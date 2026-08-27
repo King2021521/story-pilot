@@ -33,6 +33,10 @@ export class GraphProjector {
       case "foreshadowing.seeded":
         await this.projectForeshadowing(event);
         return;
+      case "memory.confirmed":
+      case "memory.merged":
+        await this.projectMemory(event);
+        return;
       default:
         return;
     }
@@ -233,6 +237,65 @@ export class GraphProjector {
         },
       );
     }
+  }
+
+  private async projectMemory(event: DomainGraphEvent): Promise<void> {
+    const status = getString(event.payload.status) ?? "canon";
+    if (status !== "canon") {
+      return;
+    }
+
+    const entityId = getString(event.payload.entityId);
+    const entityType = getString(event.payload.entityType) ?? "entity";
+    await executeGraphQuery(
+      this.store,
+      `
+      MERGE (memory:Memory {id: $id})
+      SET memory.projectId = $projectId,
+          memory.kind = $kind,
+          memory.status = $status,
+          memory.content = $content,
+          memory.entityType = $entityType,
+          memory.entityId = $entityId,
+          memory.metadata = $metadata
+      `,
+      {
+        content: getString(event.payload.content) ?? event.aggregateId,
+        entityId: entityId ?? "",
+        entityType,
+        id: event.aggregateId,
+        kind: getString(event.payload.kind) ?? "fact",
+        metadata: JSON.stringify(event.payload),
+        projectId: event.projectId,
+        status,
+      },
+    );
+
+    if (!entityId) {
+      return;
+    }
+
+    await this.ensureEntity({
+      entityType,
+      id: entityId,
+      label: entityId,
+      metadata: { inferredFrom: event.id },
+      projectId: event.projectId,
+    });
+    await executeGraphQuery(
+      this.store,
+      `
+      MATCH (memory:Memory), (entity:Entity)
+      WHERE memory.id = $memoryId AND entity.id = $entityId
+      MERGE (memory)-[relation:AFFECTS]->(entity)
+      SET relation.predicate = $predicate
+      `,
+      {
+        entityId,
+        memoryId: event.aggregateId,
+        predicate: getString(event.payload.kind) ?? "fact",
+      },
+    );
   }
 }
 

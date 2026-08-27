@@ -31,6 +31,7 @@ export async function getNeighborhood(
 ): Promise<GraphNeighborhood> {
   const rows = [
     ...(await queryEntityRelations(store, input)),
+    ...(await queryMemoryAffects(store, input)),
     ...(await queryForeshadowingLinks(store, input, "SEEDS", "seeds")),
     ...(await queryForeshadowingLinks(store, input, "PAYS_OFF", "pays_off")),
   ];
@@ -61,6 +62,30 @@ export async function getNeighborhood(
     edges,
     nodes: [...nodes.values()],
   };
+}
+
+async function queryMemoryAffects(
+  store: GraphStore,
+  input: GraphNeighborhoodInput,
+): Promise<Record<string, KuzuValue>[]> {
+  return executeGraphQuery(
+    store,
+    `
+    MATCH (source:Memory)-[relation:AFFECTS]->(target:Entity)
+    WHERE target.id = $entityId AND source.projectId = $projectId
+    RETURN source.id AS sourceId,
+           source.content AS sourceLabel,
+           'memory' AS sourceType,
+           target.id AS targetId,
+           target.name AS targetLabel,
+           target.entityType AS targetType,
+           relation.predicate AS edgeLabel
+    `,
+    {
+      entityId: input.entityId,
+      projectId: input.projectId,
+    },
+  );
 }
 
 async function queryEntityRelations(

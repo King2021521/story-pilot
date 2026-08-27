@@ -32,6 +32,22 @@ export async function initializeGraphSchema(store: GraphStore): Promise<void> {
   await executeGraphQuery(
     store,
     `
+    CREATE NODE TABLE IF NOT EXISTS Memory(
+      id STRING,
+      projectId STRING,
+      kind STRING,
+      status STRING,
+      content STRING,
+      entityType STRING,
+      entityId STRING,
+      metadata STRING,
+      PRIMARY KEY(id)
+    )
+    `,
+  );
+  await executeGraphQuery(
+    store,
+    `
     CREATE NODE TABLE IF NOT EXISTS Foreshadowing(
       id STRING,
       projectId STRING,
@@ -61,6 +77,15 @@ export async function initializeGraphSchema(store: GraphStore): Promise<void> {
     CREATE REL TABLE IF NOT EXISTS PARTICIPATES_IN(
       FROM Entity TO StoryEvent,
       role STRING
+    )
+    `,
+  );
+  await executeGraphQuery(
+    store,
+    `
+    CREATE REL TABLE IF NOT EXISTS AFFECTS(
+      FROM Memory TO Entity,
+      predicate STRING
     )
     `,
   );

@@ -193,6 +193,27 @@ export class MemoryRepository {
     return row ? mapMemoryCandidateRow(row) : undefined;
   }
 
+  updateCandidateStatus(input: {
+    readonly projectId: string;
+    readonly candidateId: string;
+    readonly status: "accepted" | "merged" | "rejected";
+    readonly now?: number;
+  }): MemoryCandidateRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        "update memory_candidates set status = ?, resolved_at = ? where project_id = ? and id = ?",
+      )
+      .run(input.status, now, input.projectId, input.candidateId);
+
+    const candidate = this.getCandidate(input.projectId, input.candidateId);
+    if (!candidate) {
+      throw new Error(`MEMORY_CANDIDATE_NOT_FOUND: ${input.candidateId}`);
+    }
+
+    return candidate;
+  }
+
   createMemory(input: CreateMemoryRecordInput): MemoryRecord {
     const now = input.now ?? Date.now();
     this.projectDatabase.client
@@ -233,6 +254,40 @@ export class MemoryRepository {
       .get(projectId, memoryId) as MemoryRow | undefined;
 
     return row ? mapMemoryRow(row) : undefined;
+  }
+
+  updateMemoryContent(input: {
+    readonly projectId: string;
+    readonly memoryId: string;
+    readonly content: string;
+    readonly confidence?: number;
+    readonly now?: number;
+  }): MemoryRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        `
+        update memories
+        set content = @content,
+            confidence = coalesce(@confidence, confidence),
+            updated_at = @now
+        where project_id = @projectId and id = @memoryId
+        `,
+      )
+      .run({
+        confidence: input.confidence ?? null,
+        content: input.content,
+        memoryId: input.memoryId,
+        now,
+        projectId: input.projectId,
+      });
+
+    const memory = this.getMemory(input.projectId, input.memoryId);
+    if (!memory) {
+      throw new Error(`MEMORY_NOT_FOUND: ${input.memoryId}`);
+    }
+
+    return memory;
   }
 }
 

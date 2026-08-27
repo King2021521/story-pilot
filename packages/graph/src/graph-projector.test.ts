@@ -157,4 +157,52 @@ describe("GraphProjector", () => {
       await store.close();
     }
   });
+
+  it("projects confirmed canon memories into entity neighborhoods", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "story-pilot-graph-"));
+    tempDirs.push(tempDir);
+    const store = await createGraphStore(join(tempDir, "graph.kuzu"));
+
+    try {
+      await initializeGraphSchema(store);
+      const projector = new GraphProjector(store);
+
+      await projector.project({
+        aggregateId: "memory_1",
+        aggregateType: "memory",
+        eventType: "memory.confirmed",
+        id: "event_1",
+        payload: {
+          content: "林鸢发现一封来自十年前的旧信。",
+          entityId: "char_linyuan",
+          entityType: "character",
+          kind: "event",
+          memoryId: "memory_1",
+          status: "canon",
+        },
+        projectId: "project_1",
+      });
+
+      const neighborhood = await getNeighborhood(store, {
+        entityId: "char_linyuan",
+        projectId: "project_1",
+      });
+
+      expect(neighborhood.nodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "char_linyuan", type: "character" }),
+          expect.objectContaining({ id: "memory_1", label: "林鸢发现一封来自十年前的旧信。", type: "memory" }),
+        ]),
+      );
+      expect(neighborhood.edges).toEqual([
+        expect.objectContaining({
+          label: "event",
+          sourceId: "memory_1",
+          targetId: "char_linyuan",
+        }),
+      ]);
+    } finally {
+      await store.close();
+    }
+  });
 });
