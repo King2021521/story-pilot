@@ -9,6 +9,7 @@ import { HealthModule } from "./health/health.module.js";
 import { PlotModule } from "./plot/plot.module.js";
 import { ProjectModule } from "./project/project.module.js";
 import { RpcModule } from "./rpc/rpc.module.js";
+import { WorkflowModule } from "./workflow/workflow.module.js";
 import { WorldModule } from "./world/world.module.js";
 
 @Module({
@@ -22,6 +23,7 @@ import { WorldModule } from "./world/world.module.js";
     PlotModule,
     ProjectModule,
     RpcModule,
+    WorkflowModule,
     WorldModule,
   ],
 })

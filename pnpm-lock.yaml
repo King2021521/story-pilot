@@ -108,6 +108,9 @@ importers:
       '@story-pilot/graph':
         specifier: workspace:^
         version: link:../../packages/graph
+      '@story-pilot/workflow-runtime':
+        specifier: workspace:^
+        version: link:../../packages/workflow-runtime
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
