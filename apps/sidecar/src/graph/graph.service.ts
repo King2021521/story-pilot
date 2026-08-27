@@ -22,6 +22,10 @@ export interface GraphRebuildResult {
   readonly projectedEvents: number;
 }
 
+export interface GraphContradictionResult {
+  readonly items: readonly unknown[];
+}
+
 interface DomainEventRow {
   readonly id: string;
   readonly project_id: string;
@@ -99,6 +103,10 @@ export class GraphService implements OnModuleDestroy {
   async getNeighborhood(input: GraphNeighborhoodRequest): Promise<GraphNeighborhood> {
     const store = await this.getProjectStore(input.projectId);
     return getNeighborhood(store, input);
+  }
+
+  findContradictions(): GraphContradictionResult {
+    return { items: [] };
   }
 
   private async getProjectStore(projectId: string): Promise<GraphStore> {

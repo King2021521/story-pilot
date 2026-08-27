@@ -11,6 +11,7 @@ import { PlotModule } from "./plot/plot.module.js";
 import { ProjectModule } from "./project/project.module.js";
 import { RpcModule } from "./rpc/rpc.module.js";
 import { WorkflowModule } from "./workflow/workflow.module.js";
+import { WorkbenchModule } from "./workbench/workbench.module.js";
 import { WorldModule } from "./world/world.module.js";
 
 @Module({
@@ -26,6 +27,7 @@ import { WorldModule } from "./world/world.module.js";
     ProjectModule,
     RpcModule,
     WorkflowModule,
+    WorkbenchModule,
     WorldModule,
   ],
 })

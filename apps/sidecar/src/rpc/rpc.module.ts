@@ -9,6 +9,7 @@ import { MemoryModule } from "../memory/memory.module.js";
 import { PlotModule } from "../plot/plot.module.js";
 import { ProjectModule } from "../project/project.module.js";
 import { WorkflowModule } from "../workflow/workflow.module.js";
+import { WorkbenchModule } from "../workbench/workbench.module.js";
 import { WorldModule } from "../world/world.module.js";
 import { RpcController } from "./rpc.controller.js";
 import { RpcService } from "./rpc.service.js";
@@ -25,6 +26,7 @@ import { RpcService } from "./rpc.service.js";
     PlotModule,
     ProjectModule,
     WorkflowModule,
+    WorkbenchModule,
     WorldModule,
   ],
   providers: [RpcService],

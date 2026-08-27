@@ -73,6 +73,137 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("supports project, workbench, and chapter read commands after local writes", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_read",
+          payload: { genre: "悬疑", title: "长夜序章" },
+        }),
+      );
+      const chapter = await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.create",
+          id: "req_chapter_read",
+          payload: {
+            projectId: getString(project, "id"),
+            summary: "主角收到旧信。",
+            title: "第一章 雨夜来信",
+            volumeId: getString(project, "defaultVolumeId"),
+          },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.saveContent",
+          id: "req_save_read",
+          payload: {
+            baseVersion: 0,
+            chapterId: getString(chapter, "id"),
+            content: "雨夜来信。旧案重新浮出水面。",
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+
+      const versions = await expectRpcData(
+        rpcService.handle({
+          command: "chapter.listVersions",
+          id: "req_versions_read",
+          payload: {
+            chapterId: getString(chapter, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const firstVersion = getArray(versions)[0];
+
+      await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.restoreVersion",
+          id: "req_restore_read",
+          payload: {
+            chapterId: getString(chapter, "id"),
+            projectId: getString(project, "id"),
+            versionId: getString(firstVersion, "id"),
+          },
+        }),
+      );
+
+      const recentProjects = await expectRpcOk(
+        rpcService.handle({
+          command: "project.listRecent",
+          id: "req_recent",
+          payload: { limit: 10 },
+        }),
+      );
+      const openedProject = await expectRpcOk(
+        rpcService.handle({
+          command: "project.open",
+          id: "req_open",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const overview = await expectRpcOk(
+        rpcService.handle({
+          command: "project.getOverview",
+          id: "req_overview",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const backup = await expectRpcOk(
+        rpcService.handle({
+          command: "project.backup",
+          id: "req_backup",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const chapters = await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.list",
+          id: "req_chapters",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const snapshot = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getSnapshot",
+          id: "req_snapshot",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_board",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+
+      expect(getRecordArray(recentProjects, "items")).toEqual([
+        expect.objectContaining({ id: getString(project, "id"), title: "长夜序章" }),
+      ]);
+      expect(openedProject).toMatchObject({ id: getString(project, "id"), title: "长夜序章" });
+      expect(overview).toMatchObject({ id: getString(project, "id"), title: "长夜序章" });
+      expect(getString(backup, "backupPath")).toContain("project.sqlite");
+      expect(getRecordArray(chapters, "items")).toEqual([
+        expect.objectContaining({ id: getString(chapter, "id"), title: "第一章 雨夜来信" }),
+      ]);
+      expect(snapshot).toMatchObject({
+        project: { id: getString(project, "id") },
+        stats: {
+          chapters: 1,
+          memories: 0,
+        },
+      });
+      expect(getRecordArray(board, "chapters")).toHaveLength(1);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("generates a draft artifact and applies it through artifact.apply", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
@@ -186,6 +317,320 @@ describe("RpcService MVP command integration", () => {
       await moduleRef.close();
     }
   });
+
+  it("supports creative object list, update, and planning commands", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const { chapter, project } = await createProjectAndChapter(rpcService);
+      const character = await expectRpcOk(
+        rpcService.handle({
+          command: "character.create",
+          id: "req_character_create",
+          payload: {
+            archetype: "调查者",
+            goal: "查清旧案",
+            name: "林鸢",
+            projectId: getString(project, "id"),
+            role: "protagonist",
+          },
+        }),
+      );
+      const updatedCharacter = await expectRpcOk(
+        rpcService.handle({
+          command: "character.update",
+          id: "req_character_update",
+          payload: {
+            characterId: getString(character, "id"),
+            patch: { goal: "保护证人", name: "林鸢" },
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const generatedNames = await expectRpcOk(
+        rpcService.handle({
+          command: "character.generateNames",
+          id: "req_character_names",
+          payload: {
+            constraints: ["冷静"],
+            count: 3,
+            projectId: getString(project, "id"),
+            style: "现代悬疑",
+          },
+        }),
+      );
+      const worldRule = await expectRpcOk(
+        rpcService.handle({
+          command: "worldRule.create",
+          id: "req_world_create",
+          payload: {
+            category: "society",
+            constraintLevel: "hard",
+            projectId: getString(project, "id"),
+            statement: "档案馆夜间封闭。",
+            title: "档案馆规则",
+          },
+        }),
+      );
+      const updatedWorldRule = await expectRpcOk(
+        rpcService.handle({
+          command: "worldRule.update",
+          id: "req_world_update",
+          payload: {
+            patch: { statement: "档案馆夜间只允许内部人员进入。" },
+            projectId: getString(project, "id"),
+            worldRuleId: getString(worldRule, "id"),
+          },
+        }),
+      );
+      const plotline = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.create",
+          id: "req_plot_create",
+          payload: {
+            kind: "main",
+            priority: 1,
+            projectId: getString(project, "id"),
+            summary: "旧案调查线",
+            title: "旧案线",
+          },
+        }),
+      );
+      const storyEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.create",
+          id: "req_event_create",
+          payload: {
+            chapterId: getString(chapter, "id"),
+            description: "林鸢收到旧信。",
+            eventType: "discovery",
+            participants: [
+              {
+                entityId: getString(character, "id"),
+                entityType: "character",
+                role: "actor",
+              },
+            ],
+            projectId: getString(project, "id"),
+            title: "旧信出现",
+          },
+        }),
+      );
+      const foreshadowing = await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.create",
+          id: "req_foreshadow_create",
+          payload: {
+            description: "旧信纸张有档案馆印记。",
+            importance: 4,
+            projectId: getString(project, "id"),
+            seedEventId: getString(storyEvent, "id"),
+            title: "档案馆印记",
+          },
+        }),
+      );
+
+      const characterList = await expectRpcOk(
+        rpcService.handle({
+          command: "character.list",
+          id: "req_character_list",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const worldRuleList = await expectRpcOk(
+        rpcService.handle({
+          command: "worldRule.list",
+          id: "req_world_list",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const plotlineList = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.list",
+          id: "req_plot_list",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const eventList = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.list",
+          id: "req_event_list",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const foreshadowingList = await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.list",
+          id: "req_foreshadow_list",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const reviewRun = await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.reviewContinuity",
+          id: "req_review",
+          payload: {
+            chapterId: getString(chapter, "id"),
+            projectId: getString(project, "id"),
+            scope: "chapter",
+          },
+        }),
+      );
+      const planRun = await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.plan",
+          id: "req_foreshadow_plan",
+          payload: {
+            chapterId: getString(chapter, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+
+      expect(updatedCharacter).toMatchObject({ motivation: "保护证人" });
+      expect(getRecordArray(generatedNames, "items")).toHaveLength(3);
+      expect(updatedWorldRule).toMatchObject({ content: "档案馆夜间只允许内部人员进入。" });
+      expect(getRecordArray(characterList, "items")).toEqual([
+        expect.objectContaining({ id: getString(character, "id") }),
+      ]);
+      expect(getRecordArray(worldRuleList, "items")).toHaveLength(1);
+      expect(getRecordArray(plotlineList, "items")).toEqual([
+        expect.objectContaining({ id: getString(plotline, "id") }),
+      ]);
+      expect(getRecordArray(eventList, "items")).toHaveLength(1);
+      expect(getRecordArray(foreshadowingList, "items")).toEqual([
+        expect.objectContaining({ id: getString(foreshadowing, "id") }),
+      ]);
+      expect(reviewRun).toMatchObject({ status: "completed", workflowName: "review" });
+      expect(planRun).toMatchObject({ status: "completed", workflowName: "foreshadowing_plan" });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("supports workflow, artifact, memory search, and graph utility commands", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const { chapter, project } = await createProjectAndChapter(rpcService);
+      const firstDraft = await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.generateDraft",
+          id: "req_first_draft",
+          payload: {
+            chapterId: getString(chapter, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const secondDraft = await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.generateDraft",
+          id: "req_second_draft",
+          payload: {
+            chapterId: getString(chapter, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const firstArtifact = getRecord(firstDraft, "artifact");
+      const secondArtifact = getRecord(secondDraft, "artifact");
+      const firstRun = getRecord(firstDraft, "workflowRun");
+      const firstCandidate = getRecordArray(firstDraft, "memoryCandidates")[0];
+      await expectRpcOk(
+        rpcService.handle({
+          command: "memory.confirm",
+          id: "req_confirm_search",
+          payload: {
+            candidateId: getString(firstCandidate, "id"),
+            decision: "canon",
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+
+      const artifact = await expectRpcOk(
+        rpcService.handle({
+          command: "artifact.get",
+          id: "req_artifact_get",
+          payload: {
+            artifactId: getString(firstArtifact, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const rejectedArtifact = await expectRpcOk(
+        rpcService.handle({
+          command: "artifact.reject",
+          id: "req_artifact_reject",
+          payload: {
+            artifactId: getString(secondArtifact, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const workOrders = await expectRpcOk(
+        rpcService.handle({
+          command: "workOrder.list",
+          id: "req_workorders",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const firstWorkOrder = getRecordArray(workOrders, "items")[0];
+      const workOrder = await expectRpcOk(
+        rpcService.handle({
+          command: "workOrder.get",
+          id: "req_workorder",
+          payload: {
+            projectId: getString(project, "id"),
+            workOrderId: getString(firstWorkOrder, "id"),
+          },
+        }),
+      );
+      const retryRun = await expectRpcOk(
+        rpcService.handle({
+          command: "workflow.retry",
+          id: "req_retry",
+          payload: {
+            projectId: getString(project, "id"),
+            workflowRunId: getString(firstRun, "id"),
+          },
+        }),
+      );
+      const memories = await expectRpcOk(
+        rpcService.handle({
+          command: "memory.search",
+          id: "req_memory_search",
+          payload: {
+            projectId: getString(project, "id"),
+            query: "旧信",
+          },
+        }),
+      );
+      const contradictions = await expectRpcOk(
+        rpcService.handle({
+          command: "graph.findContradictions",
+          id: "req_contradictions",
+          payload: {
+            projectId: getString(project, "id"),
+            scope: "project",
+          },
+        }),
+      );
+
+      expect(artifact).toMatchObject({ id: getString(firstArtifact, "id") });
+      expect(rejectedArtifact).toMatchObject({ id: getString(secondArtifact, "id"), status: "rejected" });
+      expect(workOrder).toMatchObject({ id: getString(firstWorkOrder, "id") });
+      expect(retryRun).toMatchObject({
+        artifact: { kind: "chapter_draft", status: "pending" },
+        workflowRun: { status: "completed" },
+      });
+      expect(getRecordArray(memories, "items")).toEqual([
+        expect.objectContaining({ content: expect.stringContaining("旧信") }),
+      ]);
+      expect(getRecordArray(contradictions, "items")).toEqual([]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
 });
 
 async function createRpcHarness(tempDirs: string[]) {
@@ -252,10 +697,24 @@ async function createProjectAndChapter(rpcService: RpcService) {
 }
 
 async function expectRpcOk(responsePromise: Promise<unknown>): Promise<Record<string, unknown>> {
+  const data = await expectRpcData(responsePromise);
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("Expected object RPC data");
+  }
+  return data as Record<string, unknown>;
+}
+
+async function expectRpcData(responsePromise: Promise<unknown>): Promise<unknown> {
   const response = await responsePromise;
   expect(response).toMatchObject({ ok: true });
-  const data = getRecord(response, "data");
-  return data;
+  return getField(response, "data");
+}
+
+function getArray(value: unknown): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Expected array");
+  }
+  return value;
 }
 
 function getRecord(value: unknown, field: string): Record<string, unknown> {
@@ -268,6 +727,14 @@ function getRecord(value: unknown, field: string): Record<string, unknown> {
     throw new Error(`Expected object field ${field}`);
   }
   return child as Record<string, unknown>;
+}
+
+function getField(value: unknown, field: string): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`Expected object for ${field}`);
+  }
+  const record = value as Record<string, unknown>;
+  return record[field];
 }
 
 function getRecordArray(value: unknown, field: string): Record<string, unknown>[] {

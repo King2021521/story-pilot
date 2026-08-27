@@ -1,5 +1,4 @@
 import type {
-  ModelMessage,
   ModelProvider,
   ProviderEmbedInput,
   ProviderEmbedResult,

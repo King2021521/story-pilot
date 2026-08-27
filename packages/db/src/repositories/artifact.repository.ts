@@ -95,12 +95,57 @@ export class ArtifactRepository {
     return row ? mapArtifactRow(row) : undefined;
   }
 
+  listByProject(input: {
+    readonly projectId: string;
+    readonly status?: string;
+    readonly limit?: number;
+  }): ArtifactRecord[] {
+    if (input.status) {
+      return this.projectDatabase.client
+        .prepare(
+          `
+          select * from artifacts
+          where project_id = ? and status = ?
+          order by updated_at desc
+          limit ?
+          `,
+        )
+        .all(input.projectId, input.status, input.limit ?? 100)
+        .map((row) => mapArtifactRow(row as ArtifactRow));
+    }
+
+    return this.projectDatabase.client
+      .prepare(
+        `
+        select * from artifacts
+        where project_id = ?
+        order by updated_at desc
+        limit ?
+        `,
+      )
+      .all(input.projectId, input.limit ?? 100)
+      .map((row) => mapArtifactRow(row as ArtifactRow));
+  }
+
   markApplied(projectId: string, artifactId: string, appliedAt: number): ArtifactRecord {
     this.projectDatabase.client
       .prepare(
         "update artifacts set status = 'applied', applied_at = ?, updated_at = ? where project_id = ? and id = ?",
       )
       .run(appliedAt, appliedAt, projectId, artifactId);
+
+    const artifact = this.getById(projectId, artifactId);
+    if (!artifact) {
+      throw new Error(`ARTIFACT_NOT_FOUND: ${artifactId}`);
+    }
+
+    return artifact;
+  }
+
+  markRejected(projectId: string, artifactId: string, rejectedAt: number): ArtifactRecord {
+    this.projectDatabase.client
+      .prepare("update artifacts set status = 'rejected', updated_at = ? where project_id = ? and id = ?")
+      .run(rejectedAt, projectId, artifactId);
 
     const artifact = this.getById(projectId, artifactId);
     if (!artifact) {

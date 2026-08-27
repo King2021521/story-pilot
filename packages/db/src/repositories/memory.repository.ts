@@ -185,6 +185,28 @@ export class MemoryRepository {
       .map((row) => mapMemoryRow(row as MemoryRow));
   }
 
+  searchMemories(input: {
+    readonly projectId: string;
+    readonly query: string;
+    readonly status?: string;
+    readonly limit?: number;
+  }): MemoryRecord[] {
+    const status = input.status ?? "canon";
+    return this.projectDatabase.client
+      .prepare(
+        `
+        select * from memories
+        where project_id = ?
+          and status = ?
+          and content like ?
+        order by updated_at desc
+        limit ?
+        `,
+      )
+      .all(input.projectId, status, `%${input.query}%`, input.limit ?? 20)
+      .map((row) => mapMemoryRow(row as MemoryRow));
+  }
+
   getCandidate(projectId: string, candidateId: string): MemoryCandidateRecord | undefined {
     const row = this.projectDatabase.client
       .prepare("select * from memory_candidates where project_id = ? and id = ?")

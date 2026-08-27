@@ -57,4 +57,13 @@ export class ForeshadowingService {
       projectDatabase.close();
     }
   }
+
+  async listForeshadowings(projectId: string): Promise<ForeshadowingRecord[]> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
+    try {
+      return new PlotRepository(projectDatabase).listForeshadowings(projectId);
+    } finally {
+      projectDatabase.close();
+    }
+  }
 }

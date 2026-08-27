@@ -59,6 +59,37 @@ export class ArtifactService {
     }
   }
 
+  async getArtifact(projectId: string, artifactId: string): Promise<ArtifactRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
+    try {
+      const artifact = new ArtifactRepository(projectDatabase).getById(projectId, artifactId);
+      if (!artifact) {
+        throw new Error(`ARTIFACT_NOT_FOUND: ${artifactId}`);
+      }
+
+      return artifact;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async rejectArtifact(projectId: string, artifactId: string): Promise<ArtifactRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
+    try {
+      const artifact = new ArtifactRepository(projectDatabase).getById(projectId, artifactId);
+      if (!artifact) {
+        throw new Error(`ARTIFACT_NOT_FOUND: ${artifactId}`);
+      }
+      if (artifact.status !== "pending") {
+        throw new Error(`ARTIFACT_NOT_PENDING: ${artifactId}`);
+      }
+
+      return new ArtifactRepository(projectDatabase).markRejected(projectId, artifactId, Date.now());
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
   async applyArtifact(input: ApplyArtifactInput): Promise<AppliedArtifactResult> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {

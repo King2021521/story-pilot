@@ -46,6 +46,17 @@ export interface ListChapterVersionsInput {
   readonly chapterId: string;
 }
 
+export interface ListChaptersInput {
+  readonly projectId: string;
+  readonly volumeId?: string;
+}
+
+export interface RestoreChapterVersionInput {
+  readonly projectId: string;
+  readonly chapterId: string;
+  readonly versionId: string;
+}
+
 export interface GenerateChapterDraftInput {
   readonly projectId: string;
   readonly chapterId: string;
@@ -97,6 +108,18 @@ export class ChapterService {
     }
   }
 
+  async listChapters(input: ListChaptersInput): Promise<ChapterRecord[]> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      return new ChapterRepository(projectDatabase).listChapters({
+        projectId: input.projectId,
+        ...(input.volumeId === undefined ? {} : { volumeId: input.volumeId }),
+      });
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
   async saveContent(input: SaveChapterContentInput): Promise<ChapterRecord> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
@@ -124,6 +147,33 @@ export class ChapterService {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       return new ChapterRepository(projectDatabase).listVersions(input.projectId, input.chapterId);
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async restoreVersion(input: RestoreChapterVersionInput): Promise<ChapterRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const repository = new ChapterRepository(projectDatabase);
+      const chapter = repository.getById(input.projectId, input.chapterId);
+      if (!chapter) {
+        throw new Error(`CHAPTER_NOT_FOUND: ${input.chapterId}`);
+      }
+      const version = repository.getVersionById(input.projectId, input.versionId);
+      if (!version || version.chapterId !== input.chapterId) {
+        throw new Error(`CHAPTER_VERSION_NOT_FOUND: ${input.versionId}`);
+      }
+
+      return repository.saveContent({
+        baseVersion: chapter.version,
+        chapterId: input.chapterId,
+        content: version.content,
+        nextVersion: createNextChapterVersion(chapter.version),
+        projectId: input.projectId,
+        source: "restore",
+        versionId: randomUUID(),
+      });
     } finally {
       projectDatabase.close();
     }

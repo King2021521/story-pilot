@@ -36,6 +36,19 @@ export interface CreateEntityRelationInput {
   readonly strength?: number;
 }
 
+export interface UpdateCharacterInput {
+  readonly projectId: string;
+  readonly characterId: string;
+  readonly patch: Record<string, unknown>;
+}
+
+export interface GeneratedCharacterNames {
+  readonly items: readonly {
+    readonly name: string;
+    readonly rationale: string;
+  }[];
+}
+
 @Injectable()
 export class CharacterService {
   constructor(private readonly projectStorage: ProjectStorageService) {}
@@ -108,6 +121,73 @@ export class CharacterService {
       projectDatabase.close();
     }
   }
+
+  async listCharacters(projectId: string): Promise<CharacterRecord[]> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
+    try {
+      return new CharacterRepository(projectDatabase).listCharacters(projectId);
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async updateCharacter(input: UpdateCharacterInput): Promise<CharacterRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const repository = new CharacterRepository(projectDatabase);
+      const archetype = getStringPatch(input.patch, "archetype");
+      const biography = getStringPatch(input.patch, "biography");
+      const goal = getStringPatch(input.patch, "goal");
+      const name = getStringPatch(input.patch, "name");
+      const role = getStringPatch(input.patch, "role");
+      const character = repository.updateCharacter({
+        characterId: input.characterId,
+        projectId: input.projectId,
+        ...(archetype === undefined ? {} : { archetype }),
+        ...(biography === undefined ? {} : { biography }),
+        ...(goal === undefined ? {} : { motivation: goal }),
+        ...(name === undefined ? {} : { name }),
+        ...(role === undefined ? {} : { role }),
+      });
+
+      new DomainEventRepository(projectDatabase).append({
+        aggregateId: character.id,
+        aggregateType: "character",
+        eventId: randomUUID(),
+        eventType: "character.updated",
+        payload: {
+          name: character.name,
+          role: character.role,
+        },
+        projectId: input.projectId,
+      });
+
+      return character;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  generateNames(input: {
+    readonly count: number;
+    readonly style?: string;
+    readonly constraints: readonly string[];
+  }): GeneratedCharacterNames {
+    const familyNames = ["林", "顾", "沈", "陆", "江", "程", "许", "闻", "秦", "宋"];
+    const givenNames = ["鸢", "澈", "晏", "疏", "衡", "砚", "微", "宁", "舟", "栀"];
+    const style = input.style?.trim() || "通用";
+    const constraintHint = input.constraints.length > 0 ? input.constraints.join("、") : "符合人物定位";
+
+    return {
+      items: Array.from({ length: input.count }, (_, index) => {
+        const name = `${familyNames[index % familyNames.length]}${givenNames[(index * 3) % givenNames.length]}`;
+        return {
+          name,
+          rationale: `${style}风格，${constraintHint}`,
+        };
+      }),
+    };
+  }
 }
 
 function buildCharacterTraits(input: CreateCharacterInput): CreateCharacterTraitInput[] {
@@ -130,4 +210,9 @@ function buildCharacterTraits(input: CreateCharacterInput): CreateCharacterTrait
   }
 
   return traits;
+}
+
+function getStringPatch(patch: Record<string, unknown>, key: string): string | undefined {
+  const value = patch[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }

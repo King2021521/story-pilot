@@ -26,6 +26,7 @@ import { PlotlineService, type CreatePlotlineInput } from "../plot/plotline.serv
 import { StoryEventService, type CreateStoryEventInput } from "../plot/story-event.service.js";
 import { ProjectService, type CreateProjectInput } from "../project/project.service.js";
 import { WorkflowService, type RunWorkflowInput } from "../workflow/workflow.service.js";
+import { WorkbenchService } from "../workbench/workbench.service.js";
 import { WorldRuleService } from "../world/world-rule.service.js";
 
 @Injectable()
@@ -42,6 +43,7 @@ export class RpcService {
     private readonly projectService: ProjectService,
     private readonly storyEventService: StoryEventService,
     private readonly workflowService: WorkflowService,
+    private readonly workbenchService: WorkbenchService,
     private readonly worldRuleService: WorldRuleService,
   ) {}
 
@@ -92,6 +94,47 @@ export class RpcService {
         };
         return this.projectService.createProject(input);
       }
+      case "project.listRecent": {
+        const parsed = payload as CommandPayload<"project.listRecent">;
+        return {
+          items: await this.projectService.listRecent({
+            ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
+          }),
+        };
+      }
+      case "project.open": {
+        const parsed = payload as CommandPayload<"project.open">;
+        return this.projectService.openProject(
+          "projectId" in parsed
+            ? { projectId: parsed.projectId }
+            : { path: parsed.path },
+        );
+      }
+      case "project.getOverview": {
+        const parsed = payload as CommandPayload<"project.getOverview">;
+        return this.projectService.getOverview(parsed.projectId);
+      }
+      case "project.backup": {
+        const parsed = payload as CommandPayload<"project.backup">;
+        return this.projectService.backup(parsed.projectId);
+      }
+      case "workbench.getSnapshot": {
+        const parsed = payload as CommandPayload<"workbench.getSnapshot">;
+        return this.workbenchService.getSnapshot(parsed.projectId);
+      }
+      case "workbench.getBoard": {
+        const parsed = payload as CommandPayload<"workbench.getBoard">;
+        return this.workbenchService.getBoard(parsed.projectId);
+      }
+      case "chapter.list": {
+        const parsed = payload as CommandPayload<"chapter.list">;
+        return {
+          items: await this.chapterService.listChapters({
+            projectId: parsed.projectId,
+            ...(parsed.volumeId === undefined ? {} : { volumeId: parsed.volumeId }),
+          }),
+        };
+      }
       case "chapter.create": {
         const parsed = payload as CommandPayload<"chapter.create">;
         const input: CreateChapterInput = {
@@ -113,6 +156,20 @@ export class RpcService {
       case "chapter.listVersions": {
         return this.chapterService.listVersions(payload as CommandPayload<"chapter.listVersions">);
       }
+      case "chapter.restoreVersion": {
+        const parsed = payload as CommandPayload<"chapter.restoreVersion">;
+        return this.chapterService.restoreVersion(parsed);
+      }
+      case "chapter.reviewContinuity": {
+        const parsed = payload as CommandPayload<"chapter.reviewContinuity">;
+        return this.workflowService.run({
+          input: { scope: parsed.scope },
+          projectId: parsed.projectId,
+          targetId: parsed.chapterId,
+          targetType: "chapter",
+          workflowType: "review",
+        });
+      }
       case "chapter.generateDraft": {
         const parsed = payload as CommandPayload<"chapter.generateDraft">;
         const input: GenerateChapterDraftInput = {
@@ -131,6 +188,14 @@ export class RpcService {
           ...(parsed.targetVersion === undefined ? {} : { targetVersion: parsed.targetVersion }),
         };
         return this.artifactService.applyArtifact(input);
+      }
+      case "artifact.get": {
+        const parsed = payload as CommandPayload<"artifact.get">;
+        return this.artifactService.getArtifact(parsed.projectId, parsed.artifactId);
+      }
+      case "artifact.reject": {
+        const parsed = payload as CommandPayload<"artifact.reject">;
+        return this.artifactService.rejectArtifact(parsed.projectId, parsed.artifactId);
       }
       case "memory.listCandidates": {
         const parsed = payload as CommandPayload<"memory.listCandidates">;
@@ -174,6 +239,17 @@ export class RpcService {
           targetMemoryId: parsed.targetMemoryId,
         });
       }
+      case "memory.search": {
+        const parsed = payload as CommandPayload<"memory.search">;
+        return {
+          items: await this.memoryService.searchMemories({
+            projectId: parsed.projectId,
+            query: parsed.query,
+            ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
+            ...(parsed.status === undefined ? {} : { status: parsed.status }),
+          }),
+        };
+      }
       case "graph.getNeighborhood": {
         const parsed = payload as CommandPayload<"graph.getNeighborhood">;
         return this.graphService.getNeighborhood({
@@ -185,8 +261,42 @@ export class RpcService {
         const parsed = payload as CommandPayload<"graph.rebuild">;
         return this.graphService.rebuild(parsed.projectId);
       }
+      case "graph.findContradictions": {
+        return this.graphService.findContradictions();
+      }
+      case "workOrder.list": {
+        const parsed = payload as CommandPayload<"workOrder.list">;
+        return {
+          items: await this.workflowService.listWorkOrders({
+            projectId: parsed.projectId,
+            ...(parsed.status === undefined ? {} : { status: parsed.status }),
+          }),
+        };
+      }
+      case "workOrder.get": {
+        const parsed = payload as CommandPayload<"workOrder.get">;
+        return this.workflowService.getWorkOrder(parsed);
+      }
       case "workflow.cancel": {
         return this.workflowService.cancel(payload as CommandPayload<"workflow.cancel">);
+      }
+      case "workflow.retry": {
+        const parsed = payload as CommandPayload<"workflow.retry">;
+        const previousRun = await this.workflowService.getWorkflowRun(parsed);
+        if (previousRun.workflowName === "chapter_draft") {
+          const chapterId = getString(previousRun.input.chapterId);
+          if (!chapterId) {
+            throw new Error(`WORKFLOW_RETRY_INPUT_INVALID: ${previousRun.id}`);
+          }
+          const instruction = getString(previousRun.input.instruction);
+          return this.chapterService.generateDraft({
+            chapterId,
+            projectId: parsed.projectId,
+            ...(instruction === undefined ? {} : { instruction }),
+          });
+        }
+
+        return this.workflowService.retry(parsed);
       }
       case "workflow.run": {
         const parsed = payload as CommandPayload<"workflow.run">;
@@ -227,8 +337,30 @@ export class RpcService {
         };
         return this.characterService.createCharacter(input);
       }
+      case "character.list": {
+        const parsed = payload as CommandPayload<"character.list">;
+        return { items: await this.characterService.listCharacters(parsed.projectId) };
+      }
+      case "character.update": {
+        return this.characterService.updateCharacter(payload as CommandPayload<"character.update">);
+      }
+      case "character.generateNames": {
+        const parsed = payload as CommandPayload<"character.generateNames">;
+        return this.characterService.generateNames({
+          constraints: parsed.constraints,
+          count: parsed.count,
+          ...(parsed.style === undefined ? {} : { style: parsed.style }),
+        });
+      }
       case "worldRule.create": {
         return this.worldRuleService.createWorldRule(payload as CommandPayload<"worldRule.create">);
+      }
+      case "worldRule.list": {
+        const parsed = payload as CommandPayload<"worldRule.list">;
+        return { items: await this.worldRuleService.listWorldRules(parsed.projectId) };
+      }
+      case "worldRule.update": {
+        return this.worldRuleService.updateWorldRule(payload as CommandPayload<"worldRule.update">);
       }
       case "plotline.create": {
         const parsed = payload as CommandPayload<"plotline.create">;
@@ -240,6 +372,13 @@ export class RpcService {
           ...(parsed.summary === undefined ? {} : { summary: parsed.summary }),
         };
         return this.plotlineService.createPlotline(input);
+      }
+      case "plotline.list": {
+        const parsed = payload as CommandPayload<"plotline.list">;
+        return { items: await this.plotlineService.listPlotlines(parsed.projectId) };
+      }
+      case "plotline.updateNode": {
+        return this.plotlineService.updateNode(payload as CommandPayload<"plotline.updateNode">);
       }
       case "storyEvent.create": {
         const parsed = payload as CommandPayload<"storyEvent.create">;
@@ -255,6 +394,10 @@ export class RpcService {
         };
         return this.storyEventService.createStoryEvent(input);
       }
+      case "storyEvent.list": {
+        const parsed = payload as CommandPayload<"storyEvent.list">;
+        return { items: await this.storyEventService.listStoryEvents(parsed.projectId) };
+      }
       case "foreshadowing.create": {
         const parsed = payload as CommandPayload<"foreshadowing.create">;
         const input: CreateForeshadowingInput = {
@@ -266,6 +409,20 @@ export class RpcService {
           ...(parsed.seedEventId === undefined ? {} : { seedEventId: parsed.seedEventId }),
         };
         return this.foreshadowingService.createForeshadowing(input);
+      }
+      case "foreshadowing.list": {
+        const parsed = payload as CommandPayload<"foreshadowing.list">;
+        return { items: await this.foreshadowingService.listForeshadowings(parsed.projectId) };
+      }
+      case "foreshadowing.plan": {
+        const parsed = payload as CommandPayload<"foreshadowing.plan">;
+        const target = resolveForeshadowingPlanTarget(parsed);
+        return this.workflowService.run({
+          input: {},
+          projectId: parsed.projectId,
+          workflowType: "foreshadowing_plan",
+          ...(target === undefined ? {} : target),
+        });
       }
       default:
         throw new Error(`UNKNOWN_COMMAND: ${command}`);
@@ -315,4 +472,17 @@ function serializeError(error: unknown): unknown {
 
 function getString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function resolveForeshadowingPlanTarget(
+  payload: CommandPayload<"foreshadowing.plan">,
+): Pick<RunWorkflowInput, "targetId" | "targetType"> | undefined {
+  if (payload.chapterId) {
+    return { targetId: payload.chapterId, targetType: "chapter" };
+  }
+  if (payload.plotlineId) {
+    return { targetId: payload.plotlineId, targetType: "plotline" };
+  }
+
+  return undefined;
 }

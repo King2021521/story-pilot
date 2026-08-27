@@ -67,6 +67,17 @@ export interface CreateEntityRelationRecordInput {
   readonly now?: number;
 }
 
+export interface UpdateCharacterRecordInput {
+  readonly projectId: string;
+  readonly characterId: string;
+  readonly name?: string;
+  readonly role?: string;
+  readonly archetype?: string;
+  readonly biography?: string;
+  readonly motivation?: string;
+  readonly now?: number;
+}
+
 interface CharacterRow {
   readonly id: string;
   readonly project_id: string;
@@ -198,7 +209,7 @@ export class CharacterRepository {
     return mapRelationRow(relation);
   }
 
-  private getCharacter(projectId: string, characterId: string): CharacterRecord | undefined {
+  getCharacter(projectId: string, characterId: string): CharacterRecord | undefined {
     const row = this.projectDatabase.client
       .prepare("select * from characters where project_id = ? and id = ?")
       .get(projectId, characterId) as CharacterRow | undefined;
@@ -223,6 +234,67 @@ export class CharacterRepository {
       traits,
     };
   }
+
+  listCharacters(projectId: string): CharacterRecord[] {
+    return this.projectDatabase.client
+      .prepare("select * from characters where project_id = ? order by display_name asc")
+      .all(projectId)
+      .map((row) => mapCharacterRow(row as CharacterRow, this.listTraits(projectId, (row as CharacterRow).id)));
+  }
+
+  updateCharacter(input: UpdateCharacterRecordInput): CharacterRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        `
+        update characters
+        set display_name = coalesce(@name, display_name),
+            role = coalesce(@role, role),
+            archetype = coalesce(@archetype, archetype),
+            profile = coalesce(@biography, profile),
+            motivation = coalesce(@motivation, motivation),
+            updated_at = @now
+        where project_id = @projectId and id = @characterId
+        `,
+      )
+      .run({
+        archetype: input.archetype ?? null,
+        biography: input.biography ?? null,
+        characterId: input.characterId,
+        motivation: input.motivation ?? null,
+        name: input.name ?? null,
+        now,
+        projectId: input.projectId,
+        role: input.role ?? null,
+      });
+
+    const character = this.getCharacter(input.projectId, input.characterId);
+    if (!character) {
+      throw new Error(`CHARACTER_NOT_FOUND: ${input.characterId}`);
+    }
+
+    return character;
+  }
+
+  private listTraits(projectId: string, characterId: string): CharacterTraitRecord[] {
+    return this.projectDatabase.client
+      .prepare("select * from character_traits where project_id = ? and character_id = ? order by created_at asc")
+      .all(projectId, characterId)
+      .map((trait) => mapTraitRow(trait as CharacterTraitRow));
+  }
+}
+
+function mapCharacterRow(row: CharacterRow, traits: CharacterTraitRecord[]): CharacterRecord {
+  return {
+    archetype: row.archetype,
+    id: row.id,
+    motivation: row.motivation,
+    name: row.display_name,
+    profile: row.profile,
+    projectId: row.project_id,
+    role: row.role,
+    traits,
+  };
 }
 
 function mapTraitRow(row: CharacterTraitRow): CharacterTraitRecord {

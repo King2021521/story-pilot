@@ -48,6 +48,18 @@ export interface ForeshadowingRecord {
   readonly links: ForeshadowingEventLinkRecord[];
 }
 
+export interface PlotlineNodeRecord {
+  readonly id: string;
+  readonly projectId: string;
+  readonly plotlineId: string;
+  readonly title: string;
+  readonly position: number;
+  readonly kind: string;
+  readonly status: string;
+  readonly description: string | null;
+  readonly targetChapterId: string | null;
+}
+
 export interface CreatePlotlineRecordInput {
   readonly plotlineId: string;
   readonly projectId: string;
@@ -88,6 +100,18 @@ export interface CreateForeshadowingRecordInput {
   readonly seedEventId?: string;
   readonly payoffEventLinkId?: string;
   readonly payoffEventId?: string;
+  readonly now?: number;
+}
+
+export interface UpdatePlotlineNodeRecordInput {
+  readonly projectId: string;
+  readonly plotlineNodeId: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly kind?: string;
+  readonly status?: string;
+  readonly targetChapterId?: string;
+  readonly position?: number;
   readonly now?: number;
 }
 
@@ -137,6 +161,18 @@ interface ForeshadowingEventRow {
   readonly note: string | null;
 }
 
+interface PlotlineNodeRow {
+  readonly id: string;
+  readonly project_id: string;
+  readonly plotline_id: string;
+  readonly title: string;
+  readonly position: number;
+  readonly kind: string;
+  readonly status: string;
+  readonly description: string | null;
+  readonly target_chapter_id: string | null;
+}
+
 export class PlotRepository {
   constructor(private readonly projectDatabase: ProjectDatabase) {}
 
@@ -170,6 +206,13 @@ export class PlotRepository {
     }
 
     return mapPlotlineRow(row);
+  }
+
+  listPlotlines(projectId: string): PlotlineRecord[] {
+    return this.projectDatabase.client
+      .prepare("select * from plotlines where project_id = ? order by priority desc, created_at asc")
+      .all(projectId)
+      .map((row) => mapPlotlineRow(row as PlotlineRow));
   }
 
   createStoryEvent(input: CreateStoryEventRecordInput): StoryEventRecord {
@@ -235,6 +278,14 @@ export class PlotRepository {
     return event;
   }
 
+  listStoryEvents(projectId: string): StoryEventRecord[] {
+    const rows = this.projectDatabase.client
+      .prepare("select * from story_events where project_id = ? order by position asc, created_at asc")
+      .all(projectId) as StoryEventRow[];
+
+    return rows.map((row) => this.getStoryEvent(projectId, row.id)).filter(isDefined);
+  }
+
   createForeshadowing(input: CreateForeshadowingRecordInput): ForeshadowingRecord {
     const now = input.now ?? Date.now();
     const create = this.projectDatabase.client.transaction(() => {
@@ -287,6 +338,53 @@ export class PlotRepository {
     }
 
     return foreshadowing;
+  }
+
+  listForeshadowings(projectId: string): ForeshadowingRecord[] {
+    const rows = this.projectDatabase.client
+      .prepare("select * from foreshadowings where project_id = ? order by created_at asc")
+      .all(projectId) as ForeshadowingRow[];
+
+    return rows.map((row) => this.getForeshadowing(projectId, row.id)).filter(isDefined);
+  }
+
+  updatePlotlineNode(input: UpdatePlotlineNodeRecordInput): PlotlineNodeRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        `
+        update plotline_nodes
+        set title = coalesce(@title, title),
+            description = coalesce(@description, description),
+            kind = coalesce(@kind, kind),
+            status = coalesce(@status, status),
+            target_chapter_id = coalesce(@targetChapterId, target_chapter_id),
+            position = coalesce(@position, position),
+            updated_at = @now
+        where project_id = @projectId and id = @plotlineNodeId
+        `,
+      )
+      .run({
+        description: input.description ?? null,
+        kind: input.kind ?? null,
+        now,
+        plotlineNodeId: input.plotlineNodeId,
+        position: input.position ?? null,
+        projectId: input.projectId,
+        status: input.status ?? null,
+        targetChapterId: input.targetChapterId ?? null,
+        title: input.title ?? null,
+      });
+
+    const row = this.projectDatabase.client
+      .prepare("select * from plotline_nodes where project_id = ? and id = ?")
+      .get(input.projectId, input.plotlineNodeId) as PlotlineNodeRow | undefined;
+
+    if (!row) {
+      throw new Error(`PLOTLINE_NODE_NOT_FOUND: ${input.plotlineNodeId}`);
+    }
+
+    return mapPlotlineNodeRow(row);
   }
 
   private insertForeshadowingEvent(input: {
@@ -360,6 +458,10 @@ export class PlotRepository {
   }
 }
 
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
 function mapPlotlineRow(row: PlotlineRow): PlotlineRecord {
   return {
     id: row.id,
@@ -380,6 +482,20 @@ function mapParticipantRow(row: StoryEventParticipantRow): StoryEventParticipant
     id: row.id,
     projectId: row.project_id,
     role: row.role,
+  };
+}
+
+function mapPlotlineNodeRow(row: PlotlineNodeRow): PlotlineNodeRecord {
+  return {
+    description: row.description,
+    id: row.id,
+    kind: row.kind,
+    plotlineId: row.plotline_id,
+    position: row.position,
+    projectId: row.project_id,
+    status: row.status,
+    targetChapterId: row.target_chapter_id,
+    title: row.title,
   };
 }
 

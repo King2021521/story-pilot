@@ -15,6 +15,7 @@ export interface WorkflowRunRecord {
   readonly workOrderId: string | null;
   readonly workflowName: string;
   readonly status: string;
+  readonly input: Record<string, unknown>;
 }
 
 export interface WorkflowRunStepRecord {
@@ -72,6 +73,7 @@ interface WorkflowRunRow {
   readonly work_order_id: string | null;
   readonly workflow_name: string;
   readonly status: string;
+  readonly input: string | null;
 }
 
 export class WorkflowRepository {
@@ -123,6 +125,46 @@ export class WorkflowRepository {
     }
 
     return mapWorkOrderRow(row);
+  }
+
+  getWorkOrder(projectId: string, workOrderId: string): WorkOrderRecord | undefined {
+    const row = this.projectDatabase.client
+      .prepare("select * from work_orders where project_id = ? and id = ?")
+      .get(projectId, workOrderId) as WorkOrderRow | undefined;
+
+    return row ? mapWorkOrderRow(row) : undefined;
+  }
+
+  listWorkOrders(input: {
+    readonly projectId: string;
+    readonly status?: string;
+    readonly limit?: number;
+  }): WorkOrderRecord[] {
+    if (input.status) {
+      return this.projectDatabase.client
+        .prepare(
+          `
+          select * from work_orders
+          where project_id = ? and status = ?
+          order by updated_at desc
+          limit ?
+          `,
+        )
+        .all(input.projectId, input.status, input.limit ?? 100)
+        .map((row) => mapWorkOrderRow(row as WorkOrderRow));
+    }
+
+    return this.projectDatabase.client
+      .prepare(
+        `
+        select * from work_orders
+        where project_id = ?
+        order by updated_at desc
+        limit ?
+        `,
+      )
+      .all(input.projectId, input.limit ?? 100)
+      .map((row) => mapWorkOrderRow(row as WorkOrderRow));
   }
 
   persistWorkflowRun(input: PersistWorkflowRunInput): WorkflowRunRecord {
@@ -239,9 +281,20 @@ function mapWorkOrderRow(row: WorkOrderRow): WorkOrderRecord {
 function mapWorkflowRunRow(row: WorkflowRunRow): WorkflowRunRecord {
   return {
     id: row.id,
+    input: parseRecord(row.input),
     projectId: row.project_id,
     status: row.status,
     workflowName: row.workflow_name,
     workOrderId: row.work_order_id,
   };
+}
+
+function parseRecord(value: string | null): Record<string, unknown> {
+  if (!value) {
+    return {};
+  }
+  const parsed = JSON.parse(value) as unknown;
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
 }

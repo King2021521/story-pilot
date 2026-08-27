@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -50,6 +50,22 @@ export class ProjectStorageService {
 
   getProjectRootPath(projectId: string): string {
     return join(this.getProjectsRoot(), projectId);
+  }
+
+  getProjectsRootPath(): string {
+    return this.getProjectsRoot();
+  }
+
+  listProjectRootPaths(): string[] {
+    const projectsRoot = this.getProjectsRoot();
+    try {
+      return readdirSync(projectsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(projectsRoot, entry.name))
+        .filter((projectRoot) => statSync(projectRoot).isDirectory());
+    } catch {
+      return [];
+    }
   }
 
   getGraphPath(projectId: string): string {

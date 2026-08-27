@@ -61,6 +61,25 @@ export class MemoryService {
     }
   }
 
+  async searchMemories(input: {
+    readonly projectId: string;
+    readonly query: string;
+    readonly status?: string;
+    readonly limit?: number;
+  }): Promise<MemoryRecord[]> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      return new MemoryRepository(projectDatabase).searchMemories({
+        projectId: input.projectId,
+        query: input.query,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.status === undefined ? {} : { status: input.status }),
+      });
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
   async confirm(input: ConfirmMemoryInput): Promise<MemoryDecisionResult> {
     if (input.decision === "reject") {
       return this.reject(input);

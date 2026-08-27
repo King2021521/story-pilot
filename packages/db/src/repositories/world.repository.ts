@@ -20,6 +20,16 @@ export interface CreateWorldRuleRecordInput {
   readonly now?: number;
 }
 
+export interface UpdateWorldRuleRecordInput {
+  readonly projectId: string;
+  readonly worldRuleId: string;
+  readonly category?: string;
+  readonly title?: string;
+  readonly statement?: string;
+  readonly constraintLevel?: string;
+  readonly now?: number;
+}
+
 interface WorldRuleRow {
   readonly id: string;
   readonly project_id: string;
@@ -62,14 +72,65 @@ export class WorldRepository {
       throw new Error(`WORLD_RULE_NOT_CREATED: ${input.worldRuleId}`);
     }
 
-    return {
-      category: rule.category,
-      content: rule.content,
-      id: rule.id,
-      projectId: rule.project_id,
-      source: rule.source,
-      status: rule.status,
-      title: rule.title,
-    };
+    return mapWorldRuleRow(rule);
   }
+
+  listWorldRules(projectId: string): WorldRuleRecord[] {
+    return this.projectDatabase.client
+      .prepare("select * from world_rules where project_id = ? order by created_at asc")
+      .all(projectId)
+      .map((row) => mapWorldRuleRow(row as WorldRuleRow));
+  }
+
+  getWorldRule(projectId: string, worldRuleId: string): WorldRuleRecord | undefined {
+    const rule = this.projectDatabase.client
+      .prepare("select * from world_rules where project_id = ? and id = ?")
+      .get(projectId, worldRuleId) as WorldRuleRow | undefined;
+
+    return rule ? mapWorldRuleRow(rule) : undefined;
+  }
+
+  updateWorldRule(input: UpdateWorldRuleRecordInput): WorldRuleRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        `
+        update world_rules
+        set category = coalesce(@category, category),
+            title = coalesce(@title, title),
+            content = coalesce(@statement, content),
+            source = coalesce(@constraintLevel, source),
+            updated_at = @now
+        where project_id = @projectId and id = @worldRuleId
+        `,
+      )
+      .run({
+        category: input.category ?? null,
+        constraintLevel: input.constraintLevel ?? null,
+        now,
+        projectId: input.projectId,
+        statement: input.statement ?? null,
+        title: input.title ?? null,
+        worldRuleId: input.worldRuleId,
+      });
+
+    const rule = this.getWorldRule(input.projectId, input.worldRuleId);
+    if (!rule) {
+      throw new Error(`WORLD_RULE_NOT_FOUND: ${input.worldRuleId}`);
+    }
+
+    return rule;
+  }
+}
+
+function mapWorldRuleRow(row: WorldRuleRow): WorldRuleRecord {
+  return {
+    category: row.category,
+    content: row.content,
+    id: row.id,
+    projectId: row.project_id,
+    source: row.source,
+    status: row.status,
+    title: row.title,
+  };
 }

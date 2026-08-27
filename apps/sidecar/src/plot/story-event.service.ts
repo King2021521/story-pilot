@@ -69,4 +69,13 @@ export class StoryEventService {
       projectDatabase.close();
     }
   }
+
+  async listStoryEvents(projectId: string): Promise<StoryEventRecord[]> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
+    try {
+      return new PlotRepository(projectDatabase).listStoryEvents(projectId);
+    } finally {
+      projectDatabase.close();
+    }
+  }
 }

@@ -137,6 +137,35 @@ export class ChapterRepository {
     return row ? mapChapterRow(row) : undefined;
   }
 
+  listChapters(input: {
+    readonly projectId: string;
+    readonly volumeId?: string;
+  }): ChapterRecord[] {
+    if (input.volumeId) {
+      return this.projectDatabase.client
+        .prepare(
+          `
+          select * from chapters
+          where project_id = ? and volume_id = ?
+          order by position asc, created_at asc
+          `,
+        )
+        .all(input.projectId, input.volumeId)
+        .map((row) => mapChapterRow(row as ChapterRow));
+    }
+
+    return this.projectDatabase.client
+      .prepare(
+        `
+        select * from chapters
+        where project_id = ?
+        order by position asc, created_at asc
+        `,
+      )
+      .all(input.projectId)
+      .map((row) => mapChapterRow(row as ChapterRow));
+  }
+
   saveContent(input: SaveChapterContentInput): ChapterRecord {
     const save = this.projectDatabase.client.transaction(() => {
       const chapter = this.getById(input.projectId, input.chapterId);
@@ -202,6 +231,14 @@ export class ChapterRepository {
       )
       .all(projectId, chapterId)
       .map((row) => mapChapterVersionRow(row as ChapterVersionRow));
+  }
+
+  getVersionById(projectId: string, versionId: string): ChapterVersionRecord | undefined {
+    const row = this.projectDatabase.client
+      .prepare("select * from chapter_versions where project_id = ? and id = ?")
+      .get(projectId, versionId) as ChapterVersionRow | undefined;
+
+    return row ? mapChapterVersionRow(row) : undefined;
   }
 }
 

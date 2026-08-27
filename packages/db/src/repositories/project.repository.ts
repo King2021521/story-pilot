@@ -82,4 +82,100 @@ export class ProjectRepository {
       workId: input.workId,
     };
   }
+
+  getOverview(projectId: string): ProjectOverviewRecord | undefined {
+    const row = this.projectDatabase.client
+      .prepare(
+        `
+        select
+          p.id,
+          p.title,
+          p.genre,
+          p.status,
+          p.root_path,
+          p.created_at,
+          p.updated_at,
+          w.id as work_id,
+          v.id as default_volume_id
+        from projects p
+        left join works w on w.project_id = p.id
+        left join volumes v on v.project_id = p.id and v.work_id = w.id
+        where p.id = ?
+        order by w.created_at asc, v.position asc
+        limit 1
+        `,
+      )
+      .get(projectId) as ProjectOverviewRow | undefined;
+
+    return row ? mapProjectOverviewRow(row) : undefined;
+  }
+
+  getFirstOverview(): ProjectOverviewRecord | undefined {
+    const row = this.projectDatabase.client
+      .prepare(
+        `
+        select
+          p.id,
+          p.title,
+          p.genre,
+          p.status,
+          p.root_path,
+          p.created_at,
+          p.updated_at,
+          w.id as work_id,
+          v.id as default_volume_id
+        from projects p
+        left join works w on w.project_id = p.id
+        left join volumes v on v.project_id = p.id and v.work_id = w.id
+        order by coalesce(p.opened_at, 0) desc, p.updated_at desc
+        limit 1
+        `,
+      )
+      .get() as ProjectOverviewRow | undefined;
+
+    return row ? mapProjectOverviewRow(row) : undefined;
+  }
+
+  touchOpenedAt(projectId: string, openedAt = Date.now()): ProjectOverviewRecord {
+    this.projectDatabase.client
+      .prepare("update projects set opened_at = ?, updated_at = ? where id = ?")
+      .run(openedAt, openedAt, projectId);
+
+    const overview = this.getOverview(projectId);
+    if (!overview) {
+      throw new Error(`PROJECT_NOT_FOUND: ${projectId}`);
+    }
+
+    return overview;
+  }
+}
+
+interface ProjectOverviewRow {
+  readonly id: string;
+  readonly title: string;
+  readonly genre: string;
+  readonly status: string;
+  readonly root_path: string;
+  readonly created_at: number;
+  readonly updated_at: number;
+  readonly work_id: string | null;
+  readonly default_volume_id: string | null;
+}
+
+function mapProjectOverviewRow(row: ProjectOverviewRow): ProjectOverviewRecord {
+  if (!row.work_id || !row.default_volume_id) {
+    throw new Error(`PROJECT_OVERVIEW_INCOMPLETE: ${row.id}`);
+  }
+
+  return {
+    createdAt: row.created_at,
+    defaultVolumeId: row.default_volume_id,
+    genre: row.genre,
+    id: row.id,
+    rootPath: row.root_path,
+    status: row.status,
+    title: row.title,
+    updatedAt: row.updated_at,
+    workId: row.work_id,
+  };
 }

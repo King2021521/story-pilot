@@ -20,6 +20,21 @@ export interface CancelWorkflowInput {
   readonly workflowRunId: string;
 }
 
+export interface ListWorkOrdersInput {
+  readonly projectId: string;
+  readonly status?: string;
+}
+
+export interface GetWorkOrderInput {
+  readonly projectId: string;
+  readonly workOrderId: string;
+}
+
+export interface RetryWorkflowInput {
+  readonly projectId: string;
+  readonly workflowRunId: string;
+}
+
 @Injectable()
 export class WorkflowService {
   async run(input: RunWorkflowInput): Promise<WorkflowRunState> {
@@ -83,6 +98,71 @@ export class WorkflowService {
     }
   }
 
+  async listWorkOrders(input: ListWorkOrdersInput) {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      return new WorkflowRepository(projectDatabase).listWorkOrders({
+        projectId: input.projectId,
+        ...(input.status === undefined ? {} : { status: input.status }),
+      });
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async getWorkOrder(input: GetWorkOrderInput) {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const workOrder = new WorkflowRepository(projectDatabase).getWorkOrder(input.projectId, input.workOrderId);
+      if (!workOrder) {
+        throw new Error(`WORK_ORDER_NOT_FOUND: ${input.workOrderId}`);
+      }
+
+      return workOrder;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async getWorkflowRun(input: RetryWorkflowInput): Promise<WorkflowRunRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const run = new WorkflowRepository(projectDatabase).getWorkflowRun(input.projectId, input.workflowRunId);
+      if (!run) {
+        throw new Error(`WORKFLOW_RUN_NOT_FOUND: ${input.workflowRunId}`);
+      }
+
+      return run;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async retry(input: RetryWorkflowInput): Promise<WorkflowRunState> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    let previousRun: WorkflowRunRecord;
+    try {
+      const repository = new WorkflowRepository(projectDatabase);
+      const persistedRun = repository.getWorkflowRun(input.projectId, input.workflowRunId);
+      if (!persistedRun) {
+        throw new Error(`WORKFLOW_RUN_NOT_FOUND: ${input.workflowRunId}`);
+      }
+      previousRun = persistedRun;
+    } finally {
+      projectDatabase.close();
+    }
+
+    return this.run({
+      input: {
+        ...previousRun.input,
+        retriedFromRunId: input.workflowRunId,
+      },
+      projectId: input.projectId,
+      workflowType: previousRun.workflowName,
+      ...(previousRun.workOrderId === null ? {} : { workOrderId: previousRun.workOrderId }),
+    });
+  }
+
   constructor(private readonly projectStorage: ProjectStorageService) {}
 }
 
@@ -103,6 +183,15 @@ function createDefaultWorkflowRegistry(): WorkflowRegistry {
         {
           name: "wait_for_memory_confirmation",
           execute: async () => ({ status: "waiting_user", output: { reason: "needs_memory_review" } }),
+        },
+      ],
+    })
+    .register({
+      name: "foreshadowing_plan",
+      steps: [
+        {
+          name: "prepare_foreshadowing_plan",
+          execute: async () => ({ status: "completed", output: { ready: true } }),
         },
       ],
     });

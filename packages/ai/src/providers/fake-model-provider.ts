@@ -36,12 +36,14 @@ export class FakeModelProvider implements ModelProvider {
   }
 
   async *streamText(_input: ProviderStreamTextInput): AsyncIterable<string> {
+    void _input;
     for (const chunk of this.options.textChunks ?? []) {
       yield chunk;
     }
   }
 
   async embed(_input: ProviderEmbedInput): Promise<ProviderEmbedResult> {
+    void _input;
     return {
       embedding: [...(this.options.embedding ?? [])],
     };
