@@ -25,6 +25,8 @@ describe("PromptRegistry", () => {
 
     expect(prompt.content).toContain("候选记忆");
     expect(prompt.content).toContain("不得写入正式 canon");
+    expect(prompt.content).toContain("sourceQuote");
+    expect(prompt.content).toContain("sourceSummary");
     expect(prompt.content).toContain("等待用户确认");
   });
 });

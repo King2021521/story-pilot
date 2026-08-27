@@ -710,6 +710,57 @@ describe("RpcService MVP command integration", () => {
       await moduleRef.close();
     }
   });
+
+  it("runs memory extraction through workflow.run and exposes pending candidates", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const { chapter, project } = await createProjectAndChapter(rpcService);
+      const run = await expectRpcOk(
+        rpcService.handle({
+          command: "workflow.run",
+          id: "req_memory_extract",
+          payload: {
+            input: {
+              sourceId: getString(chapter, "id"),
+              sourceText: "林鸢发现门缝下有一封旧信。",
+              sourceType: "chapter",
+            },
+            projectId: getString(project, "id"),
+            targetId: getString(chapter, "id"),
+            targetType: "chapter",
+            workflowType: "memory_extract",
+          },
+        }),
+      );
+
+      expect(run).toMatchObject({
+        status: "waiting_user",
+        workflowName: "memory_extract",
+      });
+
+      const candidates = await expectRpcData(
+        rpcService.handle({
+          command: "memory.listCandidates",
+          id: "req_memory_extract_candidates",
+          payload: {
+            projectId: getString(project, "id"),
+            status: "pending",
+          },
+        }),
+      );
+
+      expect(getArray(candidates)).toEqual([
+        expect.objectContaining({
+          content: "林鸢发现一封来自十年前的旧信。",
+          sourceId: getString(chapter, "id"),
+          sourceType: "chapter",
+          status: "pending",
+        }),
+      ]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
 });
 
 async function createRpcHarness(tempDirs: string[]) {
@@ -739,6 +790,18 @@ async function createRpcHarness(tempDirs: string[]) {
                 },
               ],
               reviewNotes: [],
+            },
+            MemoryExtractOutput: {
+              conflictNotes: [],
+              memoryCandidates: [
+                {
+                  confidence: 0.86,
+                  content: "林鸢发现一封来自十年前的旧信。",
+                  entityType: "story_event",
+                  kind: "event",
+                  sourceQuote: "林鸢发现门缝下有一封旧信。",
+                },
+              ],
             },
           },
         }),
