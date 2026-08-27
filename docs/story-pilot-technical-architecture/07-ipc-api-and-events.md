@@ -24,13 +24,13 @@ TypeScript Sidecar
 
 ## 两种可选通信方案
 
-### 方案 A：Fastify 本地 HTTP
+### 方案 A：NestJS 本地 HTTP RPC
 
 ```text
 Rust Bridge starts sidecar
   │
   ▼
-sidecar binds 127.0.0.1:<random>
+NestJS sidecar binds 127.0.0.1:<random>
   │
   ▼
 Rust Bridge stores port and token
@@ -46,7 +46,8 @@ Rust forwards request to sidecar HTTP
 
 - 开发和调试方便。
 - 支持 streaming 和健康检查。
-- Fastify schema、plugin 和 TypeScript 支持成熟。
+- NestJS Module、Controller、Provider 和测试工具适合长期维护。
+- HTTP RPC 便于开发调试、健康检查和事件流。
 - 后续拆成独立服务成本低。
 
 风险：
@@ -78,7 +79,7 @@ sidecar writes response/events to stdout
 
 ### 推荐
 
-MVP 推荐方案 A：Fastify 本地 HTTP，但前端只能通过 Tauri command 调用。
+MVP 推荐方案 A：NestJS 本地 HTTP RPC，但前端只能通过 Tauri command 调用。
 
 约束：
 
@@ -129,7 +130,7 @@ async fn sp_command(
 
 ## Sidecar API
 
-如果采用 Fastify，本地 API 可统一为：
+如果采用 NestJS 本地 HTTP RPC，本地 API 可统一为：
 
 ```text
 POST /rpc
@@ -560,4 +561,3 @@ type MemoryConfirmResponse = {
 - AI 任务启动到首个进度事件：小于 500ms。
 
 AI 生成耗时由模型决定，但 UI 必须在 500ms 内显示任务已开始。
-

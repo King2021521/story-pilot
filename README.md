@@ -7,7 +7,7 @@ Story Pilot is a desktop-first AI writing workbench for long-form fiction. The c
 ```text
 apps/
   desktop/        React + Vite + Tauri v2 desktop app
-  sidecar/        TypeScript sidecar backend powered by Fastify
+  sidecar/        TypeScript sidecar backend, planned as a NestJS local service
 packages/
   contracts/      Shared RPC, event, and error contracts
   domain/         Pure domain rules and state transitions
@@ -53,7 +53,6 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 
 - Tauri owns desktop capabilities, windowing, filesystem boundaries, and the future sidecar lifecycle.
 - React owns the workbench UI and talks through Tauri commands.
-- The TypeScript sidecar owns local backend services and exposes health/RPC entry points.
+- The TypeScript sidecar owns local backend services and should use NestJS for module, controller, and provider structure.
 - Shared contracts live in `packages/contracts` and are built before cross-package checks.
 - AI and storage packages are scaffolded as explicit boundaries before implementation begins.
-

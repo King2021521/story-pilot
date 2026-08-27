@@ -39,7 +39,7 @@ Story Pilot 是本地创作工具，默认承载用户的未公开作品、设�
 
 ### Sidecar token
 
-如果采用 Fastify 本地 HTTP：
+如果采用 NestJS 本地 HTTP RPC：
 
 - sidecar 只监听 `127.0.0.1`。
 - 端口随机分配。
@@ -513,4 +513,3 @@ MVP 目标：
 - 图谱可以重建。
 - 可以导出 Markdown 或 txt。
 - 可以创建项目备份。
-

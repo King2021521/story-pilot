@@ -9,11 +9,17 @@
 
 本设计采用 Tauri 作为桌面壳和安全边界，并使用 sidecar 承载 TypeScript 后端。
 
-## Fastify
+## NestJS
 
-- [Fastify TypeScript server 示例](https://github.com/fastify/fastify/blob/main/examples/typescript-server.ts)
+- [NestJS 官方文档](https://github.com/nestjs/docs.nestjs.com)
 
-本设计将 Fastify 作为本地 sidecar API 的推荐方案。若后续更强调封闭通信，也可以替换为 stdin/stdout JSON-RPC。
+本设计将 NestJS 作为 TypeScript sidecar 后端框架。MVP 使用 NestJS 默认 HTTP 平台适配层，不引入 Fastify 作为显式依赖。
+
+## Ant Design
+
+- [Ant Design 官方文档](https://github.com/ant-design/ant-design)
+
+本设计要求桌面前端基于 Ant Design 组件体系实现工作台、表单、表格、树、抽屉、弹窗和全局反馈。
 
 ## Drizzle ORM
 
@@ -37,4 +43,3 @@ Neo4j 是成熟图数据库，但对桌面 MVP 而言更偏服务化部署。本
 
 - [小说创作平台需求分析](../novel-creation-agent-requirements/README.md)
 - [Story Pilot 桌面端产品设计](../story-pilot-desktop-product-design/README.md)
-

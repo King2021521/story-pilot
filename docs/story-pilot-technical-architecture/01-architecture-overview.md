@@ -22,9 +22,9 @@ Story Pilot 是一个面向长篇文学创作的桌面端 AI 创作工作台。�
 │                                            │ managed sidecar │
 │                                            ▼                 │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │ TypeScript Sidecar Runtime                             │  │
+│  │ NestJS TypeScript Sidecar Runtime                      │  │
 │  │                                                        │  │
-│  │  API Router  App Services  Workflow Runtime  AI Layer  │  │
+│  │  Controllers  App Services  Workflow Runtime  AI Layer │  │
 │  │      │            │              │              │       │  │
 │  │      ▼            ▼              ▼              ▼       │  │
 │  │  SQLite      Kuzu Graph      File Store      LLM APIs   │  │
@@ -64,12 +64,12 @@ Story Pilot 是一个面向长篇文学创作的桌面端 AI 创作工作台。�
 - 不实现 AI 编排逻辑。
 - 不直接写业务数据库，除非是启动、迁移、诊断等极少数桥接场景。
 
-### TypeScript Sidecar Runtime
+### NestJS TypeScript Sidecar Runtime
 
 职责：
 
 - 承载后端业务逻辑。
-- 提供本地内部 API 或 JSON-RPC 服务。
+- 提供本地内部 HTTP RPC 服务。
 - 执行数据库读写、图谱投影、搜索索引、文件存储、导入导出。
 - 承载 AI 工作流运行时、上下文组装、模型网关、结构化输出解析和任务恢复。
 
@@ -78,6 +78,7 @@ Story Pilot 是一个面向长篇文学创作的桌面端 AI 创作工作台。�
 - 和前端类型系统可以共享 contract。
 - LLM SDK、文本处理、结构化 schema、workflow 生态更顺手。
 - 更适合快速迭代 AI 产品逻辑。
+- NestJS 提供模块化、依赖注入、Controller/Provider 分层和测试工具。
 - Rust 保持薄桥接，降低桌面层复杂度。
 
 ## 组件分层
@@ -89,7 +90,7 @@ UI Command
 Tauri IPC
   │
   ▼
-Sidecar API Router
+NestJS Controller
   │
   ▼
 Application Service
@@ -222,7 +223,7 @@ Graph Projector 根据事件更新 Kuzu
 | --- | --- | --- |
 | Frontend | UI、交互、状态呈现、用户命令 | 数据库直连、LLM 密钥、复杂业务规则 |
 | Rust Bridge | Tauri 能力、sidecar 生命周期、安全边界 | AI 编排、业务服务、复杂查询 |
-| Sidecar API | 命令路由、权限校验、请求响应和事件 | 直接拼 prompt |
+| NestJS Sidecar | Controller、Module、Provider、权限校验、请求响应和事件 | 直接拼 prompt |
 | App Services | 用户用例编排和事务边界 | 具体模型 provider 细节 |
 | Domain | 创作对象、规则、状态机 | 任何外部 IO |
 | Workflow Runtime | AI 任务步骤、暂停、恢复、取消、审计 | UI 呈现 |
@@ -237,8 +238,8 @@ Graph Projector 根据事件更新 Kuzu
 | --- | --- | --- |
 | 桌面框架 | Tauri v2 | 轻量、安全能力强、适合本地应用 |
 | 桌面桥接 | Rust commands + sidecar | Rust 控制桌面能力，业务逻辑放 TS |
-| Sidecar 运行时 | Node.js + TypeScript | AI 编排和文本处理效率高 |
-| 内部 API | Fastify 或 JSON-RPC | Fastify 适合本地 HTTP、schema 和流式；JSON-RPC 更封闭 |
+| Sidecar 运行时 | NestJS + Node.js + TypeScript | 模块化、依赖注入、测试工具和工程规范更适合复杂后端 |
+| 内部 API | NestJS HTTP RPC | 保留本地 HTTP 调试和事件流能力，前端仍只能通过 Tauri bridge 调用 |
 | 关系数据库 | SQLite + Drizzle ORM | 嵌入式、事务稳定、迁移简单 |
 | 图数据库 | Kuzu embedded | 本地嵌入式 property graph，适合桌面端关系检索 |
 | 全文搜索 | SQLite FTS5 | MVP 足够，部署成本低 |
@@ -304,4 +305,3 @@ MVP 暂缓：
 - 自动商业化发布
 - 多模型成本优化调度
 - 复杂 Agent 对话编排
-

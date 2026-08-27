@@ -35,12 +35,22 @@ story-pilot/
     sidecar/
       src/
         main.ts
-        server.ts
-        bootstrap.ts
-        env.ts
-        routes/
-        services/
-        workers/
+        app.module.ts
+        common/
+        rpc/
+        health/
+        project/
+        workbench/
+        chapter/
+        character/
+        world/
+        plot/
+        memory/
+        workflow/
+        ai/
+        storage/
+        graph/
+        search/
   packages/
     contracts/
       src/
@@ -127,15 +137,31 @@ story-pilot/
 
 ### `apps/sidecar`
 
-本地业务后端进程。
+基于 NestJS 的本地业务后端进程。
 
 职责：
 
-- 启动本地 API 或 JSON-RPC 服务。
+- 启动 NestJS 本地 HTTP RPC 服务。
 - 初始化用户数据目录和项目目录。
 - 连接 SQLite、Kuzu、索引和文件存储。
 - 执行业务 service 和 workflow runtime。
 - 向 Rust bridge 输出事件。
+
+模块组织：
+
+- `HealthModule`: sidecar 健康检查。
+- `RpcModule`: 统一 RPC envelope 和 command dispatch。
+- `ProjectModule`: 项目创建、打开、索引和备份。
+- `ChapterModule`: 卷、章节、正文和版本。
+- `CharacterModule`: 人物库和关系维护。
+- `WorldModule`: 世界规则、地点、组织、物品。
+- `PlotModule`: 故事线、剧情节点、伏笔。
+- `MemoryModule`: 候选记忆、正式记忆和确认流。
+- `WorkflowModule`: 工作单和 AI 工作流运行时。
+- `AiModule`: 模型网关、提示词、结构化输出和审阅。
+- `StorageModule`: 项目目录、文件存储、快照。
+- `GraphModule`: Kuzu 图谱投影和查询。
+- `SearchModule`: FTS、向量索引和上下文召回。
 
 ### `packages/contracts`
 
@@ -406,4 +432,3 @@ contracts command schema
 - data log：migration、graph projection、backup。
 
 日志默认按天切分并限制保留天数。模型原始输入输出默认只保存到项目内 `files/model-raw/`，由用户可配置关闭。
-

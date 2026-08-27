@@ -4,7 +4,7 @@
 
 ## 设计结论
 
-Story Pilot 推荐采用“本地优先的桌面应用 + TypeScript sidecar 后端 + SQLite/Kuzu 双存储 + AI 工作流运行时”的架构。
+Story Pilot 推荐采用“本地优先的桌面应用 + NestJS TypeScript sidecar 后端 + SQLite/Kuzu 双存储 + AI 工作流运行时”的架构。
 
 核心判断：
 
@@ -68,4 +68,3 @@ Story Pilot 推荐采用“本地优先的桌面应用 + TypeScript sidecar 后�
 
 6. 工程上避免过早服务化  
    桌面 MVP 不引入 Postgres、Redis、Temporal、Neo4j 服务端集群。先用嵌入式、本地可运维的组件完成闭环。
-
