@@ -93,6 +93,9 @@ importers:
       '@nestjs/platform-express':
         specifier: ^12.0.1
         version: 12.0.1(@nestjs/common@12.0.1)(@nestjs/core@12.0.1)
+      '@story-pilot/ai':
+        specifier: workspace:^
+        version: link:../../packages/ai
       '@story-pilot/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
@@ -111,6 +114,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@nestjs/testing':
         specifier: ^12.0.1
@@ -122,7 +128,11 @@ importers:
         specifier: ^7.2.2
         version: 7.2.2
 
-  packages/ai: {}
+  packages/ai:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/contracts:
     dependencies:

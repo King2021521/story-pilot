@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { AiModule } from "./ai/ai.module.js";
 import { ArtifactModule } from "./artifact/artifact.module.js";
 import { CharacterModule } from "./character/character.module.js";
 import { ChapterModule } from "./chapter/chapter.module.js";
@@ -12,6 +13,7 @@ import { WorldModule } from "./world/world.module.js";
 
 @Module({
   imports: [
+    AiModule,
     ArtifactModule,
     CharacterModule,
     ChapterModule,
