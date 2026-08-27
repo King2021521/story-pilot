@@ -51,4 +51,39 @@ describe("RpcController", () => {
       },
     });
   });
+
+  it("rejects RPC requests when a bridge token is configured and does not match", async () => {
+    const previousToken = process.env.STORY_PILOT_SIDECAR_TOKEN;
+    process.env.STORY_PILOT_SIDECAR_TOKEN = "test-bridge-token";
+    const moduleRef = await Test.createTestingModule({
+      imports: [RpcModule],
+    }).compile();
+    const controller = moduleRef.get(RpcController);
+
+    try {
+      await expect(
+        controller.handle(
+          {
+            id: "req_auth",
+            command: "app.health",
+          },
+          "wrong-token",
+        ),
+      ).resolves.toEqual({
+        id: "req_auth",
+        ok: false,
+        error: {
+          code: "SECURITY_FORBIDDEN",
+          message: "Invalid sidecar bridge token",
+        },
+      });
+    } finally {
+      if (previousToken === undefined) {
+        delete process.env.STORY_PILOT_SIDECAR_TOKEN;
+      } else {
+        process.env.STORY_PILOT_SIDECAR_TOKEN = previousToken;
+      }
+      await moduleRef.close();
+    }
+  });
 });

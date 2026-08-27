@@ -4,19 +4,86 @@ import {
   FileProtectOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Col, Row, Statistic, Tabs } from "antd";
+import { Col, Empty, Row, Spin, Statistic, Tabs } from "antd";
 
-import { ChapterEditorPage } from "../chapter/ChapterEditorPage";
-import { MemoryCandidateList } from "../memory/MemoryCandidateList";
+import {
+  ChapterEditorPage,
+  type GenerateChapterDraftRequest,
+  type SaveChapterRequest,
+} from "../chapter/ChapterEditorPage";
+import { MemoryCandidateList, type MemoryCandidateItem } from "../memory/MemoryCandidateList";
 
-const metrics = [
-  { icon: <FileProtectOutlined />, title: "故事圣经", value: 12 },
-  { icon: <TeamOutlined />, title: "人物", value: 8 },
-  { icon: <BranchesOutlined />, title: "故事线", value: 4 },
-  { icon: <DeploymentUnitOutlined />, title: "图谱关系", value: 26 },
-];
+export interface WorkbenchProject {
+  readonly defaultVolumeId: string;
+  readonly genre: string;
+  readonly id: string;
+  readonly status: string;
+  readonly title: string;
+}
 
-export function WorkbenchHome() {
+export interface WorkbenchChapter {
+  readonly content: string;
+  readonly id: string;
+  readonly title: string;
+  readonly version: number;
+}
+
+export interface WorkbenchBoard {
+  readonly artifacts: readonly unknown[];
+  readonly chapters: readonly WorkbenchChapter[];
+  readonly memoryCandidates: readonly MemoryCandidateItem[];
+  readonly project: WorkbenchProject;
+  readonly workOrders: readonly unknown[];
+}
+
+export interface WorkbenchHomeProps {
+  readonly board?: WorkbenchBoard | undefined;
+  readonly loading?: boolean;
+  readonly selectedChapterId?: string | undefined;
+  readonly savingChapter?: boolean;
+  onGenerateDraft(input: GenerateChapterDraftRequest): Promise<void> | void;
+  onRejectMemory(candidateId: string): Promise<void> | void;
+  onSaveChapter(input: SaveChapterRequest): Promise<void> | void;
+  onSelectChapter(chapterId: string): void;
+  onAcceptMemory(candidateId: string): Promise<void> | void;
+}
+
+export function WorkbenchHome({
+  board,
+  loading = false,
+  onAcceptMemory,
+  onGenerateDraft,
+  onRejectMemory,
+  onSaveChapter,
+  onSelectChapter,
+  savingChapter = false,
+  selectedChapterId,
+}: WorkbenchHomeProps) {
+  if (loading) {
+    return (
+      <div className="workbench-home workbench-home--centered">
+        <Spin />
+      </div>
+    );
+  }
+
+  if (!board) {
+    return (
+      <div className="workbench-home workbench-home--centered">
+        <Empty description="暂无打开的作品" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      </div>
+    );
+  }
+
+  const selectedChapter =
+    board.chapters.find((chapter) => chapter.id === selectedChapterId) ?? board.chapters[0];
+  const metrics = [
+    { icon: <FileProtectOutlined />, title: "章节", value: board.chapters.length },
+    { icon: <TeamOutlined />, title: "待确认记忆", value: board.memoryCandidates.length },
+    { icon: <BranchesOutlined />, title: "待审产物", value: board.artifacts.length },
+    { icon: <DeploymentUnitOutlined />, title: "AI 任务", value: board.workOrders.length },
+  ];
+
   return (
     <div className="workbench-home">
       <Row gutter={[12, 12]}>
@@ -36,14 +103,12 @@ export function WorkbenchHome() {
           {
             children: (
               <ChapterEditorPage
-                chapter={{
-                  content: "雨水沿着旧城墙的裂缝向下流，林鸢在钟楼下拆开那封没有署名的信。",
-                  id: "chapter_1",
-                  title: "第一章 雨夜来信",
-                  version: 1,
-                }}
-                onGenerateDraft={() => undefined}
-                onSave={() => undefined}
+                chapter={selectedChapter}
+                chapters={board.chapters}
+                onGenerateDraft={onGenerateDraft}
+                onSave={onSaveChapter}
+                onSelectChapter={onSelectChapter}
+                saving={savingChapter}
               />
             ),
             key: "chapter",
@@ -52,17 +117,9 @@ export function WorkbenchHome() {
           {
             children: (
               <MemoryCandidateList
-                candidates={[
-                  {
-                    confidence: 0.8,
-                    content: "林鸢发现一封来历异常的旧信。",
-                    id: "candidate_1",
-                    kind: "event",
-                    status: "pending",
-                  },
-                ]}
-                onAccept={() => undefined}
-                onReject={() => undefined}
+                candidates={board.memoryCandidates}
+                onAccept={onAcceptMemory}
+                onReject={onRejectMemory}
               />
             ),
             key: "memory",

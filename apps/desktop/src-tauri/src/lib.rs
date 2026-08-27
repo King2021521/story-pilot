@@ -21,9 +21,14 @@ async fn story_pilot_rpc_to_url(
     request: StoryPilotRpcRequest,
 ) -> Result<Value, String> {
     let endpoint = build_rpc_endpoint(sidecar_base_url)?;
-    let response = reqwest::Client::new()
-        .post(endpoint)
-        .json(&request)
+    let mut request_builder = reqwest::Client::new().post(endpoint).json(&request);
+    if let Ok(token) = std::env::var("STORY_PILOT_SIDECAR_TOKEN") {
+        if !token.is_empty() {
+            request_builder = request_builder.header("x-story-pilot-bridge-token", token);
+        }
+    }
+
+    let response = request_builder
         .send()
         .await
         .map_err(|error| format!("SIDECAR_RPC_REQUEST_FAILED: {error}"))?;
@@ -84,7 +89,7 @@ mod tests {
     #[test]
     fn story_pilot_rpc_forwards_rpc_envelope_to_sidecar() {
         let (url_tx, url_rx) = mpsc::channel();
-        let (body_tx, body_rx) = mpsc::channel();
+        let (request_tx, request_rx) = mpsc::channel();
 
         let server = thread::spawn(move || {
             let listener = TcpListener::bind("127.0.0.1:0").expect("bind test sidecar");
@@ -118,10 +123,9 @@ mod tests {
             }
 
             let request_text = String::from_utf8(request_bytes).expect("request is utf8");
-            let body_start = request_text.find("\r\n\r\n").expect("header terminator") + 4;
-            body_tx
-                .send(request_text[body_start..].to_string())
-                .expect("send request body");
+            request_tx
+                .send(request_text)
+                .expect("send raw test request");
 
             let response_body = r#"{"id":"req_1","ok":true,"data":{"status":"ok"}}"#;
             let response = format!(
@@ -140,14 +144,22 @@ mod tests {
             id: "req_1".to_string(),
             payload: json!({ "source": "rust-test" }),
         };
+        std::env::set_var("STORY_PILOT_SIDECAR_TOKEN", "bridge-token");
         let response = tauri::async_runtime::block_on(story_pilot_rpc_to_url(&url, request))
             .expect("forward rpc");
+        std::env::remove_var("STORY_PILOT_SIDECAR_TOKEN");
+        let raw_request = request_rx.recv().expect("raw request");
 
         assert_eq!(response["ok"], true);
         assert_eq!(response["data"]["status"], "ok");
+        assert!(
+            raw_request
+                .to_lowercase()
+                .contains("x-story-pilot-bridge-token: bridge-token"),
+            "missing sidecar bridge token header in request: {raw_request}",
+        );
         assert_eq!(
-            serde_json::from_str::<Value>(&body_rx.recv().expect("request body"))
-                .expect("json body"),
+            serde_json::from_str::<Value>(request_body(&raw_request)).expect("json body"),
             json!({
                 "command": "app.health",
                 "id": "req_1",
@@ -166,5 +178,11 @@ mod tests {
                 None
             }
         })
+    }
+
+    fn request_body(request_text: &str) -> &str {
+        let body_start = request_text.find("\r\n\r\n").expect("header terminator") + 4;
+
+        &request_text[body_start..]
     }
 }

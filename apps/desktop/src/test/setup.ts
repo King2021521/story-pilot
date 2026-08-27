@@ -25,3 +25,10 @@ Object.defineProperty(window, "matchMedia", {
     removeListener: vi.fn(),
   })),
 });
+
+const realGetComputedStyle = window.getComputedStyle.bind(window);
+
+Object.defineProperty(window, "getComputedStyle", {
+  configurable: true,
+  value: (element: Element) => realGetComputedStyle(element),
+});

@@ -1,8 +1,8 @@
 import { BranchesOutlined, SaveOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { Button, Form, Input, Space, Tag, Typography } from "antd";
+import { Button, Empty, Form, Input, Space, Tag, Typography } from "antd";
 
 import { ChapterTree } from "./ChapterTree";
-import { ChapterVersionDrawer } from "./ChapterVersionDrawer";
+import { ChapterVersionDrawer, type ChapterVersionItem } from "./ChapterVersionDrawer";
 
 const { Text, Title } = Typography;
 
@@ -25,19 +25,49 @@ export interface GenerateChapterDraftRequest {
 }
 
 export interface ChapterEditorPageProps {
-  readonly chapter: ChapterEditorModel;
-  onSave(input: SaveChapterRequest): void;
-  onGenerateDraft(input: GenerateChapterDraftRequest): void;
+  readonly chapter?: ChapterEditorModel | undefined;
+  readonly chapters?: readonly ChapterEditorModel[];
+  readonly saving?: boolean;
+  readonly versions?: readonly ChapterVersionItem[];
+  onGenerateDraft(input: GenerateChapterDraftRequest): Promise<void> | void;
+  onSave(input: SaveChapterRequest): Promise<void> | void;
+  onSelectChapter?: ((chapterId: string) => void) | undefined;
 }
 
-export function ChapterEditorPage({ chapter, onGenerateDraft, onSave }: ChapterEditorPageProps) {
+export function ChapterEditorPage({
+  chapter,
+  chapters,
+  onGenerateDraft,
+  onSave,
+  onSelectChapter,
+  saving = false,
+  versions,
+}: ChapterEditorPageProps) {
+  if (!chapter) {
+    return (
+      <section className="chapter-editor-page">
+        <ChapterTree chapters={chapters ?? []} onSelectChapter={onSelectChapter} />
+        <div className="chapter-editor-page__main">
+          <Empty description="暂无章节" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </div>
+      </section>
+    );
+  }
+
+  const chapterVersions = versions ?? [
+    {
+      id: `${chapter.id}-v${chapter.version}`,
+      source: "current",
+      title: `${chapter.title} v${chapter.version}`,
+      version: chapter.version,
+    },
+  ];
+
   return (
     <section className="chapter-editor-page">
       <ChapterTree
-        chapters={[
-          { id: chapter.id, title: chapter.title },
-          { id: "chapter_2", title: "第二章 旧报纸" },
-        ]}
+        chapters={chapters ?? [chapter]}
+        onSelectChapter={onSelectChapter}
         selectedChapterId={chapter.id}
       />
 
@@ -51,16 +81,7 @@ export function ChapterEditorPage({ chapter, onGenerateDraft, onSave }: ChapterE
             </Space>
           </div>
           <Space wrap>
-            <ChapterVersionDrawer
-              versions={[
-                {
-                  id: "version_1",
-                  source: "user",
-                  title: `${chapter.title} v${chapter.version}`,
-                  version: chapter.version,
-                },
-              ]}
-            />
+            <ChapterVersionDrawer versions={chapterVersions} />
             <Button
               aria-label="生成草稿"
               icon={<ThunderboltOutlined />}
@@ -77,6 +98,7 @@ export function ChapterEditorPage({ chapter, onGenerateDraft, onSave }: ChapterE
         </header>
 
         <Form
+          key={`${chapter.id}:${chapter.version}`}
           initialValues={{ content: chapter.content }}
           layout="vertical"
           onFinish={(values: { content: string }) =>
@@ -87,7 +109,11 @@ export function ChapterEditorPage({ chapter, onGenerateDraft, onSave }: ChapterE
             })
           }
         >
-          <Form.Item label="章节正文" name="content" rules={[{ required: true, message: "请输入章节正文" }]}>
+          <Form.Item
+            label="章节正文"
+            name="content"
+            rules={[{ required: true, message: "请输入章节正文" }]}
+          >
             <Input.TextArea
               aria-label="章节正文"
               autoSize={{ maxRows: 18, minRows: 12 }}
@@ -95,7 +121,13 @@ export function ChapterEditorPage({ chapter, onGenerateDraft, onSave }: ChapterE
             />
           </Form.Item>
           <Space>
-            <Button aria-label="保存章节" htmlType="submit" icon={<SaveOutlined />} type="primary">
+            <Button
+              aria-label="保存章节"
+              htmlType="submit"
+              icon={<SaveOutlined />}
+              loading={saving}
+              type="primary"
+            >
               保存章节
             </Button>
             <Button icon={<BranchesOutlined />}>查看脉络</Button>
