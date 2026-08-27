@@ -11,6 +11,17 @@ import {
   type GenerateChapterDraftRequest,
   type SaveChapterRequest,
 } from "../chapter/ChapterEditorPage";
+import {
+  CreativeElementsPanel,
+  type CharacterElement,
+  type CreateCharacterValues,
+  type CreateForeshadowingValues,
+  type CreatePlotlineValues,
+  type CreateWorldRuleValues,
+  type ForeshadowingElement,
+  type PlotlineElement,
+  type WorldRuleElement,
+} from "../creative/CreativeElementsPanel";
 import { MemoryCandidateList, type MemoryCandidateItem } from "../memory/MemoryCandidateList";
 
 export interface WorkbenchProject {
@@ -31,9 +42,13 @@ export interface WorkbenchChapter {
 export interface WorkbenchBoard {
   readonly artifacts: readonly unknown[];
   readonly chapters: readonly WorkbenchChapter[];
+  readonly characters?: readonly CharacterElement[];
+  readonly foreshadowings?: readonly ForeshadowingElement[];
   readonly memoryCandidates: readonly MemoryCandidateItem[];
+  readonly plotlines?: readonly PlotlineElement[];
   readonly project: WorkbenchProject;
   readonly workOrders: readonly unknown[];
+  readonly worldRules?: readonly WorldRuleElement[];
 }
 
 export interface WorkbenchHomeProps {
@@ -46,12 +61,20 @@ export interface WorkbenchHomeProps {
   onSaveChapter(input: SaveChapterRequest): Promise<void> | void;
   onSelectChapter(chapterId: string): void;
   onAcceptMemory(candidateId: string): Promise<void> | void;
+  onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
+  onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
+  onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
+  onCreateWorldRule(input: CreateWorldRuleValues): Promise<void> | void;
 }
 
 export function WorkbenchHome({
   board,
   loading = false,
   onAcceptMemory,
+  onCreateCharacter,
+  onCreateForeshadowing,
+  onCreatePlotline,
+  onCreateWorldRule,
   onGenerateDraft,
   onRejectMemory,
   onSaveChapter,
@@ -79,8 +102,8 @@ export function WorkbenchHome({
     board.chapters.find((chapter) => chapter.id === selectedChapterId) ?? board.chapters[0];
   const metrics = [
     { icon: <FileProtectOutlined />, title: "章节", value: board.chapters.length },
-    { icon: <TeamOutlined />, title: "待确认记忆", value: board.memoryCandidates.length },
-    { icon: <BranchesOutlined />, title: "待审产物", value: board.artifacts.length },
+    { icon: <TeamOutlined />, title: "人物", value: board.characters?.length ?? 0 },
+    { icon: <BranchesOutlined />, title: "故事线", value: board.plotlines?.length ?? 0 },
     { icon: <DeploymentUnitOutlined />, title: "AI 任务", value: board.workOrders.length },
   ];
 
@@ -113,6 +136,22 @@ export function WorkbenchHome({
             ),
             key: "chapter",
             label: "章节",
+          },
+          {
+            children: (
+              <CreativeElementsPanel
+                characters={board.characters ?? []}
+                foreshadowings={board.foreshadowings ?? []}
+                onCreateCharacter={onCreateCharacter}
+                onCreateForeshadowing={onCreateForeshadowing}
+                onCreatePlotline={onCreatePlotline}
+                onCreateWorldRule={onCreateWorldRule}
+                plotlines={board.plotlines ?? []}
+                worldRules={board.worldRules ?? []}
+              />
+            ),
+            key: "creative",
+            label: "创作要素",
           },
           {
             children: (

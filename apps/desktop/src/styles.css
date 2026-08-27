@@ -185,6 +185,37 @@ button {
   min-width: 0;
 }
 
+.creative-elements {
+  align-items: stretch;
+}
+
+.creative-panel {
+  display: grid;
+  gap: 14px;
+  height: 100%;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.creative-panel h5 {
+  margin: 0;
+}
+
+.creative-panel__inline {
+  width: 100%;
+}
+
+.creative-panel__inline > .ant-space-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.creative-list {
+  min-height: 104px;
+}
+
 .chapter-version-item {
   margin: 0;
 }

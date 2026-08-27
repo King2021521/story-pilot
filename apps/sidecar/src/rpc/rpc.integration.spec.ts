@@ -507,6 +507,85 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("includes creative objects on the workbench board after they are created", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_board_creative",
+          payload: { genre: "悬疑", title: "长夜序章" },
+        }),
+      );
+
+      await expectRpcOk(
+        rpcService.handle({
+          command: "character.create",
+          id: "character_create",
+          payload: {
+            name: "林鸢",
+            projectId: getString(project, "id"),
+            role: "protagonist",
+          },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "worldRule.create",
+          id: "world_rule_create",
+          payload: {
+            category: "society",
+            projectId: getString(project, "id"),
+            statement: "旧城区由钟楼议会管理。",
+            title: "旧城区治理",
+          },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.create",
+          id: "plotline_create",
+          payload: {
+            kind: "mystery",
+            priority: 5,
+            projectId: getString(project, "id"),
+            summary: "围绕旧信来源展开。",
+            title: "旧信谜团",
+          },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.create",
+          id: "foreshadowing_create",
+          payload: {
+            description: "信纸水印暗示十年前档案。",
+            payoffExpectation: "后续揭示档案伪造者。",
+            projectId: getString(project, "id"),
+            title: "水印伏笔",
+          },
+        }),
+      );
+
+      const board = await expectRpcData(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "board_with_creative_objects",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+
+      expect(board).toMatchObject({
+        characters: [expect.objectContaining({ name: "林鸢" })],
+        foreshadowings: [expect.objectContaining({ title: "水印伏笔" })],
+        plotlines: [expect.objectContaining({ name: "旧信谜团" })],
+        worldRules: [expect.objectContaining({ title: "旧城区治理" })],
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("supports workflow, artifact, memory search, and graph utility commands", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {

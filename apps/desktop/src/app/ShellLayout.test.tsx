@@ -192,6 +192,91 @@ describe("ShellLayout", () => {
       });
     });
   });
+
+  it("sends creative object creation actions through typed RPC commands", async () => {
+    const project = createProject();
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, [project]);
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            characters: [],
+            foreshadowings: [],
+            memoryCandidates: [],
+            plotlines: [],
+            project,
+            workOrders: [],
+            worldRules: [],
+          });
+        default:
+          return rpcSuccess(request.id, { id: `${request.command}:result` });
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: "创作要素" }));
+
+    fireEvent.change(screen.getByLabelText("人物名称"), { target: { value: "林鸢" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建人物" }));
+    await waitFor(() => {
+      expect(rpcPayload("character.create")).toMatchObject({
+        name: "林鸢",
+        projectId: "project_1",
+        role: "support",
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("规则标题"), { target: { value: "旧城区治理" } });
+    fireEvent.change(screen.getByLabelText("规则内容"), { target: { value: "旧城区由钟楼议会管理。" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建规则" }));
+    await waitFor(() => {
+      expect(rpcPayload("worldRule.create")).toMatchObject({
+        category: "custom",
+        constraintLevel: "soft",
+        projectId: "project_1",
+        statement: "旧城区由钟楼议会管理。",
+        title: "旧城区治理",
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("故事线标题"), { target: { value: "旧信谜团" } });
+    fireEvent.change(screen.getByLabelText("故事线摘要"), { target: { value: "围绕旧信来源展开。" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建故事线" }));
+    await waitFor(() => {
+      expect(rpcPayload("plotline.create")).toMatchObject({
+        kind: "branch",
+        priority: 0,
+        projectId: "project_1",
+        summary: "围绕旧信来源展开。",
+        title: "旧信谜团",
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("伏笔标题"), { target: { value: "水印伏笔" } });
+    fireEvent.change(screen.getByLabelText("伏笔内容"), { target: { value: "信纸水印暗示十年前档案。" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建伏笔" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("foreshadowing.create")).toMatchObject({
+        description: "信纸水印暗示十年前档案。",
+        importance: 3,
+        projectId: "project_1",
+        title: "水印伏笔",
+      });
+    });
+  });
 });
 
 interface TestRpcRequest {

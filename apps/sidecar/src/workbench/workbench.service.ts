@@ -2,9 +2,12 @@ import { Injectable } from "@nestjs/common";
 import {
   ArtifactRepository,
   ChapterRepository,
+  CharacterRepository,
   MemoryRepository,
+  PlotRepository,
   ProjectRepository,
   WorkflowRepository,
+  WorldRepository,
 } from "@story-pilot/db";
 
 import { ProjectStorageService } from "../storage/project-storage.service.js";
@@ -27,8 +30,12 @@ export interface WorkbenchSnapshot {
 export interface WorkbenchBoard {
   readonly project: unknown;
   readonly chapters: readonly unknown[];
+  readonly characters: readonly unknown[];
   readonly artifacts: readonly unknown[];
+  readonly foreshadowings: readonly unknown[];
   readonly memoryCandidates: readonly unknown[];
+  readonly plotlines: readonly unknown[];
+  readonly worldRules: readonly unknown[];
   readonly workOrders: readonly unknown[];
 }
 
@@ -81,8 +88,12 @@ export class WorkbenchService {
       return {
         artifacts: new ArtifactRepository(projectDatabase).listByProject({ projectId }),
         chapters: new ChapterRepository(projectDatabase).listChapters({ projectId }),
+        characters: new CharacterRepository(projectDatabase).listCharacters(projectId),
+        foreshadowings: new PlotRepository(projectDatabase).listForeshadowings(projectId),
         memoryCandidates: new MemoryRepository(projectDatabase).listCandidates({ projectId }),
+        plotlines: new PlotRepository(projectDatabase).listPlotlines(projectId),
         project: getProjectOrThrow(new ProjectRepository(projectDatabase), projectId),
+        worldRules: new WorldRepository(projectDatabase).listWorldRules(projectId),
         workOrders: new WorkflowRepository(projectDatabase).listWorkOrders({ projectId }),
       };
     } finally {

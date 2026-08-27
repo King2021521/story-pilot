@@ -7,7 +7,7 @@ import {
   FileTextOutlined,
   RobotOutlined,
 } from "@ant-design/icons";
-import type { CommandName, CommandPayload } from "@story-pilot/contracts";
+import type { CommandPayload } from "@story-pilot/contracts";
 import {
   App as AntApp,
   Button,
@@ -23,7 +23,7 @@ import {
   Timeline,
   Typography,
 } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
 import { ProjectSidebar, type ProjectSidebarProject } from "../features/project/ProjectSidebar";
@@ -33,7 +33,7 @@ import {
   type WorkbenchChapter,
   type WorkbenchProject,
 } from "../features/workbench/WorkbenchHome";
-import { TauriRpcClient, type RpcClient } from "../shared/rpc/rpc-client";
+import { useStoryPilotApi } from "../shared/rpc/useStoryPilotApi";
 
 const { Content, Sider } = Layout;
 const { Text, Title } = Typography;
@@ -46,7 +46,7 @@ interface CreateProjectFormValues {
 
 export function ShellLayout() {
   const { message } = AntApp.useApp();
-  const rpcClient = useMemo<RpcClient>(() => new TauriRpcClient(), []);
+  const storyPilotApi = useStoryPilotApi();
   const [activeProject, setActiveProject] = useState<WorkbenchProject | undefined>();
   const [board, setBoard] = useState<WorkbenchBoard | undefined>();
   const [boardOpen, setBoardOpen] = useState(false);
@@ -61,11 +61,7 @@ export function ShellLayout() {
 
   const refreshBoard = useCallback(
     async (projectId: string) => {
-      const nextBoard = await sendRpcData<"workbench.getBoard", WorkbenchBoard>(
-        rpcClient,
-        "workbench.getBoard",
-        { projectId },
-      );
+      const nextBoard = (await storyPilotApi.getWorkbenchBoard({ projectId })) as WorkbenchBoard;
       setBoard(nextBoard);
       setActiveProject(nextBoard.project);
       setProjects((currentProjects) => upsertProject(currentProjects, nextBoard.project));
@@ -77,23 +73,17 @@ export function ShellLayout() {
 
       return nextBoard;
     },
-    [rpcClient],
+    [storyPilotApi],
   );
 
   const openProject = useCallback(
     async (projectId: string) => {
-      const project = await sendRpcData<"project.open", WorkbenchProject>(
-        rpcClient,
-        "project.open",
-        {
-          projectId,
-        },
-      );
+      const project = (await storyPilotApi.openProject({ projectId })) as WorkbenchProject;
       setActiveProject(project);
       setProjects((currentProjects) => upsertProject(currentProjects, project));
       await refreshBoard(project.id);
     },
-    [refreshBoard, rpcClient],
+    [refreshBoard, storyPilotApi],
   );
 
   useEffect(() => {
@@ -102,11 +92,7 @@ export function ShellLayout() {
     async function loadInitialProject() {
       setLoadingWorkbench(true);
       try {
-        const recentProjects = await sendRpcData<"project.listRecent", WorkbenchProject[]>(
-          rpcClient,
-          "project.listRecent",
-          { limit: 20 },
-        );
+        const recentProjects = (await storyPilotApi.listRecentProjects({ limit: 20 })) as WorkbenchProject[];
         if (cancelled) {
           return;
         }
@@ -119,18 +105,8 @@ export function ShellLayout() {
           return;
         }
 
-        const project = await sendRpcData<"project.open", WorkbenchProject>(
-          rpcClient,
-          "project.open",
-          {
-            projectId: firstProject.id,
-          },
-        );
-        const nextBoard = await sendRpcData<"workbench.getBoard", WorkbenchBoard>(
-          rpcClient,
-          "workbench.getBoard",
-          { projectId: project.id },
-        );
+        const project = (await storyPilotApi.openProject({ projectId: firstProject.id })) as WorkbenchProject;
+        const nextBoard = (await storyPilotApi.getWorkbenchBoard({ projectId: project.id })) as WorkbenchBoard;
         if (cancelled) {
           return;
         }
@@ -154,17 +130,13 @@ export function ShellLayout() {
     return () => {
       cancelled = true;
     };
-  }, [message, rpcClient]);
+  }, [message, storyPilotApi]);
 
   const createProject = useCallback(
     async (values: CreateProjectFormValues) => {
       setCreatingProject(true);
       try {
-        const project = await sendRpcData<"project.create", WorkbenchProject>(
-          rpcClient,
-          "project.create",
-          createProjectPayload(values),
-        );
+        const project = (await storyPilotApi.createProject(createProjectPayload(values))) as WorkbenchProject;
         setProjects((currentProjects) => upsertProject(currentProjects, project));
         await refreshBoard(project.id);
         setCreateProjectOpen(false);
@@ -176,7 +148,7 @@ export function ShellLayout() {
         setCreatingProject(false);
       }
     },
-    [createProjectForm, message, refreshBoard, rpcClient],
+    [createProjectForm, message, refreshBoard, storyPilotApi],
   );
 
   const saveChapter = useCallback(
@@ -191,14 +163,10 @@ export function ShellLayout() {
 
       setSavingChapter(true);
       try {
-        const chapter = await sendRpcData<"chapter.saveContent", WorkbenchChapter>(
-          rpcClient,
-          "chapter.saveContent",
-          {
-            ...input,
-            projectId: activeProject.id,
-          },
-        );
+        const chapter = (await storyPilotApi.saveChapterContent({
+          ...input,
+          projectId: activeProject.id,
+        })) as WorkbenchChapter;
         setBoard((currentBoard) =>
           currentBoard ? replaceChapter(currentBoard, chapter) : currentBoard,
         );
@@ -210,7 +178,7 @@ export function ShellLayout() {
         setSavingChapter(false);
       }
     },
-    [activeProject, message, rpcClient],
+    [activeProject, message, storyPilotApi],
   );
 
   const generateDraft = useCallback(
@@ -220,7 +188,7 @@ export function ShellLayout() {
       }
 
       try {
-        await sendRpcData<"chapter.generateDraft", unknown>(rpcClient, "chapter.generateDraft", {
+        await storyPilotApi.generateChapterDraft({
           ...input,
           projectId: activeProject.id,
         });
@@ -231,7 +199,7 @@ export function ShellLayout() {
         message.error(getErrorMessage(error));
       }
     },
-    [activeProject, message, refreshBoard, rpcClient],
+    [activeProject, message, refreshBoard, storyPilotApi],
   );
 
   const acceptMemory = useCallback(
@@ -241,9 +209,8 @@ export function ShellLayout() {
       }
 
       try {
-        await sendRpcData<"memory.confirm", unknown>(rpcClient, "memory.confirm", {
+        await storyPilotApi.confirmMemory({
           candidateId,
-          decision: "canon",
           projectId: activeProject.id,
         });
         setBoard((currentBoard) => filterMemoryCandidate(currentBoard, candidateId));
@@ -252,7 +219,7 @@ export function ShellLayout() {
         message.error(getErrorMessage(error));
       }
     },
-    [activeProject, message, rpcClient],
+    [activeProject, message, storyPilotApi],
   );
 
   const rejectMemory = useCallback(
@@ -262,7 +229,7 @@ export function ShellLayout() {
       }
 
       try {
-        await sendRpcData<"memory.reject", unknown>(rpcClient, "memory.reject", {
+        await storyPilotApi.rejectMemory({
           candidateId,
           projectId: activeProject.id,
         });
@@ -272,7 +239,87 @@ export function ShellLayout() {
         message.error(getErrorMessage(error));
       }
     },
-    [activeProject, message, rpcClient],
+    [activeProject, message, storyPilotApi],
+  );
+
+  const createCharacter = useCallback(
+    async (input: Omit<CommandPayload<"character.create">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createCharacter({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("人物已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const createWorldRule = useCallback(
+    async (input: Omit<CommandPayload<"worldRule.create">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createWorldRule({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("规则已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const createPlotline = useCallback(
+    async (input: Omit<CommandPayload<"plotline.create">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createPlotline({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const createForeshadowing = useCallback(
+    async (input: Omit<CommandPayload<"foreshadowing.create">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createForeshadowing({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("伏笔已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
   );
 
   return (
@@ -322,6 +369,10 @@ export function ShellLayout() {
           board={board}
           loading={loadingWorkbench}
           onAcceptMemory={acceptMemory}
+          onCreateCharacter={createCharacter}
+          onCreateForeshadowing={createForeshadowing}
+          onCreatePlotline={createPlotline}
+          onCreateWorldRule={createWorldRule}
           onGenerateDraft={generateDraft}
           onRejectMemory={rejectMemory}
           onSaveChapter={saveChapter}
@@ -425,19 +476,6 @@ export function ShellLayout() {
       </Modal>
     </Layout>
   );
-}
-
-async function sendRpcData<TCommand extends CommandName, TData>(
-  rpcClient: RpcClient,
-  command: TCommand,
-  payload: CommandPayload<TCommand>,
-): Promise<TData> {
-  const response = await rpcClient.send(command, payload);
-  if (!response.ok) {
-    throw new Error(response.error.message);
-  }
-
-  return response.data as TData;
 }
 
 function createProjectPayload(values: CreateProjectFormValues): CommandPayload<"project.create"> {
