@@ -179,7 +179,11 @@ importers:
 
   packages/testing: {}
 
-  packages/workflow-runtime: {}
+  packages/workflow-runtime:
+    dependencies:
+      '@story-pilot/ai':
+        specifier: workspace:^
+        version: link:../ai
 
 packages:
 

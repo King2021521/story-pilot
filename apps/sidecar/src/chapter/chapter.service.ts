@@ -1,13 +1,29 @@
 import { randomUUID } from "node:crypto";
 
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import {
+  ArtifactRepository,
   ChapterRepository,
+  ContextRepository,
+  MemoryRepository,
+  ModelCallRepository,
+  WorkflowRepository,
+  type ArtifactRecord,
   type ChapterRecord,
   type ChapterVersionRecord,
+  type MemoryCandidateRecord,
 } from "@story-pilot/db";
+import {
+  buildPromptMessages,
+  ChapterDraftOutputSchema,
+  ContextBuilder,
+  type ModelGateway,
+} from "@story-pilot/ai";
 import { createNextChapterVersion } from "@story-pilot/domain";
+import { WorkflowEngine, WorkflowRegistry, createChapterDraftWorkflow, type WorkflowRunState } from "@story-pilot/workflow-runtime";
 
+import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
+import { GraphService } from "../graph/graph.service.js";
 import { ProjectStorageService } from "../storage/project-storage.service.js";
 
 export interface CreateChapterInput {
@@ -30,9 +46,26 @@ export interface ListChapterVersionsInput {
   readonly chapterId: string;
 }
 
+export interface GenerateChapterDraftInput {
+  readonly projectId: string;
+  readonly chapterId: string;
+  readonly instruction?: string;
+  readonly relatedEntityIds?: readonly string[];
+}
+
+export interface GenerateChapterDraftResult {
+  readonly artifact: ArtifactRecord;
+  readonly memoryCandidates: readonly MemoryCandidateRecord[];
+  readonly workflowRun: WorkflowRunState;
+}
+
 @Injectable()
 export class ChapterService {
-  constructor(private readonly projectStorage: ProjectStorageService) {}
+  constructor(
+    private readonly projectStorage: ProjectStorageService,
+    private readonly graphService: GraphService,
+    @Inject(MODEL_GATEWAY) private readonly modelGateway: ModelGateway,
+  ) {}
 
   async createChapter(input: CreateChapterInput): Promise<ChapterRecord> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
@@ -96,4 +129,233 @@ export class ChapterService {
     }
   }
 
+  async generateDraft(input: GenerateChapterDraftInput): Promise<GenerateChapterDraftResult> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const chapterRepository = new ChapterRepository(projectDatabase);
+      const chapter = chapterRepository.getById(input.projectId, input.chapterId);
+      if (!chapter) {
+        throw new Error(`CHAPTER_NOT_FOUND: ${input.chapterId}`);
+      }
+
+      const instruction = input.instruction?.trim() || "生成当前章节草稿";
+      const workflowRepository = new WorkflowRepository(projectDatabase);
+      const workOrder = workflowRepository.createWorkOrder({
+        projectId: input.projectId,
+        title: `生成章节草稿：${chapter.title}`,
+        type: "chapter_draft",
+        workOrderId: randomUUID(),
+      });
+      const runId = randomUUID();
+      const workflowInput = {
+        chapterId: input.chapterId,
+        instruction,
+        projectId: input.projectId,
+        relatedEntityIds: [...(input.relatedEntityIds ?? [])],
+      };
+      workflowRepository.persistWorkflowRun({
+        input: workflowInput,
+        projectId: input.projectId,
+        runId,
+        status: "running",
+        steps: [],
+        workflowName: "chapter_draft",
+        workOrderId: workOrder.id,
+      });
+
+      let artifact: ArtifactRecord | undefined;
+      let memoryCandidates: MemoryCandidateRecord[] = [];
+      let modelCallId: string | undefined;
+      const contextRepository = new ContextRepository(projectDatabase);
+      const memoryRepository = new MemoryRepository(projectDatabase);
+      const artifactRepository = new ArtifactRepository(projectDatabase);
+      const modelCallRepository = new ModelCallRepository(projectDatabase);
+
+      const registry = new WorkflowRegistry().register(
+        createChapterDraftWorkflow({
+          buildContext: async ({ chapterId, instruction: taskInstruction, projectId }) => {
+            const context = await new ContextBuilder({
+              getChapter: async (contextProjectId, contextChapterId) => {
+                const contextChapter = chapterRepository.getById(contextProjectId, contextChapterId);
+                if (!contextChapter) {
+                  throw new Error(`CHAPTER_NOT_FOUND: ${contextChapterId}`);
+                }
+
+                return {
+                  content: contextChapter.content,
+                  id: contextChapter.id,
+                  summary: contextChapter.synopsis,
+                  title: contextChapter.title,
+                  version: contextChapter.version,
+                };
+              },
+              getGraphNeighborhood: async ({ entityId, projectId: graphProjectId }) =>
+                this.graphService.getNeighborhood({
+                  entityId,
+                  projectId: graphProjectId,
+                }),
+              listMemories: async ({ limit, projectId: memoryProjectId, statuses }) =>
+                memoryRepository.listMemories({
+                  limit,
+                  projectId: memoryProjectId,
+                  statuses,
+                }),
+            }).buildChapterDraftContext({
+              chapterId,
+              instruction: taskInstruction,
+              projectId,
+              relatedEntityIds: input.relatedEntityIds ?? [],
+            });
+
+            const contextRecord = contextRepository.createPackage({
+              contextPackageId: randomUUID(),
+              inputHash: context.package.inputHash,
+              items: context.items.map((item) => ({
+                content: item.content,
+                contextPackageItemId: randomUUID(),
+                itemId: item.itemId,
+                itemType: item.itemType,
+                rank: item.rank,
+                ...(item.metadata === undefined ? {} : { metadata: item.metadata }),
+              })),
+              projectId,
+              purpose: context.package.purpose,
+              targetId: context.package.targetId,
+              targetType: context.package.targetType,
+            });
+
+            return {
+              contextPackageId: contextRecord.id,
+              text: context.text,
+            };
+          },
+          generateDraft: async ({ chapterId, context, instruction: taskInstruction, projectId }) => {
+            const messages = buildPromptMessages({
+              capability: "chapter_draft",
+              context: context.text,
+              instruction: taskInstruction,
+              version: "v1",
+            });
+            const result = await this.modelGateway.generateObject({
+              messages,
+              promptVersion: "chapter-draft.v1",
+              purpose: "chapter_draft",
+              schema: ChapterDraftOutputSchema,
+              schemaName: "ChapterDraftOutput",
+            });
+            modelCallId = randomUUID();
+            modelCallRepository.create({
+              latencyMs: result.modelCall.latencyMs,
+              model: result.modelCall.model,
+              modelCallId,
+              projectId,
+              provider: result.modelCall.provider,
+              purpose: result.modelCall.purpose,
+              request: {
+                chapterId,
+                messages,
+                schemaName: "ChapterDraftOutput",
+              },
+              response: result.raw,
+              status: result.modelCall.status,
+              workflowRunId: runId,
+              ...(result.modelCall.promptVersion === undefined
+                ? {}
+                : { promptVersion: result.modelCall.promptVersion }),
+              ...(result.modelCall.usage === undefined ? {} : { usage: result.modelCall.usage }),
+            });
+
+            return result.object;
+          },
+          persistDraft: async (draftInput) => {
+            const persist = projectDatabase.client.transaction(() => {
+              artifact = artifactRepository.createArtifact({
+                artifactId: randomUUID(),
+                body: draftInput.draft.body,
+                kind: "chapter_draft",
+                metadata: JSON.stringify({
+                  contextPackageId: draftInput.contextPackageId,
+                  reviewNotes: draftInput.reviewNotes,
+                  summary: draftInput.draft.summary,
+                }),
+                projectId: draftInput.projectId,
+                targetId: draftInput.chapterId,
+                targetType: "chapter",
+                workflowRunId: draftInput.workflowRunId,
+                workOrderId: workOrder.id,
+                title: draftInput.draft.title,
+              });
+
+              memoryCandidates = draftInput.memoryCandidates.map((candidate) =>
+                memoryRepository.createCandidate({
+                  candidateId: randomUUID(),
+                  confidence: candidate.confidence,
+                  content: candidate.content,
+                  entityType: candidate.entityType,
+                  kind: candidate.kind,
+                  projectId: draftInput.projectId,
+                  sourceId: artifact?.id ?? "",
+                  sourceType: "artifact",
+                  ...(candidate.entityId === undefined ? {} : { entityId: candidate.entityId }),
+                  ...(modelCallId === undefined ? {} : { modelCallId }),
+                  ...(candidate.proposedRelations === undefined
+                    ? {}
+                    : { proposedRelations: candidate.proposedRelations }),
+                }),
+              );
+            });
+            persist();
+
+            if (!artifact) {
+              throw new Error("CHAPTER_DRAFT_ARTIFACT_NOT_CREATED");
+            }
+
+            return {
+              artifactId: artifact.id,
+              memoryCandidateIds: memoryCandidates.map((candidate) => candidate.id),
+            };
+          },
+        }),
+      );
+      const run = await new WorkflowEngine(registry).run({
+        input: workflowInput,
+        runId,
+        workflowName: "chapter_draft",
+      });
+      workflowRepository.persistWorkflowRun({
+        input: run.input,
+        projectId: input.projectId,
+        runId: run.id,
+        status: run.status,
+        steps: run.steps.map((step) => ({
+          name: step.name,
+          projectId: input.projectId,
+          status: step.status,
+          stepId: randomUUID(),
+          workflowRunId: run.id,
+          ...(step.error === undefined ? {} : { error: step.error }),
+          ...(step.output === undefined ? {} : { output: step.output }),
+        })),
+        workflowName: run.workflowName,
+        workOrderId: workOrder.id,
+        ...(run.output === undefined ? {} : { output: run.output }),
+      });
+      workflowRepository.updateWorkOrderStatus(input.projectId, workOrder.id, run.status);
+
+      if (run.status !== "completed") {
+        throw new Error(`CHAPTER_DRAFT_WORKFLOW_${run.status.toUpperCase()}`);
+      }
+      if (!artifact) {
+        throw new Error("CHAPTER_DRAFT_ARTIFACT_NOT_CREATED");
+      }
+
+      return {
+        artifact,
+        memoryCandidates,
+        workflowRun: run,
+      };
+    } finally {
+      projectDatabase.close();
+    }
+  }
 }

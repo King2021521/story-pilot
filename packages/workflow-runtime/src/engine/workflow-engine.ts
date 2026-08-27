@@ -106,6 +106,7 @@ export class WorkflowEngine {
     input: Record<string, unknown>,
   ): Promise<WorkflowRunState> {
     let currentRun = this.updateRun(run, { status: "running" });
+    let stepInput = input;
 
     for (let index = startIndex; index < definition.steps.length; index += 1) {
       const stepDefinition = definition.steps[index];
@@ -114,7 +115,7 @@ export class WorkflowEngine {
       }
 
       const stepResult = await this.executeStep(stepDefinition, {
-        input,
+        input: stepInput,
         runId: currentRun.id,
         workflowName: currentRun.workflowName,
       });
@@ -130,6 +131,12 @@ export class WorkflowEngine {
       }
       if (stepResult.status === "failed") {
         return this.updateRun(currentRun, { status: "failed" });
+      }
+      if (stepResult.output !== undefined) {
+        stepInput = {
+          ...stepInput,
+          ...stepResult.output,
+        };
       }
     }
 

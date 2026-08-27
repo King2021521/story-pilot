@@ -13,6 +13,8 @@ import { ProjectStorageService } from "../storage/project-storage.service.js";
 
 export interface CreateArtifactInput {
   readonly projectId: string;
+  readonly workOrderId?: string;
+  readonly workflowRunId?: string;
   readonly kind: string;
   readonly targetType?: string;
   readonly targetId?: string;
@@ -49,6 +51,8 @@ export class ArtifactService {
         ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
         ...(input.targetId === undefined ? {} : { targetId: input.targetId }),
         ...(input.targetType === undefined ? {} : { targetType: input.targetType }),
+        ...(input.workflowRunId === undefined ? {} : { workflowRunId: input.workflowRunId }),
+        ...(input.workOrderId === undefined ? {} : { workOrderId: input.workOrderId }),
       });
     } finally {
       projectDatabase.close();

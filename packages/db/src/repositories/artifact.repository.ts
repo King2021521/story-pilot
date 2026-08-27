@@ -20,6 +20,8 @@ export interface ArtifactRecord {
 export interface CreateArtifactRecordInput {
   readonly artifactId: string;
   readonly projectId: string;
+  readonly workOrderId?: string;
+  readonly workflowRunId?: string;
   readonly kind: string;
   readonly targetType?: string;
   readonly targetId?: string;
@@ -55,12 +57,12 @@ export class ArtifactRepository {
     this.projectDatabase.client
       .prepare(`
         insert into artifacts (
-          id, project_id, kind, target_type, target_id, status, title, body, metadata,
-          created_at, updated_at
+          id, project_id, work_order_id, workflow_run_id, kind, target_type, target_id,
+          status, title, body, metadata, created_at, updated_at
         )
         values (
-          @artifactId, @projectId, @kind, @targetType, @targetId, 'pending', @title, @body,
-          @metadata, @now, @now
+          @artifactId, @projectId, @workOrderId, @workflowRunId, @kind, @targetType, @targetId,
+          'pending', @title, @body, @metadata, @now, @now
         )
       `)
       .run({
@@ -73,6 +75,8 @@ export class ArtifactRepository {
         targetId: input.targetId ?? null,
         targetType: input.targetType ?? null,
         title: input.title,
+        workflowRunId: input.workflowRunId ?? null,
+        workOrderId: input.workOrderId ?? null,
       });
 
     const artifact = this.getById(input.projectId, input.artifactId);
