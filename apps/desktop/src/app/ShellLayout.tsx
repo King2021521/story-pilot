@@ -25,7 +25,9 @@ import {
 } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
+import { ArtifactReviewPanel, type ArtifactReviewItem } from "../features/ai/ArtifactReviewPanel";
 import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
+import type { ChapterVersionItem } from "../features/chapter/ChapterVersionDrawer";
 import { ProjectSidebar, type ProjectSidebarProject } from "../features/project/ProjectSidebar";
 import {
   WorkbenchHome,
@@ -53,11 +55,18 @@ export function ShellLayout() {
   const [aiOpen, setAiOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [chapterVersions, setChapterVersions] = useState<readonly ChapterVersionItem[]>([]);
+  const [loadingChapterVersions, setLoadingChapterVersions] = useState(false);
   const [loadingWorkbench, setLoadingWorkbench] = useState(true);
   const [projects, setProjects] = useState<readonly ProjectSidebarProject[]>([]);
   const [savingChapter, setSavingChapter] = useState(false);
   const [selectedChapterId, setSelectedChapterId] = useState<string | undefined>();
   const [createProjectForm] = Form.useForm<CreateProjectFormValues>();
+
+  const selectChapter = useCallback((chapterId: string) => {
+    setSelectedChapterId(chapterId);
+    setChapterVersions([]);
+  }, []);
 
   const refreshBoard = useCallback(
     async (projectId: string) => {
@@ -114,6 +123,7 @@ export function ShellLayout() {
         setBoard(nextBoard);
         setProjects((currentProjects) => upsertProject(currentProjects, project));
         setSelectedChapterId(nextBoard.chapters[0]?.id);
+        setChapterVersions([]);
       } catch (error) {
         if (!cancelled) {
           message.error(getErrorMessage(error));
@@ -151,6 +161,28 @@ export function ShellLayout() {
     [createProjectForm, message, refreshBoard, storyPilotApi],
   );
 
+  const createChapter = useCallback(
+    async (input: Omit<CommandPayload<"chapter.create">, "projectId" | "volumeId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        const chapter = (await storyPilotApi.createChapter({
+          ...input,
+          projectId: activeProject.id,
+          volumeId: activeProject.defaultVolumeId,
+        })) as WorkbenchChapter;
+        await refreshBoard(activeProject.id);
+        setSelectedChapterId(chapter.id);
+        message.success("章节已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const saveChapter = useCallback(
     async (input: {
       readonly baseVersion: number;
@@ -181,6 +213,52 @@ export function ShellLayout() {
     [activeProject, message, storyPilotApi],
   );
 
+  const loadChapterVersions = useCallback(
+    async (input: { readonly chapterId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      setLoadingChapterVersions(true);
+      try {
+        const versions = (await storyPilotApi.listChapterVersions({
+          chapterId: input.chapterId,
+          projectId: activeProject.id,
+        })) as ChapterVersionItem[];
+        setChapterVersions(versions);
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      } finally {
+        setLoadingChapterVersions(false);
+      }
+    },
+    [activeProject, message, storyPilotApi],
+  );
+
+  const restoreChapterVersion = useCallback(
+    async (input: { readonly chapterId: string; readonly versionId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        const chapter = (await storyPilotApi.restoreChapterVersion({
+          ...input,
+          projectId: activeProject.id,
+        })) as WorkbenchChapter;
+        setBoard((currentBoard) =>
+          currentBoard ? replaceChapter(currentBoard, chapter) : currentBoard,
+        );
+        setSelectedChapterId(chapter.id);
+        setChapterVersions([]);
+        message.success("章节版本已恢复");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, storyPilotApi],
+  );
+
   const generateDraft = useCallback(
     async (input: { readonly chapterId: string; readonly instruction: string }) => {
       if (!activeProject) {
@@ -195,6 +273,57 @@ export function ShellLayout() {
         setAiOpen(true);
         await refreshBoard(activeProject.id);
         message.success("AI 草稿已进入产物区");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const applyArtifact = useCallback(
+    async (artifact: ArtifactReviewItem) => {
+      if (!activeProject || !board) {
+        return;
+      }
+
+      const targetChapter = board.chapters.find((chapter) => chapter.id === artifact.targetId);
+      if (!targetChapter) {
+        message.error("未找到产物对应章节");
+        return;
+      }
+
+      try {
+        const result = (await storyPilotApi.applyArtifact({
+          applyMode: "replace",
+          artifactId: artifact.id,
+          projectId: activeProject.id,
+          targetVersion: targetChapter.version,
+        })) as { readonly chapter?: WorkbenchChapter };
+        if (result.chapter) {
+          setSelectedChapterId(result.chapter.id);
+        }
+        await refreshBoard(activeProject.id);
+        message.success("AI 产物已应用为章节版本");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, board, message, refreshBoard, storyPilotApi],
+  );
+
+  const rejectArtifact = useCallback(
+    async (artifact: ArtifactReviewItem) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.rejectArtifact({
+          artifactId: artifact.id,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("AI 产物已拒绝");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -334,7 +463,7 @@ export function ShellLayout() {
               message.error(getErrorMessage(error));
             });
           }}
-          onSelectChapter={setSelectedChapterId}
+          onSelectChapter={selectChapter}
           projects={projects}
           selectedChapterId={selectedChapterId}
         />
@@ -367,16 +496,21 @@ export function ShellLayout() {
 
         <WorkbenchHome
           board={board}
+          chapterVersions={chapterVersions}
+          loadingChapterVersions={loadingChapterVersions}
           loading={loadingWorkbench}
           onAcceptMemory={acceptMemory}
+          onCreateChapter={createChapter}
           onCreateCharacter={createCharacter}
           onCreateForeshadowing={createForeshadowing}
           onCreatePlotline={createPlotline}
           onCreateWorldRule={createWorldRule}
           onGenerateDraft={generateDraft}
+          onLoadChapterVersions={loadChapterVersions}
           onRejectMemory={rejectMemory}
+          onRestoreChapterVersion={restoreChapterVersion}
           onSaveChapter={saveChapter}
-          onSelectChapter={setSelectedChapterId}
+          onSelectChapter={selectChapter}
           savingChapter={savingChapter}
           selectedChapterId={selectedChapterId}
         />
@@ -414,6 +548,21 @@ export function ShellLayout() {
               label: (
                 <span>
                   <BarsOutlined /> 概览
+                </span>
+              ),
+            },
+            {
+              children: (
+                <ArtifactReviewPanel
+                  artifacts={board?.artifacts ?? []}
+                  onApply={applyArtifact}
+                  onReject={rejectArtifact}
+                />
+              ),
+              key: "artifacts",
+              label: (
+                <span>
+                  <RobotOutlined /> AI 产物
                 </span>
               ),
             },

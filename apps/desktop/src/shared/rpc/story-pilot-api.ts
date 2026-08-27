@@ -6,7 +6,7 @@ export class StoryPilotApiClient {
   constructor(private readonly rpcClient: RpcClient) {}
 
   listRecentProjects(input: CommandPayload<"project.listRecent">) {
-    return this.send("project.listRecent", input);
+    return this.sendList("project.listRecent", input);
   }
 
   openProject(input: CommandPayload<"project.open">) {
@@ -87,4 +87,20 @@ export class StoryPilotApiClient {
 
     return response.data;
   }
+
+  private async sendList<TCommand extends CommandName>(
+    command: TCommand,
+    payload: CommandPayload<TCommand>,
+  ): Promise<readonly unknown[]> {
+    const data = await this.send(command, payload);
+    if (isListResponse(data)) {
+      return data.items;
+    }
+
+    throw new Error(`Invalid list response for ${command}`);
+  }
+}
+
+function isListResponse(data: unknown): data is { readonly items: readonly unknown[] } {
+  return typeof data === "object" && data !== null && "items" in data && Array.isArray(data.items);
 }

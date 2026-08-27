@@ -147,6 +147,12 @@ button {
   padding: 18px;
 }
 
+.chapter-editor-page__main--empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+}
+
 .chapter-editor-page__header {
   margin-bottom: 16px;
 }
@@ -183,6 +189,33 @@ button {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.artifact-review-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.artifact-review-list__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #f0efec;
+  padding: 14px 0;
+}
+
+.artifact-review-list__item:last-child {
+  border-bottom: 0;
+}
+
+.artifact-review-list__content {
+  min-width: 0;
+}
+
+.artifact-review-list__content .ant-typography {
+  margin-bottom: 8px;
 }
 
 .creative-elements {

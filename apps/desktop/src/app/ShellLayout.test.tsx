@@ -17,7 +17,7 @@ describe("ShellLayout", () => {
     invokeMock.mockImplementation(async (_tauriCommand, args) => {
       const request = getRpcRequest(args);
 
-      return rpcSuccess(request.id, request.command === "project.listRecent" ? [] : null);
+      return rpcSuccess(request.id, request.command === "project.listRecent" ? { items: [] } : null);
     });
   });
 
@@ -52,7 +52,7 @@ describe("ShellLayout", () => {
         });
       }
 
-      return rpcSuccess(request.id, []);
+      return rpcSuccess(request.id, { items: [] });
     });
 
     render(
@@ -104,7 +104,7 @@ describe("ShellLayout", () => {
       const request = getRpcRequest(args);
       switch (request.command) {
         case "project.listRecent":
-          return rpcSuccess(request.id, [project]);
+          return rpcSuccess(request.id, { items: [project] });
         case "project.open":
           return rpcSuccess(request.id, project);
         case "workbench.getBoard":
@@ -200,7 +200,7 @@ describe("ShellLayout", () => {
       const request = getRpcRequest(args);
       switch (request.command) {
         case "project.listRecent":
-          return rpcSuccess(request.id, [project]);
+          return rpcSuccess(request.id, { items: [project] });
         case "project.open":
           return rpcSuccess(request.id, project);
         case "workbench.getBoard":
@@ -274,6 +274,160 @@ describe("ShellLayout", () => {
         importance: 3,
         projectId: "project_1",
         title: "水印伏笔",
+      });
+    });
+  });
+
+  it("creates chapters, restores chapter versions, and reviews AI artifacts", async () => {
+    const project = createProject();
+    const chapter = {
+      content: "雨夜里，林鸢发现门缝下有一封旧信。",
+      id: "chapter_1",
+      title: "第一章 雨夜来信",
+      version: 2,
+    };
+    const chapters = [chapter];
+    const artifacts = [
+      {
+        body: "AI 草稿正文。",
+        id: "artifact_apply",
+        kind: "chapter_draft",
+        status: "pending",
+        targetId: "chapter_1",
+        targetType: "chapter",
+        title: "AI 章节草稿",
+      },
+      {
+        body: "废弃草稿正文。",
+        id: "artifact_reject",
+        kind: "chapter_draft",
+        status: "pending",
+        targetId: "chapter_1",
+        targetType: "chapter",
+        title: "废弃草稿",
+      },
+    ];
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts,
+            chapters,
+            characters: [],
+            foreshadowings: [],
+            memoryCandidates: [],
+            plotlines: [],
+            project,
+            workOrders: [],
+            worldRules: [],
+          });
+        case "chapter.create": {
+          const createdChapter = {
+            content: "",
+            id: "chapter_2",
+            title: request.payload.title as string,
+            version: 0,
+          };
+          chapters.push(createdChapter);
+          return rpcSuccess(request.id, createdChapter);
+        }
+        case "chapter.listVersions":
+          return rpcSuccess(request.id, [
+            {
+              chapterId: "chapter_1",
+              content: "旧正文。",
+              createdAt: 1,
+              id: "version_1",
+              projectId: "project_1",
+              source: "user",
+              summary: null,
+              version: 1,
+            },
+          ]);
+        case "chapter.restoreVersion":
+          chapter.content = "旧正文。";
+          chapter.version = 3;
+          return rpcSuccess(request.id, chapter);
+        case "artifact.apply":
+          chapter.content = artifacts[0]!.body;
+          chapter.version = 4;
+          artifacts[0]!.status = "applied";
+          return rpcSuccess(request.id, { artifact: artifacts[0], chapter });
+        case "artifact.reject":
+          artifacts[1]!.status = "rejected";
+          return rpcSuccess(request.id, artifacts[1]);
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    await screen.findByLabelText("章节正文");
+
+    fireEvent.click(screen.getByRole("button", { name: "新建章节" }));
+    fireEvent.change(screen.getByLabelText("章节标题"), { target: { value: "第二章 钟楼停摆" } });
+    fireEvent.change(screen.getByLabelText("章节摘要"), { target: { value: "林鸢追查钟楼线索。" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建章节" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("chapter.create")).toMatchObject({
+        projectId: "project_1",
+        summary: "林鸢追查钟楼线索。",
+        title: "第二章 钟楼停摆",
+        volumeId: "volume_1",
+      });
+    });
+
+    fireEvent.click(within(screen.getByLabelText("章节树")).getByText("第一章 雨夜来信"));
+    expect(await screen.findByRole("heading", { name: "第一章 雨夜来信" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "版本" }));
+    fireEvent.click(await screen.findByRole("button", { name: "恢复 v1" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("chapter.restoreVersion")).toMatchObject({
+        chapterId: "chapter_1",
+        projectId: "project_1",
+        versionId: "version_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "项目看板" }));
+    fireEvent.click(await screen.findByRole("tab", { name: /AI 产物/ }));
+
+    const draftArtifact = screen.getByText("AI 章节草稿").closest("li");
+    expect(draftArtifact).not.toBeNull();
+    fireEvent.click(within(draftArtifact as HTMLElement).getByRole("button", { name: "应用" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("artifact.apply")).toMatchObject({
+        applyMode: "replace",
+        artifactId: "artifact_apply",
+        projectId: "project_1",
+        targetVersion: 3,
+      });
+    });
+
+    const rejectedArtifact = await screen.findByText("废弃草稿");
+    const rejectedArtifactItem = rejectedArtifact.closest("li");
+    expect(rejectedArtifactItem).not.toBeNull();
+    fireEvent.click(within(rejectedArtifactItem as HTMLElement).getByRole("button", { name: "拒绝" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("artifact.reject")).toMatchObject({
+        artifactId: "artifact_reject",
+        projectId: "project_1",
       });
     });
   });

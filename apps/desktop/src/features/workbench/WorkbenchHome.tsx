@@ -8,9 +8,13 @@ import { Col, Empty, Row, Spin, Statistic, Tabs } from "antd";
 
 import {
   ChapterEditorPage,
+  type CreateChapterRequest,
   type GenerateChapterDraftRequest,
+  type LoadChapterVersionsRequest,
+  type RestoreChapterVersionRequest,
   type SaveChapterRequest,
 } from "../chapter/ChapterEditorPage";
+import type { ChapterVersionItem } from "../chapter/ChapterVersionDrawer";
 import {
   CreativeElementsPanel,
   type CharacterElement,
@@ -22,6 +26,7 @@ import {
   type PlotlineElement,
   type WorldRuleElement,
 } from "../creative/CreativeElementsPanel";
+import type { ArtifactReviewItem } from "../ai/ArtifactReviewPanel";
 import { MemoryCandidateList, type MemoryCandidateItem } from "../memory/MemoryCandidateList";
 
 export interface WorkbenchProject {
@@ -40,7 +45,7 @@ export interface WorkbenchChapter {
 }
 
 export interface WorkbenchBoard {
-  readonly artifacts: readonly unknown[];
+  readonly artifacts: readonly ArtifactReviewItem[];
   readonly chapters: readonly WorkbenchChapter[];
   readonly characters?: readonly CharacterElement[];
   readonly foreshadowings?: readonly ForeshadowingElement[];
@@ -53,6 +58,8 @@ export interface WorkbenchBoard {
 
 export interface WorkbenchHomeProps {
   readonly board?: WorkbenchBoard | undefined;
+  readonly chapterVersions?: readonly ChapterVersionItem[];
+  readonly loadingChapterVersions?: boolean;
   readonly loading?: boolean;
   readonly selectedChapterId?: string | undefined;
   readonly savingChapter?: boolean;
@@ -61,22 +68,30 @@ export interface WorkbenchHomeProps {
   onSaveChapter(input: SaveChapterRequest): Promise<void> | void;
   onSelectChapter(chapterId: string): void;
   onAcceptMemory(candidateId: string): Promise<void> | void;
+  onCreateChapter(input: CreateChapterRequest): Promise<void> | void;
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
   onCreateWorldRule(input: CreateWorldRuleValues): Promise<void> | void;
+  onLoadChapterVersions(input: LoadChapterVersionsRequest): Promise<void> | void;
+  onRestoreChapterVersion(input: RestoreChapterVersionRequest): Promise<void> | void;
 }
 
 export function WorkbenchHome({
   board,
+  chapterVersions = [],
+  loadingChapterVersions = false,
   loading = false,
   onAcceptMemory,
+  onCreateChapter,
   onCreateCharacter,
   onCreateForeshadowing,
   onCreatePlotline,
   onCreateWorldRule,
   onGenerateDraft,
+  onLoadChapterVersions,
   onRejectMemory,
+  onRestoreChapterVersion,
   onSaveChapter,
   onSelectChapter,
   savingChapter = false,
@@ -128,10 +143,15 @@ export function WorkbenchHome({
               <ChapterEditorPage
                 chapter={selectedChapter}
                 chapters={board.chapters}
+                loadingVersions={loadingChapterVersions}
+                onCreateChapter={onCreateChapter}
                 onGenerateDraft={onGenerateDraft}
+                onLoadVersions={onLoadChapterVersions}
+                onRestoreVersion={onRestoreChapterVersion}
                 onSave={onSaveChapter}
                 onSelectChapter={onSelectChapter}
                 saving={savingChapter}
+                versions={chapterVersions}
               />
             ),
             key: "chapter",

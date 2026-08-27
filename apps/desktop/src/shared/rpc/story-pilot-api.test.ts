@@ -5,6 +5,33 @@ import { StoryPilotApiClient } from "./story-pilot-api";
 import type { RpcClient } from "./rpc-client";
 
 describe("StoryPilotApiClient", () => {
+  it("unwraps list responses returned by the sidecar RPC service", async () => {
+    const rpcClient: RpcClient = {
+      async send(command) {
+        return {
+          data: {
+            items: [
+              {
+                id: "project_1",
+                title: "雾都案卷",
+              },
+            ],
+          },
+          id: `req_${command}`,
+          ok: true,
+        };
+      },
+    };
+    const api = new StoryPilotApiClient(rpcClient);
+
+    await expect(api.listRecentProjects({ limit: 20 })).resolves.toEqual([
+      {
+        id: "project_1",
+        title: "雾都案卷",
+      },
+    ]);
+  });
+
   it("wraps workbench creation and chapter actions with typed RPC commands", async () => {
     const calls: Array<{ command: string; payload: unknown }> = [];
     const rpcClient: RpcClient = {
