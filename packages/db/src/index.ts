@@ -7,3 +7,5 @@ export function getDatabaseFileName(role: DatabaseFileRole): string {
   return role === "global" ? GLOBAL_DATABASE_FILE : PROJECT_DATABASE_FILE;
 }
 
+export * from "./project-database.js";
+export * from "./schema/index.js";

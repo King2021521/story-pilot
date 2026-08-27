@@ -1,0 +1,450 @@
+export const INITIAL_PROJECT_SCHEMA_MIGRATION_ID = "0001_project_schema_v1";
+
+export const INITIAL_PROJECT_SCHEMA_SQL = `
+create table if not exists projects (
+  id text primary key,
+  title text not null,
+  genre text not null,
+  status text not null default 'planning',
+  summary text,
+  root_path text not null,
+  created_at integer not null,
+  updated_at integer not null,
+  opened_at integer
+);
+
+create table if not exists works (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  title text not null,
+  genre text not null,
+  target_length integer,
+  status text not null default 'planning',
+  logline text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists volumes (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  work_id text not null references works(id) on delete cascade,
+  title text not null,
+  position integer not null,
+  summary text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists chapters (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  work_id text not null references works(id) on delete cascade,
+  volume_id text references volumes(id) on delete set null,
+  title text not null,
+  status text not null default 'draft',
+  position integer not null,
+  synopsis text,
+  content text not null default '',
+  word_count integer not null default 0,
+  version integer not null default 0,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists chapter_versions (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  chapter_id text not null references chapters(id) on delete cascade,
+  version integer not null,
+  source text not null,
+  content text not null,
+  summary text,
+  created_at integer not null,
+  unique (chapter_id, version)
+);
+
+create table if not exists scenes (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  chapter_id text not null references chapters(id) on delete cascade,
+  title text not null,
+  position integer not null,
+  pov_character_id text,
+  location_id text,
+  summary text,
+  status text not null default 'planned',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists characters (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  display_name text not null,
+  role text not null default 'supporting',
+  archetype text,
+  status text not null default 'active',
+  profile text,
+  appearance text,
+  motivation text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists character_traits (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  character_id text not null references characters(id) on delete cascade,
+  name text not null,
+  value text not null,
+  evidence text,
+  confidence real not null default 1,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists entity_relations (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  source_entity_type text not null,
+  source_entity_id text not null,
+  relation_type text not null,
+  target_entity_type text not null,
+  target_entity_id text not null,
+  description text,
+  polarity integer not null default 0,
+  strength real not null default 0.5,
+  status text not null default 'confirmed',
+  evidence text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists world_rules (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  category text not null,
+  title text not null,
+  content text not null,
+  status text not null default 'canon',
+  source text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists locations (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  name text not null,
+  type text not null default 'place',
+  description text,
+  status text not null default 'active',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists organizations (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  name text not null,
+  type text not null default 'organization',
+  description text,
+  status text not null default 'active',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists items (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  name text not null,
+  type text not null default 'item',
+  description text,
+  owner_entity_type text,
+  owner_entity_id text,
+  status text not null default 'active',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists plotlines (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  name text not null,
+  type text not null default 'main',
+  status text not null default 'planning',
+  summary text,
+  priority integer not null default 0,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists plotline_nodes (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  plotline_id text not null references plotlines(id) on delete cascade,
+  title text not null,
+  position integer not null,
+  kind text not null default 'beat',
+  status text not null default 'planned',
+  description text,
+  target_chapter_id text references chapters(id) on delete set null,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists story_events (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  title text not null,
+  event_type text not null default 'plot',
+  event_time text,
+  position integer not null default 0,
+  summary text not null,
+  causal_importance real not null default 0.5,
+  chapter_id text references chapters(id) on delete set null,
+  scene_id text references scenes(id) on delete set null,
+  status text not null default 'canon',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists event_participants (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  event_id text not null references story_events(id) on delete cascade,
+  entity_type text not null,
+  entity_id text not null,
+  role text not null default 'participant',
+  created_at integer not null
+);
+
+create table if not exists event_relations (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  source_event_id text not null references story_events(id) on delete cascade,
+  relation_type text not null,
+  target_event_id text not null references story_events(id) on delete cascade,
+  description text,
+  created_at integer not null
+);
+
+create table if not exists foreshadowings (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  title text not null,
+  status text not null default 'seeded',
+  seed_text text,
+  payoff_text text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists foreshadowing_events (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  foreshadowing_id text not null references foreshadowings(id) on delete cascade,
+  event_id text not null references story_events(id) on delete cascade,
+  role text not null,
+  note text,
+  created_at integer not null
+);
+
+create table if not exists work_orders (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  type text not null,
+  status text not null default 'queued',
+  title text not null,
+  description text,
+  created_by text not null default 'user',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists workflow_runs (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  work_order_id text references work_orders(id) on delete set null,
+  workflow_name text not null,
+  status text not null default 'queued',
+  input text,
+  output text,
+  error text,
+  started_at integer,
+  completed_at integer,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists workflow_steps (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  workflow_run_id text not null references workflow_runs(id) on delete cascade,
+  name text not null,
+  status text not null default 'queued',
+  input text,
+  output text,
+  error text,
+  started_at integer,
+  completed_at integer,
+  created_at integer not null
+);
+
+create table if not exists artifacts (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  work_order_id text references work_orders(id) on delete set null,
+  workflow_run_id text references workflow_runs(id) on delete set null,
+  kind text not null,
+  target_type text,
+  target_id text,
+  status text not null default 'pending',
+  title text not null,
+  body text not null,
+  metadata text,
+  created_at integer not null,
+  updated_at integer not null,
+  applied_at integer
+);
+
+create table if not exists model_calls (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  workflow_run_id text references workflow_runs(id) on delete set null,
+  step_id text references workflow_steps(id) on delete set null,
+  provider text not null,
+  model text not null,
+  purpose text not null,
+  prompt_version text,
+  request text not null,
+  response text,
+  usage text,
+  status text not null default 'completed',
+  error text,
+  latency_ms integer,
+  created_at integer not null
+);
+
+create table if not exists memory_candidates (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  source_type text not null,
+  source_id text not null,
+  entity_type text not null,
+  entity_id text,
+  kind text not null,
+  content text not null,
+  confidence real not null default 0.5,
+  status text not null default 'pending',
+  proposed_relations text,
+  model_call_id text references model_calls(id) on delete set null,
+  created_at integer not null,
+  resolved_at integer
+);
+
+create table if not exists memories (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  entity_type text not null,
+  entity_id text,
+  kind text not null,
+  content text not null,
+  source_candidate_id text references memory_candidates(id) on delete set null,
+  confidence real not null default 1,
+  status text not null default 'canon',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists context_packages (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  purpose text not null,
+  target_type text,
+  target_id text,
+  input_hash text not null,
+  created_at integer not null
+);
+
+create table if not exists context_package_items (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  context_package_id text not null references context_packages(id) on delete cascade,
+  item_type text not null,
+  item_id text not null,
+  rank integer not null default 0,
+  content text not null,
+  metadata text
+);
+
+create table if not exists files (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  role text not null,
+  relative_path text not null,
+  mime_type text,
+  size_bytes integer,
+  checksum text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists domain_events (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  aggregate_type text not null,
+  aggregate_id text not null,
+  event_type text not null,
+  payload text not null,
+  created_at integer not null
+);
+
+create table if not exists projection_checkpoints (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  projection_name text not null,
+  last_domain_event_id text,
+  rebuilt_at integer,
+  updated_at integer not null
+);
+
+create index if not exists projects_status_idx on projects(status);
+create index if not exists projects_opened_at_idx on projects(opened_at);
+create index if not exists works_project_id_idx on works(project_id);
+create index if not exists volumes_work_position_idx on volumes(work_id, position);
+create index if not exists chapters_work_position_idx on chapters(work_id, position);
+create index if not exists chapter_versions_project_id_idx on chapter_versions(project_id);
+create index if not exists scenes_chapter_position_idx on scenes(chapter_id, position);
+create index if not exists characters_display_name_idx on characters(display_name);
+create index if not exists character_traits_character_id_idx on character_traits(character_id);
+create index if not exists entity_relations_source_idx on entity_relations(source_entity_type, source_entity_id);
+create index if not exists entity_relations_target_idx on entity_relations(target_entity_type, target_entity_id);
+create index if not exists world_rules_category_idx on world_rules(category);
+create index if not exists locations_name_idx on locations(name);
+create index if not exists organizations_name_idx on organizations(name);
+create index if not exists items_name_idx on items(name);
+create index if not exists plotlines_status_idx on plotlines(status);
+create index if not exists plotline_nodes_plotline_position_idx on plotline_nodes(plotline_id, position);
+create index if not exists story_events_position_idx on story_events(project_id, position);
+create index if not exists event_participants_entity_idx on event_participants(entity_type, entity_id);
+create index if not exists event_relations_source_idx on event_relations(source_event_id);
+create index if not exists event_relations_target_idx on event_relations(target_event_id);
+create index if not exists foreshadowings_status_idx on foreshadowings(status);
+create index if not exists work_orders_status_idx on work_orders(status);
+create index if not exists workflow_runs_status_idx on workflow_runs(status);
+create index if not exists artifacts_target_idx on artifacts(target_type, target_id);
+create index if not exists artifacts_status_idx on artifacts(status);
+create index if not exists model_calls_purpose_idx on model_calls(purpose);
+create index if not exists memory_candidates_status_idx on memory_candidates(status);
+create index if not exists memory_candidates_entity_idx on memory_candidates(entity_type, entity_id);
+create index if not exists memories_entity_idx on memories(entity_type, entity_id);
+create index if not exists memories_kind_idx on memories(kind);
+create index if not exists context_packages_target_idx on context_packages(target_type, target_id);
+create index if not exists context_package_items_package_id_idx on context_package_items(context_package_id);
+create index if not exists files_role_idx on files(role);
+create index if not exists domain_events_aggregate_idx on domain_events(aggregate_type, aggregate_id);
+create index if not exists domain_events_event_type_idx on domain_events(event_type);
+create index if not exists projection_checkpoints_projection_name_idx on projection_checkpoints(projection_name);
+`;
