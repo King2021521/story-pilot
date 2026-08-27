@@ -8,4 +8,5 @@ export function getDatabaseFileName(role: DatabaseFileRole): string {
 }
 
 export * from "./project-database.js";
+export * from "./repositories/index.js";
 export * from "./schema/index.js";

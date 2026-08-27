@@ -4,21 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "dev": "tsx src/main.ts",
-    "prebuild": "pnpm --filter @story-pilot/contracts build",
-    "predev": "pnpm --filter @story-pilot/contracts build",
-    "pretest": "pnpm --filter @story-pilot/contracts build",
-    "pretypecheck": "pnpm --filter @story-pilot/contracts build",
+    "build": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && tsc -p tsconfig.build.json",
+    "dev": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && tsx src/main.ts",
     "start": "node dist/main.js",
-    "test": "vitest run src",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "test": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && vitest run src",
+    "typecheck": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-express": "^12.0.1",
     "@story-pilot/contracts": "workspace:^",
+    "@story-pilot/db": "workspace:^",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },

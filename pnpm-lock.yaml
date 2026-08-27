@@ -96,6 +96,9 @@ importers:
       '@story-pilot/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
+      '@story-pilot/db':
+        specifier: workspace:^
+        version: link:../../packages/db
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
