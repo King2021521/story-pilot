@@ -1,0 +1,20 @@
+export type StoryPilotErrorCode =
+  | "APP_BACKEND_UNAVAILABLE"
+  | "PROJECT_NOT_FOUND"
+  | "CHAPTER_VERSION_CONFLICT"
+  | "WORKFLOW_ALREADY_RUNNING"
+  | "MODEL_PROVIDER_NOT_CONFIGURED"
+  | "MODEL_OUTPUT_PARSE_FAILED"
+  | "MEMORY_CONFLICT_DETECTED"
+  | "GRAPH_UNAVAILABLE"
+  | "FILE_OUT_OF_SCOPE"
+  | "VALIDATION_FAILED"
+  | "SECURITY_FORBIDDEN"
+  | "UNKNOWN_COMMAND";
+
+export type RpcError = {
+  code: StoryPilotErrorCode;
+  message: string;
+  details?: unknown;
+};
+

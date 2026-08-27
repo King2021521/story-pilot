@@ -1,0 +1,21 @@
+{
+  "name": "@story-pilot/sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/main.ts",
+    "prebuild": "pnpm --filter @story-pilot/contracts build",
+    "predev": "pnpm --filter @story-pilot/contracts build",
+    "pretest": "pnpm --filter @story-pilot/contracts build",
+    "pretypecheck": "pnpm --filter @story-pilot/contracts build",
+    "start": "node dist/main.js",
+    "test": "vitest run src",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@story-pilot/contracts": "workspace:^",
+    "fastify": "^5.12.1"
+  }
+}
