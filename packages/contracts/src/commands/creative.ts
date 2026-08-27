@@ -1,0 +1,75 @@
+import { z } from "zod";
+
+import { projectIdPayloadSchema } from "./shared.js";
+
+export const creativeCommandSchemas = {
+  "character.list": projectIdPayloadSchema,
+  "character.create": projectIdPayloadSchema.extend({
+    name: z.string().min(1),
+    role: z.enum(["protagonist", "antagonist", "support", "cameo"]).default("support"),
+    archetype: z.string().optional(),
+    goal: z.string().optional(),
+    need: z.string().optional(),
+    flaw: z.string().optional(),
+    secret: z.string().optional(),
+    voiceProfile: z.string().optional(),
+    biography: z.string().optional(),
+  }),
+  "character.update": projectIdPayloadSchema.extend({
+    characterId: z.string().min(1),
+    patch: z.record(z.string(), z.unknown()),
+  }),
+  "character.generateNames": projectIdPayloadSchema.extend({
+    count: z.number().int().positive().max(50).default(10),
+    style: z.string().optional(),
+    gender: z.string().optional(),
+    constraints: z.array(z.string()).default([]),
+  }),
+  "worldRule.list": projectIdPayloadSchema,
+  "worldRule.create": projectIdPayloadSchema.extend({
+    category: z.enum(["magic", "tech", "society", "history", "geography", "economy", "custom"]),
+    title: z.string().min(1),
+    statement: z.string().min(1),
+    constraintLevel: z.enum(["hard", "soft", "optional"]).default("soft"),
+  }),
+  "worldRule.update": projectIdPayloadSchema.extend({
+    worldRuleId: z.string().min(1),
+    patch: z.record(z.string(), z.unknown()),
+  }),
+  "plotline.list": projectIdPayloadSchema,
+  "plotline.create": projectIdPayloadSchema.extend({
+    title: z.string().min(1),
+    kind: z.enum(["main", "branch", "romance", "mystery", "growth", "world"]).default("branch"),
+    summary: z.string().optional(),
+    priority: z.number().int().nonnegative().default(0),
+  }),
+  "plotline.updateNode": projectIdPayloadSchema.extend({
+    plotlineNodeId: z.string().min(1),
+    patch: z.record(z.string(), z.unknown()),
+  }),
+  "storyEvent.list": projectIdPayloadSchema,
+  "storyEvent.create": projectIdPayloadSchema.extend({
+    title: z.string().min(1),
+    description: z.string().min(1),
+    eventType: z
+      .enum(["decision", "discovery", "conflict", "reveal", "loss", "victory", "betrayal", "travel", "custom"])
+      .default("custom"),
+    chapterId: z.string().min(1).optional(),
+    sceneId: z.string().min(1).optional(),
+    locationId: z.string().min(1).optional(),
+    storyTime: z.string().optional(),
+    outcome: z.string().optional(),
+  }),
+  "foreshadowing.list": projectIdPayloadSchema,
+  "foreshadowing.create": projectIdPayloadSchema.extend({
+    title: z.string().min(1),
+    description: z.string().min(1),
+    payoffExpectation: z.string().optional(),
+    importance: z.number().int().min(1).max(5).default(3),
+  }),
+  "foreshadowing.plan": projectIdPayloadSchema.extend({
+    chapterId: z.string().min(1).optional(),
+    plotlineId: z.string().min(1).optional(),
+  }),
+};
+
