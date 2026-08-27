@@ -7,7 +7,7 @@ Story Pilot is a desktop-first AI writing workbench for long-form fiction. The c
 ```text
 apps/
   desktop/        React + Vite + Tauri v2 desktop app
-  sidecar/        TypeScript sidecar backend, planned as a NestJS local service
+  sidecar/        TypeScript sidecar backend powered by NestJS
 packages/
   contracts/      Shared RPC, event, and error contracts
   domain/         Pure domain rules and state transitions
