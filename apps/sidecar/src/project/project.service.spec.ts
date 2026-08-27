@@ -49,6 +49,7 @@ describe("ProjectService", () => {
     expect(project.title).toBe("长夜序章");
     expect(project.genre).toBe("悬疑");
     expect(project.status).toBe("planning");
+    expect(project.defaultVolumeId).toEqual(expect.any(String));
     expect(existsSync(project.rootPath)).toBe(true);
     expect(existsSync(join(project.rootPath, PROJECT_DATABASE_FILE))).toBe(true);
     expect(existsSync(join(project.rootPath, "graph.kuzu"))).toBe(true);
@@ -62,6 +63,9 @@ describe("ProjectService", () => {
       const workRow = projectDatabase.client
         .prepare("select title, genre, target_length, logline from works")
         .get();
+      const volumeRow = projectDatabase.client
+        .prepare("select id, title, position from volumes")
+        .get();
 
       expect(projectRow).toMatchObject({
         title: "长夜序章",
@@ -73,6 +77,11 @@ describe("ProjectService", () => {
         genre: "悬疑",
         target_length: 80000,
         logline: "雨夜来信揭开旧案。",
+      });
+      expect(volumeRow).toMatchObject({
+        id: project.defaultVolumeId,
+        title: "第一卷",
+        position: 1,
       });
     } finally {
       projectDatabase.close();

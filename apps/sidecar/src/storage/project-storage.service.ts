@@ -20,7 +20,7 @@ export interface ProjectLayout {
 @Injectable()
 export class ProjectStorageService {
   createProjectLayout(input: CreateProjectLayoutInput): ProjectLayout {
-    const rootPath = join(this.getProjectsRoot(), input.projectId);
+    const rootPath = this.getProjectRootPath(input.projectId);
     const databasePath = join(rootPath, "project.sqlite");
     const graphPath = join(rootPath, "graph.kuzu");
     const filesPath = join(rootPath, "files");
@@ -40,6 +40,10 @@ export class ProjectStorageService {
       rootPath,
       snapshotsPath,
     };
+  }
+
+  getProjectRootPath(projectId: string): string {
+    return join(this.getProjectsRoot(), projectId);
   }
 
   private getProjectsRoot(): string {

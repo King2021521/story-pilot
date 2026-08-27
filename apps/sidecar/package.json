@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && tsc -p tsconfig.build.json",
-    "dev": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && tsx src/main.ts",
+    "build": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/domain build && pnpm --filter @story-pilot/db build && tsc -p tsconfig.build.json",
+    "dev": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/domain build && pnpm --filter @story-pilot/db build && tsx src/main.ts",
     "start": "node dist/main.js",
-    "test": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && vitest run src",
-    "typecheck": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/db build && tsc --noEmit -p tsconfig.json"
+    "test": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/domain build && pnpm --filter @story-pilot/db build && vitest run src",
+    "typecheck": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/domain build && pnpm --filter @story-pilot/db build && tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -16,6 +16,7 @@
     "@nestjs/platform-express": "^12.0.1",
     "@story-pilot/contracts": "workspace:^",
     "@story-pilot/db": "workspace:^",
+    "@story-pilot/domain": "workspace:^",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },

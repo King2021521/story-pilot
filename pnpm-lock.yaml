@@ -99,6 +99,9 @@ importers:
       '@story-pilot/db':
         specifier: workspace:^
         version: link:../../packages/db
+      '@story-pilot/domain':
+        specifier: workspace:^
+        version: link:../../packages/domain
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2

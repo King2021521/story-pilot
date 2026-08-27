@@ -28,6 +28,7 @@ export class ProjectService {
     const genre = input.genre?.trim() || "未分类";
     const projectId = randomUUID();
     const workId = randomUUID();
+    const defaultVolumeId = randomUUID();
     const layout = this.projectStorage.createProjectLayout({ projectId });
     const projectDatabase = createProjectDatabase(layout.databasePath);
 
@@ -36,6 +37,7 @@ export class ProjectService {
       const repository = new ProjectRepository(projectDatabase);
 
       return repository.createProject({
+        defaultVolumeId,
         genre,
         projectId,
         rootPath: layout.rootPath,

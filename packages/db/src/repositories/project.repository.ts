@@ -3,6 +3,7 @@ import type { ProjectDatabase } from "../project-database.js";
 export interface CreateProjectRecordInput {
   readonly projectId: string;
   readonly workId: string;
+  readonly defaultVolumeId: string;
   readonly title: string;
   readonly genre: string;
   readonly rootPath: string;
@@ -14,6 +15,7 @@ export interface CreateProjectRecordInput {
 export interface ProjectOverviewRecord {
   readonly id: string;
   readonly workId: string;
+  readonly defaultVolumeId: string;
   readonly title: string;
   readonly genre: string;
   readonly status: string;
@@ -36,6 +38,10 @@ export class ProjectRepository {
       insert into works (id, project_id, title, genre, target_length, status, logline, created_at, updated_at)
       values (@workId, @projectId, @title, @genre, @wordCountGoal, 'planning', @logline, @now, @now)
     `);
+    const insertDefaultVolume = this.projectDatabase.client.prepare(`
+      insert into volumes (id, project_id, work_id, title, position, created_at, updated_at)
+      values (@defaultVolumeId, @projectId, @workId, '第一卷', 1, @now, @now)
+    `);
 
     const createRecords = this.projectDatabase.client.transaction(() => {
       insertProject.run({
@@ -54,12 +60,19 @@ export class ProjectRepository {
         wordCountGoal: input.wordCountGoal ?? null,
         workId: input.workId,
       });
+      insertDefaultVolume.run({
+        defaultVolumeId: input.defaultVolumeId,
+        now,
+        projectId: input.projectId,
+        workId: input.workId,
+      });
     });
 
     createRecords();
 
     return {
       createdAt: now,
+      defaultVolumeId: input.defaultVolumeId,
       genre: input.genre,
       id: input.projectId,
       rootPath: input.rootPath,
