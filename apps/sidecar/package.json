@@ -20,6 +20,7 @@
     "@story-pilot/domain": "workspace:^",
     "@story-pilot/graph": "workspace:^",
     "@story-pilot/workflow-runtime": "workspace:^",
+    "dotenv": "^17.4.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^4.4.3"

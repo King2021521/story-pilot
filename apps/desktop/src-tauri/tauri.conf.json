@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "externalBin": ["binaries/story-pilot-sidecar"]
   }
 }
-

@@ -3,6 +3,18 @@
   "identifier": "default",
   "description": "Default desktop permissions for Story Pilot.",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:default"]
+  "permissions": [
+    "core:default",
+    "opener:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "args": false,
+          "name": "binaries/story-pilot-sidecar",
+          "sidecar": true
+        }
+      ]
+    }
+  ]
 }
-
