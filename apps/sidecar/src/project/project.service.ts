@@ -54,7 +54,7 @@ export class ProjectService {
       await runProjectMigrations(projectDatabase);
       const repository = new ProjectRepository(projectDatabase);
 
-      return repository.createProject({
+      const project = repository.createProject({
         defaultVolumeId,
         genre,
         projectId,
@@ -64,6 +64,9 @@ export class ProjectService {
         ...(input.logline === undefined ? {} : { logline: input.logline }),
         ...(input.wordCountGoal === undefined ? {} : { wordCountGoal: input.wordCountGoal }),
       });
+      await this.projectStorage.upsertProjectIndex(project);
+
+      return project;
     } finally {
       projectDatabase.close();
     }
@@ -71,8 +74,24 @@ export class ProjectService {
 
   async listRecent(input: ListRecentProjectsInput = {}): Promise<ProjectOverview[]> {
     const limit = input.limit ?? 20;
-    const projects: ProjectOverview[] = [];
+    await this.syncProjectIndexFromProjectRoots();
 
+    return (await this.projectStorage.listProjectIndex({ limit }))
+      .filter((project) => this.projectStorage.projectDatabaseExists(project.id))
+      .map((project) => ({
+        createdAt: project.createdAt,
+        defaultVolumeId: project.defaultVolumeId,
+        genre: project.genre,
+        id: project.id,
+        rootPath: project.rootPath,
+        status: project.status,
+        title: project.title,
+        updatedAt: project.updatedAt,
+        workId: project.workId,
+      }));
+  }
+
+  async syncProjectIndexFromProjectRoots(): Promise<void> {
     for (const projectRoot of this.projectStorage.listProjectRootPaths()) {
       const databasePath = join(projectRoot, PROJECT_DATABASE_FILE);
       if (!existsSync(databasePath)) {
@@ -83,7 +102,7 @@ export class ProjectService {
       try {
         const project = new ProjectRepository(projectDatabase).getFirstOverview();
         if (project) {
-          projects.push(project);
+          await this.projectStorage.upsertProjectIndex(project);
         }
       } catch {
         continue;
@@ -91,16 +110,15 @@ export class ProjectService {
         projectDatabase.close();
       }
     }
-
-    return projects
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, limit);
   }
 
   async openProject(input: OpenProjectInput): Promise<ProjectOverview> {
     const databasePath = input.path
       ? join(input.path, PROJECT_DATABASE_FILE)
-      : join(this.projectStorage.getProjectRootPath(requireProjectId(input)), PROJECT_DATABASE_FILE);
+      : join(
+          this.projectStorage.getProjectRootPath(requireProjectId(input)),
+          PROJECT_DATABASE_FILE,
+        );
     const projectDatabase = createProjectDatabase(databasePath);
     await runProjectMigrations(projectDatabase);
 
@@ -112,6 +130,8 @@ export class ProjectService {
       if (!project) {
         throw new Error(`PROJECT_NOT_FOUND: ${input.projectId ?? input.path ?? "unknown"}`);
       }
+
+      await this.projectStorage.touchProjectIndex(project);
 
       return project;
     } finally {
@@ -138,7 +158,10 @@ export class ProjectService {
     const createdAt = Date.now();
     const backupsPath = join(project.rootPath, "backups");
     mkdirSync(backupsPath, { recursive: true });
-    const backupPath = join(backupsPath, `${basename(project.rootPath)}-${createdAt}.project.sqlite`);
+    const backupPath = join(
+      backupsPath,
+      `${basename(project.rootPath)}-${createdAt}.project.sqlite`,
+    );
 
     copyFileSync(join(project.rootPath, PROJECT_DATABASE_FILE), backupPath);
 

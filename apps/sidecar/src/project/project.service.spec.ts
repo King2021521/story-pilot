@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Test } from "@nestjs/testing";
-import { createProjectDatabase, PROJECT_DATABASE_FILE } from "@story-pilot/db";
+import {
+  createProjectDatabase,
+  GLOBAL_DATABASE_FILE,
+  PROJECT_DATABASE_FILE,
+} from "@story-pilot/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ProjectModule } from "./project.module.js";
@@ -56,10 +60,13 @@ describe("ProjectService", () => {
     expect(existsSync(join(project.rootPath, "files"))).toBe(true);
     expect(existsSync(join(project.rootPath, "snapshots"))).toBe(true);
     expect(existsSync(join(project.rootPath, "backups"))).toBe(true);
+    expect(existsSync(join(rootDir, GLOBAL_DATABASE_FILE))).toBe(true);
 
     const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
     try {
-      const projectRow = projectDatabase.client.prepare("select title, genre, status from projects").get();
+      const projectRow = projectDatabase.client
+        .prepare("select title, genre, status from projects")
+        .get();
       const workRow = projectDatabase.client
         .prepare("select title, genre, target_length, logline from works")
         .get();
@@ -86,5 +93,45 @@ describe("ProjectService", () => {
     } finally {
       projectDatabase.close();
     }
+
+    const globalDatabase = createProjectDatabase(join(rootDir, GLOBAL_DATABASE_FILE));
+    try {
+      const indexRow = globalDatabase.client
+        .prepare(
+          "select project_id, title, genre, status, root_path, database_path, graph_path from project_index",
+        )
+        .get();
+
+      expect(indexRow).toMatchObject({
+        database_path: join(project.rootPath, PROJECT_DATABASE_FILE),
+        genre: "悬疑",
+        graph_path: join(project.rootPath, "graph.kuzu"),
+        project_id: project.id,
+        root_path: project.rootPath,
+        status: "planning",
+        title: "长夜序章",
+      });
+    } finally {
+      globalDatabase.close();
+    }
+  });
+
+  it("lists and opens projects through the global project index", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-projects-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule],
+    }).compile();
+    const service = moduleRef.get(ProjectService);
+
+    const firstProject = await service.createProject({ title: "第一部", genre: "悬疑" });
+    const secondProject = await service.createProject({ title: "第二部", genre: "科幻" });
+    const opened = await service.openProject({ path: firstProject.rootPath });
+    const recent = await service.listRecent({ limit: 2 });
+
+    expect(opened.id).toBe(firstProject.id);
+    expect(recent.map((project) => project.id)).toEqual([firstProject.id, secondProject.id]);
   });
 });

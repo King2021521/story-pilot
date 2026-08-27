@@ -500,8 +500,16 @@ describe("RpcService MVP command integration", () => {
       expect(getRecordArray(foreshadowingList, "items")).toEqual([
         expect.objectContaining({ id: getString(foreshadowing, "id") }),
       ]);
-      expect(reviewRun).toMatchObject({ status: "completed", workflowName: "review" });
-      expect(planRun).toMatchObject({ status: "completed", workflowName: "foreshadowing_plan" });
+      expect(reviewRun).toMatchObject({
+        output: { artifactId: expect.any(String) },
+        status: "completed",
+        workflowName: "review",
+      });
+      expect(planRun).toMatchObject({
+        output: { artifactId: expect.any(String) },
+        status: "completed",
+        workflowName: "foreshadowing_plan",
+      });
     } finally {
       await moduleRef.close();
     }
@@ -696,7 +704,10 @@ describe("RpcService MVP command integration", () => {
       );
 
       expect(artifact).toMatchObject({ id: getString(firstArtifact, "id") });
-      expect(rejectedArtifact).toMatchObject({ id: getString(secondArtifact, "id"), status: "rejected" });
+      expect(rejectedArtifact).toMatchObject({
+        id: getString(secondArtifact, "id"),
+        status: "rejected",
+      });
       expect(workOrder).toMatchObject({ id: getString(firstWorkOrder, "id") });
       expect(retryRun).toMatchObject({
         artifact: { kind: "chapter_draft", status: "pending" },
@@ -790,6 +801,30 @@ async function createRpcHarness(tempDirs: string[]) {
                 },
               ],
               reviewNotes: [],
+            },
+            ContinuityReviewOutput: {
+              issues: [
+                {
+                  evidence: "角色夜间进入档案馆需要解释通行权限。",
+                  issueType: "world_rule",
+                  relatedEntityIds: [],
+                  severity: "warning",
+                  suggestion: "补充内部人员协助或更改进入时间。",
+                },
+              ],
+              summary: "连续性审阅完成。",
+            },
+            ForeshadowingPlanOutput: {
+              suggestions: [
+                {
+                  action: "reinforce",
+                  foreshadowingId: "foreshadowing_1",
+                  priority: 2,
+                  proposedText: "旧信水印在强光下短暂浮现。",
+                  rationale: "当前章节适合强化，不宜直接回收。",
+                },
+              ],
+              summary: "伏笔规划完成。",
             },
             MemoryExtractOutput: {
               conflictNotes: [],
@@ -885,7 +920,9 @@ function getRecordArray(value: unknown, field: string): Record<string, unknown>[
   if (!Array.isArray(child)) {
     throw new Error(`Expected array field ${field}`);
   }
-  return child.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null);
+  return child.filter(
+    (item): item is Record<string, unknown> => typeof item === "object" && item !== null,
+  );
 }
 
 function getString(value: unknown, field: string): string {

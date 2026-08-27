@@ -39,4 +39,22 @@ describe("PromptRegistry", () => {
     expect(prompt.content).toContain("sourceSummary");
     expect(prompt.content).toContain("等待用户确认");
   });
+
+  it("loads continuity review prompt with structured issue contract", () => {
+    const prompt = PromptRegistry.getPrompt("continuity_review", "v1");
+
+    expect(prompt.content).toContain("连续性审阅器");
+    expect(prompt.content).toContain("canon");
+    expect(prompt.content).toContain("hypothesis");
+    expect(prompt.content).toContain("issues");
+    expect(prompt.content).toContain("severity");
+  });
+
+  it("loads foreshadowing plan prompt with actionable suggestion contract", () => {
+    const prompt = PromptRegistry.getPrompt("foreshadowing_plan", "v1");
+
+    expect(prompt.content).toContain("伏笔规划器");
+    expect(prompt.content).toContain("suggestions");
+    expect(prompt.content).toContain("action");
+  });
 });

@@ -217,4 +217,63 @@ describe("ArtifactService", () => {
       projectDatabase.close();
     }
   });
+
+  it("applies a structured rewrite patch artifact to chapter content", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-artifacts-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, ChapterModule, ArtifactModule],
+    }).compile();
+    const projectService = moduleRef.get(ProjectService);
+    const chapterService = moduleRef.get(ChapterService);
+    const artifactService = moduleRef.get(ArtifactService);
+
+    const project = await projectService.createProject({
+      title: "长夜序章",
+      genre: "悬疑",
+    });
+    const chapter = await chapterService.createChapter({
+      projectId: project.id,
+      title: "第一章 雨夜来信",
+      volumeId: project.defaultVolumeId,
+    });
+    await chapterService.saveContent({
+      baseVersion: 0,
+      chapterId: chapter.id,
+      content: "旧城区下雨。林鸢看见门缝下的信。",
+      projectId: project.id,
+    });
+
+    const artifact = await artifactService.createArtifact({
+      body: JSON.stringify({
+        operations: [
+          {
+            find: "旧城区下雨",
+            op: "replace_text",
+            replace: "旧城区落雨",
+          },
+        ],
+      }),
+      kind: "rewrite_patch",
+      projectId: project.id,
+      targetId: chapter.id,
+      targetType: "chapter",
+      title: "润色补丁",
+    });
+
+    const applied = await artifactService.applyArtifact({
+      applyMode: "patch",
+      artifactId: artifact.id,
+      projectId: project.id,
+      targetVersion: 1,
+    });
+
+    expect(applied.chapter).toMatchObject({
+      content: "旧城区落雨。林鸢看见门缝下的信。",
+      version: 2,
+    });
+    expect(applied.artifact.status).toBe("applied");
+  });
 });

@@ -181,6 +181,112 @@ function resolveChapterContent(
     case "append":
       return currentContent ? `${currentContent}\n\n${artifactBody}` : artifactBody;
     case "patch":
-      throw new Error("PATCH_ARTIFACT_NOT_IMPLEMENTED");
+      return applyStructuredPatch(currentContent, artifactBody);
   }
+}
+
+type TextPatchOperation =
+  | {
+      readonly op: "replace_text";
+      readonly find: string;
+      readonly replace: string;
+    }
+  | {
+      readonly op: "replace";
+      readonly path: "/content";
+      readonly value: string;
+    }
+  | {
+      readonly op: "append";
+      readonly path?: "/content";
+      readonly value: string;
+    };
+
+function applyStructuredPatch(currentContent: string, artifactBody: string): string {
+  const parsed = parsePatchBody(artifactBody);
+  const operations = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.operations)
+      ? parsed.operations
+      : undefined;
+
+  if (!operations) {
+    throw new Error("PATCH_ARTIFACT_INVALID_BODY");
+  }
+
+  return operations.reduce((content, operation, index) => {
+    const parsedOperation = parseTextPatchOperation(operation, index);
+    switch (parsedOperation.op) {
+      case "replace_text": {
+        if (!content.includes(parsedOperation.find)) {
+          throw new Error(`PATCH_ARTIFACT_FIND_NOT_FOUND: ${parsedOperation.find}`);
+        }
+
+        return content.replace(parsedOperation.find, parsedOperation.replace);
+      }
+      case "replace":
+        return parsedOperation.value;
+      case "append":
+        return content ? `${content}\n\n${parsedOperation.value}` : parsedOperation.value;
+    }
+  }, currentContent);
+}
+
+function parsePatchBody(artifactBody: string): unknown {
+  try {
+    return JSON.parse(artifactBody) as unknown;
+  } catch (error) {
+    throw new Error("PATCH_ARTIFACT_INVALID_JSON", { cause: error });
+  }
+}
+
+function parseTextPatchOperation(operation: unknown, index: number): TextPatchOperation {
+  if (!isRecord(operation) || typeof operation.op !== "string") {
+    throw new Error(`PATCH_ARTIFACT_INVALID_OPERATION: ${index}`);
+  }
+
+  if (operation.op === "replace_text") {
+    if (typeof operation.find !== "string" || typeof operation.replace !== "string") {
+      throw new Error(`PATCH_ARTIFACT_INVALID_OPERATION: ${index}`);
+    }
+
+    return {
+      find: operation.find,
+      op: "replace_text",
+      replace: operation.replace,
+    };
+  }
+
+  if (operation.op === "replace") {
+    if (operation.path !== "/content" || typeof operation.value !== "string") {
+      throw new Error(`PATCH_ARTIFACT_INVALID_OPERATION: ${index}`);
+    }
+
+    return {
+      op: "replace",
+      path: "/content",
+      value: operation.value,
+    };
+  }
+
+  if (operation.op === "append") {
+    if (
+      (operation.path !== undefined && operation.path !== "/content") ||
+      typeof operation.value !== "string"
+    ) {
+      throw new Error(`PATCH_ARTIFACT_INVALID_OPERATION: ${index}`);
+    }
+
+    return {
+      op: "append",
+      ...(operation.path === undefined ? {} : { path: "/content" }),
+      value: operation.value,
+    };
+  }
+
+  throw new Error(`PATCH_ARTIFACT_UNSUPPORTED_OPERATION: ${operation.op}`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

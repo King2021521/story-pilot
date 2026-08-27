@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ChapterDraftOutputSchema, MemoryExtractOutputSchema } from "@story-pilot/ai";
+import {
+  ChapterDraftOutputSchema,
+  ContinuityReviewOutputSchema,
+  ForeshadowingPlanOutputSchema,
+  MemoryExtractOutputSchema,
+} from "@story-pilot/ai";
 
 import { createModelGatewayFromEnv } from "./model-gateway.provider.js";
 
@@ -34,6 +39,32 @@ describe("createModelGatewayFromEnv", () => {
     ).resolves.toMatchObject({
       object: {
         memoryCandidates: expect.any(Array),
+      },
+    });
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "检查连续性" }],
+        purpose: "continuity_review",
+        schema: ContinuityReviewOutputSchema,
+        schemaName: "ContinuityReviewOutput",
+      }),
+    ).resolves.toMatchObject({
+      object: {
+        issues: expect.any(Array),
+        summary: expect.any(String),
+      },
+    });
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "规划伏笔" }],
+        purpose: "foreshadowing_plan",
+        schema: ForeshadowingPlanOutputSchema,
+        schemaName: "ForeshadowingPlanOutput",
+      }),
+    ).resolves.toMatchObject({
+      object: {
+        suggestions: expect.any(Array),
+        summary: expect.any(String),
       },
     });
   });

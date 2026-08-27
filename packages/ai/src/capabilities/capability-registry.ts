@@ -37,6 +37,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   },
   "foreshadowing.plan": {
     name: "foreshadowing.plan",
+    promptCapability: "foreshadowing_plan",
     purpose: "foreshadowing_plan",
   },
   "idea.generateConcepts": {

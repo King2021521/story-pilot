@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 
 import type { ModelMessage } from "../model-gateway/types.js";
 
-export type PromptCapability = "chapter_draft" | "memory_extract" | "continuity_review";
+export type PromptCapability =
+  "chapter_draft" | "memory_extract" | "continuity_review" | "foreshadowing_plan";
 export type PromptVersion = "v1";
 
 export interface PromptDefinition {
@@ -22,6 +23,7 @@ const promptFiles = {
   canon_boundary: "./shared/canon-boundary.v1.md",
   chapter_draft: "./chapter-draft/system.v1.md",
   continuity_review: "./continuity-review/system.v1.md",
+  foreshadowing_plan: "./foreshadowing-plan/system.v1.md",
   global_writer: "./shared/global-writer-system.v1.md",
   memory_extract: "./memory-extract/system.v1.md",
 } as const;

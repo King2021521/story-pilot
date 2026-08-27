@@ -41,7 +41,29 @@ describe("WorkflowService", () => {
 
     const moduleRef = await Test.createTestingModule({
       imports: [ProjectModule, WorkflowModule],
-    }).compile();
+    })
+      .overrideProvider(MODEL_GATEWAY)
+      .useValue(
+        new ModelGateway(
+          new FakeModelProvider({
+            objectResponses: {
+              ContinuityReviewOutput: {
+                issues: [
+                  {
+                    evidence: "草稿违反了档案馆夜间规则。",
+                    issueType: "world_rule",
+                    relatedEntityIds: ["rule_1"],
+                    severity: "error",
+                    suggestion: "补充内部通行权限。",
+                  },
+                ],
+                summary: "发现世界规则冲突。",
+              },
+            },
+          }),
+        ),
+      )
+      .compile();
     const projectService = moduleRef.get(ProjectService);
     const workOrderService = moduleRef.get(WorkOrderService);
     const workflowService = moduleRef.get(WorkflowService);
@@ -62,10 +84,9 @@ describe("WorkflowService", () => {
 
     expect(run.status).toBe("completed");
     expect(run.steps).toEqual([
-      expect.objectContaining({
-        name: "prepare_review",
-        status: "completed",
-      }),
+      expect.objectContaining({ name: "build_context", status: "completed" }),
+      expect.objectContaining({ name: "call_model", status: "completed" }),
+      expect.objectContaining({ name: "persist_review_artifact", status: "completed" }),
     ]);
 
     const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
@@ -84,7 +105,101 @@ describe("WorkflowService", () => {
         projectDatabase.client
           .prepare("select name, status from workflow_steps where workflow_run_id = ?")
           .all(run.id),
-      ).toEqual([expect.objectContaining({ name: "prepare_review", status: "completed" })]);
+      ).toEqual([
+        expect.objectContaining({ name: "build_context", status: "completed" }),
+        expect.objectContaining({ name: "call_model", status: "completed" }),
+        expect.objectContaining({ name: "persist_review_artifact", status: "completed" }),
+      ]);
+      expect(
+        projectDatabase.client
+          .prepare("select purpose, prompt_version, status from model_calls")
+          .get(),
+      ).toMatchObject({
+        prompt_version: "continuity-review.v1",
+        purpose: "continuity_review",
+        status: "completed",
+      });
+      expect(
+        projectDatabase.client.prepare("select kind, title, body, status from artifacts").get(),
+      ).toMatchObject({
+        body: expect.stringContaining("世界规则冲突"),
+        kind: "review_report",
+        status: "pending",
+        title: "连续性审阅报告",
+      });
+    } finally {
+      projectDatabase.close();
+    }
+  });
+
+  it("runs foreshadowing planning through the model gateway and persists an artifact", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-workflows-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, WorkflowModule],
+    })
+      .overrideProvider(MODEL_GATEWAY)
+      .useValue(
+        new ModelGateway(
+          new FakeModelProvider({
+            objectResponses: {
+              ForeshadowingPlanOutput: {
+                suggestions: [
+                  {
+                    action: "payoff",
+                    chapterId: "chapter_6",
+                    foreshadowingId: "foreshadowing_1",
+                    priority: 1,
+                    proposedText: "旧信水印指向真正的寄信人。",
+                    rationale: "第六章适合回收旧信主线伏笔。",
+                  },
+                ],
+                summary: "建议第六章回收旧信水印。",
+              },
+            },
+          }),
+        ),
+      )
+      .compile();
+    const projectService = moduleRef.get(ProjectService);
+    const workflowService = moduleRef.get(WorkflowService);
+
+    const project = await projectService.createProject({ title: "长夜序章", genre: "悬疑" });
+    const run = await workflowService.run({
+      input: {},
+      projectId: project.id,
+      targetId: "chapter_6",
+      targetType: "chapter",
+      workflowType: "foreshadowing_plan",
+    });
+
+    expect(run).toMatchObject({
+      output: { artifactId: expect.any(String) },
+      status: "completed",
+      workflowName: "foreshadowing_plan",
+    });
+
+    const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
+    try {
+      expect(
+        projectDatabase.client
+          .prepare("select purpose, prompt_version, status from model_calls")
+          .get(),
+      ).toMatchObject({
+        prompt_version: "foreshadowing-plan.v1",
+        purpose: "foreshadowing_plan",
+        status: "completed",
+      });
+      expect(
+        projectDatabase.client.prepare("select kind, title, body, status from artifacts").get(),
+      ).toMatchObject({
+        body: expect.stringContaining("旧信水印"),
+        kind: "review_report",
+        status: "pending",
+        title: "伏笔规划建议",
+      });
     } finally {
       projectDatabase.close();
     }

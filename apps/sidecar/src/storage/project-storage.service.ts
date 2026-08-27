@@ -1,13 +1,20 @@
-import { mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { Injectable } from "@nestjs/common";
 import {
+  createGlobalDatabase,
   createProjectDatabase,
+  GLOBAL_DATABASE_FILE,
+  GlobalProjectIndexRepository,
   PROJECT_DATABASE_FILE,
+  runGlobalMigrations,
   runProjectMigrations,
+  type GlobalDatabase,
+  type GlobalProjectIndexRecord,
   type ProjectDatabase,
+  type ProjectOverviewRecord,
 } from "@story-pilot/db";
 
 export interface CreateProjectLayoutInput {
@@ -56,8 +63,12 @@ export class ProjectStorageService {
     return this.getProjectsRoot();
   }
 
+  getGlobalDatabasePath(): string {
+    return join(this.ensureProjectsRoot(), GLOBAL_DATABASE_FILE);
+  }
+
   listProjectRootPaths(): string[] {
-    const projectsRoot = this.getProjectsRoot();
+    const projectsRoot = this.ensureProjectsRoot();
     try {
       return readdirSync(projectsRoot, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
@@ -72,13 +83,77 @@ export class ProjectStorageService {
     return join(this.getProjectRootPath(projectId), "graph.kuzu");
   }
 
+  async openGlobalDatabase(): Promise<GlobalDatabase> {
+    const globalDatabase = createGlobalDatabase(this.getGlobalDatabasePath());
+    await runGlobalMigrations(globalDatabase);
+    return globalDatabase;
+  }
+
+  async upsertProjectIndex(project: ProjectOverviewRecord): Promise<GlobalProjectIndexRecord> {
+    const globalDatabase = await this.openGlobalDatabase();
+    try {
+      return new GlobalProjectIndexRepository(globalDatabase).upsertProject({
+        createdAt: project.createdAt,
+        databasePath: join(project.rootPath, PROJECT_DATABASE_FILE),
+        defaultVolumeId: project.defaultVolumeId,
+        genre: project.genre,
+        graphPath: join(project.rootPath, "graph.kuzu"),
+        openedAt: project.updatedAt,
+        projectId: project.id,
+        rootPath: project.rootPath,
+        status: project.status,
+        title: project.title,
+        updatedAt: project.updatedAt,
+        workId: project.workId,
+      });
+    } finally {
+      globalDatabase.close();
+    }
+  }
+
+  async touchProjectIndex(project: ProjectOverviewRecord): Promise<GlobalProjectIndexRecord> {
+    const indexed = await this.upsertProjectIndex(project);
+    const globalDatabase = await this.openGlobalDatabase();
+    try {
+      return new GlobalProjectIndexRepository(globalDatabase).touchOpenedAt(
+        project.id,
+        Math.max(Date.now(), indexed.openedAt ?? 0, indexed.updatedAt) + 1,
+      );
+    } finally {
+      globalDatabase.close();
+    }
+  }
+
+  async listProjectIndex(
+    input: { readonly limit?: number } = {},
+  ): Promise<GlobalProjectIndexRecord[]> {
+    const globalDatabase = await this.openGlobalDatabase();
+    try {
+      return new GlobalProjectIndexRepository(globalDatabase).listRecent(input);
+    } finally {
+      globalDatabase.close();
+    }
+  }
+
   async openProjectDatabase(projectId: string): Promise<ProjectDatabase> {
-    const projectDatabase = createProjectDatabase(join(this.getProjectRootPath(projectId), PROJECT_DATABASE_FILE));
+    const projectDatabase = createProjectDatabase(
+      join(this.getProjectRootPath(projectId), PROJECT_DATABASE_FILE),
+    );
     await runProjectMigrations(projectDatabase);
     return projectDatabase;
   }
 
+  projectDatabaseExists(projectId: string): boolean {
+    return existsSync(join(this.getProjectRootPath(projectId), PROJECT_DATABASE_FILE));
+  }
+
   private getProjectsRoot(): string {
     return process.env.STORY_PILOT_PROJECTS_ROOT ?? join(homedir(), ".story-pilot", "projects");
+  }
+
+  private ensureProjectsRoot(): string {
+    const projectsRoot = this.getProjectsRoot();
+    mkdirSync(projectsRoot, { recursive: true });
+    return projectsRoot;
   }
 }

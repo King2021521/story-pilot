@@ -45,6 +45,29 @@ export function createModelGatewayFromEnv(
           ],
           reviewNotes: ["旧信来源仍需用户确认后再进入 canon。"],
         },
+        ContinuityReviewOutput: {
+          issues: [
+            {
+              evidence: "Fake provider 未发现硬性冲突，仅提示继续核对 canon。",
+              issueType: "info",
+              relatedEntityIds: [],
+              severity: "info",
+              suggestion: "在应用 AI 产物前由用户复核上下文。",
+            },
+          ],
+          summary: "连续性审阅完成，未发现 fake 数据中的硬性矛盾。",
+        },
+        ForeshadowingPlanOutput: {
+          suggestions: [
+            {
+              action: "reinforce",
+              priority: 3,
+              proposedText: "在下一章保留一个可被读者回忆的细节回声。",
+              rationale: "Fake provider 默认建议强化已有伏笔而不直接回收。",
+            },
+          ],
+          summary: "建议强化既有伏笔，等待用户确认后再落入正文。",
+        },
         MemoryExtractOutput: {
           conflictNotes: [],
           memoryCandidates: [
