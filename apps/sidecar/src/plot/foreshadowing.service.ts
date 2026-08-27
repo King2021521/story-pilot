@@ -41,7 +41,12 @@ export class ForeshadowingService {
         eventId: randomUUID(),
         eventType: "foreshadowing.seeded",
         payload: {
-          linkCount: foreshadowing.links.length,
+          links: foreshadowing.links.map((link) => ({
+            eventId: link.eventId,
+            note: link.note,
+            role: link.role,
+          })),
+          status: foreshadowing.status,
           title: foreshadowing.title,
         },
         projectId: input.projectId,

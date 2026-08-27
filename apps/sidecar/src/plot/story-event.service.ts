@@ -53,7 +53,12 @@ export class StoryEventService {
         eventType: "story_event.created",
         payload: {
           eventType: event.eventType,
-          participantCount: event.participants.length,
+          participants: event.participants.map((participant) => ({
+            entityId: participant.entityId,
+            entityType: participant.entityType,
+            role: participant.role,
+          })),
+          summary: event.summary,
           title: event.title,
         },
         projectId: input.projectId,

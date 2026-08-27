@@ -52,6 +52,10 @@ export class ProjectStorageService {
     return join(this.getProjectsRoot(), projectId);
   }
 
+  getGraphPath(projectId: string): string {
+    return join(this.getProjectRootPath(projectId), "graph.kuzu");
+  }
+
   async openProjectDatabase(projectId: string): Promise<ProjectDatabase> {
     const projectDatabase = createProjectDatabase(join(this.getProjectRootPath(projectId), PROJECT_DATABASE_FILE));
     await runProjectMigrations(projectDatabase);
