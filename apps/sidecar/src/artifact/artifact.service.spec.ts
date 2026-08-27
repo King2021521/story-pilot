@@ -81,4 +81,61 @@ describe("ArtifactService", () => {
     expect(applied.chapter.content).toContain("十年前");
     expect(applied.chapter.content).not.toContain("用户自己写下");
   });
+
+  it("rejects applying an AI draft artifact over a newer user chapter version", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-artifacts-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, ChapterModule, ArtifactModule],
+    }).compile();
+    const projectService = moduleRef.get(ProjectService);
+    const chapterService = moduleRef.get(ChapterService);
+    const artifactService = moduleRef.get(ArtifactService);
+
+    const project = await projectService.createProject({
+      title: "长夜序章",
+      genre: "悬疑",
+    });
+    const chapter = await chapterService.createChapter({
+      projectId: project.id,
+      volumeId: project.defaultVolumeId,
+      title: "第一章 雨夜来信",
+    });
+    await chapterService.saveContent({
+      projectId: project.id,
+      chapterId: chapter.id,
+      content: "用户第一版。",
+      baseVersion: 0,
+    });
+    const artifact = await artifactService.createArtifact({
+      body: "AI 草稿。",
+      kind: "chapter_draft",
+      projectId: project.id,
+      targetId: chapter.id,
+      targetType: "chapter",
+      title: "AI 草稿",
+    });
+    await chapterService.saveContent({
+      projectId: project.id,
+      chapterId: chapter.id,
+      content: "用户第二版，不应被旧草稿覆盖。",
+      baseVersion: 1,
+    });
+
+    await expect(
+      artifactService.applyArtifact({
+        applyMode: "replace",
+        artifactId: artifact.id,
+        projectId: project.id,
+        targetVersion: 1,
+      }),
+    ).rejects.toThrow("CHAPTER_VERSION_CONFLICT");
+
+    await expect(chapterService.getChapter(project.id, chapter.id)).resolves.toMatchObject({
+      content: "用户第二版，不应被旧草稿覆盖。",
+      version: 2,
+    });
+  });
 });
