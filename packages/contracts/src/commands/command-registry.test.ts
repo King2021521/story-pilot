@@ -87,6 +87,48 @@ describe("command registry", () => {
     });
   });
 
+  it("parses story events with participants", () => {
+    expect(
+      parseCommandPayload("storyEvent.create", {
+        projectId: "proj_1",
+        title: "雨夜来信",
+        description: "主角收到关键线索。",
+        eventType: "discovery",
+        participants: [
+          {
+            entityType: "character",
+            entityId: "char_1",
+            role: "discoverer",
+          },
+        ],
+      }),
+    ).toMatchObject({
+      participants: [
+        {
+          entityType: "character",
+          entityId: "char_1",
+          role: "discoverer",
+        },
+      ],
+    });
+  });
+
+  it("parses foreshadowings with seed and payoff event links", () => {
+    expect(
+      parseCommandPayload("foreshadowing.create", {
+        projectId: "proj_1",
+        title: "旧报纸日期",
+        description: "门缝下露出的旧报纸日期。",
+        payoffExpectation: "揭示十年前的火灾不是事故。",
+        seedEventId: "event_seed",
+        payoffEventId: "event_payoff",
+      }),
+    ).toMatchObject({
+      payoffEventId: "event_payoff",
+      seedEventId: "event_seed",
+    });
+  });
+
   it("rejects unknown commands", () => {
     expect(() => parseCommandPayload("unknown.command", {})).toThrow("UNKNOWN_COMMAND");
   });

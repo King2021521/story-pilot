@@ -4,9 +4,6 @@ import { Injectable } from "@nestjs/common";
 import {
   ArtifactRepository,
   ChapterRepository,
-  createProjectDatabase,
-  PROJECT_DATABASE_FILE,
-  runProjectMigrations,
   type ArtifactRecord,
   type ChapterRecord,
 } from "@story-pilot/db";
@@ -41,7 +38,7 @@ export class ArtifactService {
   constructor(private readonly projectStorage: ProjectStorageService) {}
 
   async createArtifact(input: CreateArtifactInput): Promise<ArtifactRecord> {
-    const projectDatabase = await this.openProjectDatabase(input.projectId);
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       return new ArtifactRepository(projectDatabase).createArtifact({
         artifactId: randomUUID(),
@@ -59,7 +56,7 @@ export class ArtifactService {
   }
 
   async applyArtifact(input: ApplyArtifactInput): Promise<AppliedArtifactResult> {
-    const projectDatabase = await this.openProjectDatabase(input.projectId);
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       const artifactRepository = new ArtifactRepository(projectDatabase);
       const chapterRepository = new ChapterRepository(projectDatabase);
@@ -101,12 +98,6 @@ export class ArtifactService {
     }
   }
 
-  private async openProjectDatabase(projectId: string) {
-    const projectRoot = this.projectStorage.getProjectRootPath(projectId);
-    const projectDatabase = createProjectDatabase(`${projectRoot}/${PROJECT_DATABASE_FILE}`);
-    await runProjectMigrations(projectDatabase);
-    return projectDatabase;
-  }
 }
 
 function resolveChapterContent(

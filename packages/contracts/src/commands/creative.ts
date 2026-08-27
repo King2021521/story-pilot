@@ -59,6 +59,15 @@ export const creativeCommandSchemas = {
     locationId: z.string().min(1).optional(),
     storyTime: z.string().optional(),
     outcome: z.string().optional(),
+    participants: z
+      .array(
+        z.object({
+          entityType: z.string().min(1),
+          entityId: z.string().min(1),
+          role: z.string().min(1).default("participant"),
+        }),
+      )
+      .default([]),
   }),
   "foreshadowing.list": projectIdPayloadSchema,
   "foreshadowing.create": projectIdPayloadSchema.extend({
@@ -66,10 +75,11 @@ export const creativeCommandSchemas = {
     description: z.string().min(1),
     payoffExpectation: z.string().optional(),
     importance: z.number().int().min(1).max(5).default(3),
+    seedEventId: z.string().min(1).optional(),
+    payoffEventId: z.string().min(1).optional(),
   }),
   "foreshadowing.plan": projectIdPayloadSchema.extend({
     chapterId: z.string().min(1).optional(),
     plotlineId: z.string().min(1).optional(),
   }),
 };
-

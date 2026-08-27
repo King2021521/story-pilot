@@ -3,9 +3,6 @@ import { randomUUID } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import {
   ChapterRepository,
-  createProjectDatabase,
-  PROJECT_DATABASE_FILE,
-  runProjectMigrations,
   type ChapterRecord,
   type ChapterVersionRecord,
 } from "@story-pilot/db";
@@ -38,7 +35,7 @@ export class ChapterService {
   constructor(private readonly projectStorage: ProjectStorageService) {}
 
   async createChapter(input: CreateChapterInput): Promise<ChapterRecord> {
-    const projectDatabase = await this.openProjectDatabase(input.projectId);
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       return new ChapterRepository(projectDatabase).createChapter({
         chapterId: randomUUID(),
@@ -54,7 +51,7 @@ export class ChapterService {
   }
 
   async getChapter(projectId: string, chapterId: string): Promise<ChapterRecord> {
-    const projectDatabase = await this.openProjectDatabase(projectId);
+    const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
     try {
       const chapter = new ChapterRepository(projectDatabase).getById(projectId, chapterId);
       if (!chapter) {
@@ -68,7 +65,7 @@ export class ChapterService {
   }
 
   async saveContent(input: SaveChapterContentInput): Promise<ChapterRecord> {
-    const projectDatabase = await this.openProjectDatabase(input.projectId);
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       const repository = new ChapterRepository(projectDatabase);
       const chapter = repository.getById(input.projectId, input.chapterId);
@@ -91,7 +88,7 @@ export class ChapterService {
   }
 
   async listVersions(input: ListChapterVersionsInput): Promise<ChapterVersionRecord[]> {
-    const projectDatabase = await this.openProjectDatabase(input.projectId);
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       return new ChapterRepository(projectDatabase).listVersions(input.projectId, input.chapterId);
     } finally {
@@ -99,10 +96,4 @@ export class ChapterService {
     }
   }
 
-  private async openProjectDatabase(projectId: string) {
-    const projectRoot = this.projectStorage.getProjectRootPath(projectId);
-    const projectDatabase = createProjectDatabase(`${projectRoot}/${PROJECT_DATABASE_FILE}`);
-    await runProjectMigrations(projectDatabase);
-    return projectDatabase;
-  }
 }

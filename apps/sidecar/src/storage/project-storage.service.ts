@@ -3,6 +3,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { Injectable } from "@nestjs/common";
+import {
+  createProjectDatabase,
+  PROJECT_DATABASE_FILE,
+  runProjectMigrations,
+  type ProjectDatabase,
+} from "@story-pilot/db";
 
 export interface CreateProjectLayoutInput {
   readonly projectId: string;
@@ -44,6 +50,12 @@ export class ProjectStorageService {
 
   getProjectRootPath(projectId: string): string {
     return join(this.getProjectsRoot(), projectId);
+  }
+
+  async openProjectDatabase(projectId: string): Promise<ProjectDatabase> {
+    const projectDatabase = createProjectDatabase(join(this.getProjectRootPath(projectId), PROJECT_DATABASE_FILE));
+    await runProjectMigrations(projectDatabase);
+    return projectDatabase;
   }
 
   private getProjectsRoot(): string {
