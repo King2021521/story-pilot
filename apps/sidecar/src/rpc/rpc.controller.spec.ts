@@ -3,15 +3,13 @@ import "reflect-metadata";
 import { Test } from "@nestjs/testing";
 import { describe, expect, it } from "vitest";
 
-import { HealthService } from "../health/health.service.js";
 import { RpcController } from "./rpc.controller.js";
-import { RpcService } from "./rpc.service.js";
+import { RpcModule } from "./rpc.module.js";
 
 describe("RpcController", () => {
   it("handles app.health through the RPC envelope", async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [RpcController],
-      providers: [RpcService, HealthService],
+      imports: [RpcModule],
     }).compile();
 
     const controller = moduleRef.get(RpcController);
@@ -34,8 +32,7 @@ describe("RpcController", () => {
 
   it("returns a normalized error for unknown commands", async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [RpcController],
-      providers: [RpcService, HealthService],
+      imports: [RpcModule],
     }).compile();
 
     const controller = moduleRef.get(RpcController);
@@ -55,4 +52,3 @@ describe("RpcController", () => {
     });
   });
 });
-
