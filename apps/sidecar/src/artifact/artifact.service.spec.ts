@@ -9,6 +9,8 @@ import { ChapterModule } from "../chapter/chapter.module.js";
 import { ChapterService } from "../chapter/chapter.service.js";
 import { ProjectModule } from "../project/project.module.js";
 import { ProjectService } from "../project/project.service.js";
+import { ProjectStorageService } from "../storage/project-storage.service.js";
+import { StorageModule } from "../storage/storage.module.js";
 import { ArtifactModule } from "./artifact.module.js";
 import { ArtifactService } from "./artifact.service.js";
 
@@ -137,5 +139,82 @@ describe("ArtifactService", () => {
       content: "用户第二版，不应被旧草稿覆盖。",
       version: 2,
     });
+  });
+
+  it("creates an AI chapter version linked to the applied artifact without changing content in version-only mode", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-artifacts-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, ChapterModule, ArtifactModule, StorageModule],
+    }).compile();
+    const projectService = moduleRef.get(ProjectService);
+    const chapterService = moduleRef.get(ChapterService);
+    const artifactService = moduleRef.get(ArtifactService);
+    const projectStorage = moduleRef.get(ProjectStorageService);
+
+    const project = await projectService.createProject({
+      title: "长夜序章",
+      genre: "悬疑",
+    });
+    const chapter = await chapterService.createChapter({
+      projectId: project.id,
+      volumeId: project.defaultVolumeId,
+      title: "第一章 雨夜来信",
+    });
+    await chapterService.saveContent({
+      projectId: project.id,
+      chapterId: chapter.id,
+      content: "用户当前正文。",
+      baseVersion: 0,
+    });
+
+    const artifact = await artifactService.createArtifact({
+      body: "AI 备选草稿。",
+      kind: "chapter_draft",
+      projectId: project.id,
+      targetId: chapter.id,
+      targetType: "chapter",
+      title: "AI 草稿",
+    });
+
+    const applied = await artifactService.applyArtifact({
+      applyMode: "create_version_only",
+      artifactId: artifact.id,
+      projectId: project.id,
+      targetVersion: 1,
+    });
+
+    expect(applied.chapter.content).toBe("用户当前正文。");
+    expect(applied.chapter.version).toBe(2);
+
+    const projectDatabase = await projectStorage.openProjectDatabase(project.id);
+    try {
+      const versionRow = projectDatabase.client
+        .prepare(
+          "select source, content, artifact_id from chapter_versions where chapter_id = ? and version = ?",
+        )
+        .get(chapter.id, 2) as { source: string; content: string; artifact_id: string | null };
+      expect(versionRow).toEqual({
+        artifact_id: artifact.id,
+        content: "AI 备选草稿。",
+        source: "ai",
+      });
+
+      const eventRow = projectDatabase.client
+        .prepare(
+          "select event_type, aggregate_id, payload from domain_events where aggregate_id = ?",
+        )
+        .get(artifact.id) as { event_type: string; aggregate_id: string; payload: string };
+      expect(eventRow.event_type).toBe("artifact.applied");
+      expect(JSON.parse(eventRow.payload)).toMatchObject({
+        applyMode: "create_version_only",
+        chapterId: chapter.id,
+        version: 2,
+      });
+    } finally {
+      projectDatabase.close();
+    }
   });
 });

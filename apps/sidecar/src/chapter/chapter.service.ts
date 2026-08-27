@@ -5,6 +5,7 @@ import {
   ArtifactRepository,
   ChapterRepository,
   ContextRepository,
+  DomainEventRepository,
   MemoryRepository,
   ModelCallRepository,
   WorkflowRepository,
@@ -20,7 +21,12 @@ import {
   type ModelGateway,
 } from "@story-pilot/ai";
 import { createNextChapterVersion } from "@story-pilot/domain";
-import { WorkflowEngine, WorkflowRegistry, createChapterDraftWorkflow, type WorkflowRunState } from "@story-pilot/workflow-runtime";
+import {
+  WorkflowEngine,
+  WorkflowRegistry,
+  createChapterDraftWorkflow,
+  type WorkflowRunState,
+} from "@story-pilot/workflow-runtime";
 
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
 import { GraphService } from "../graph/graph.service.js";
@@ -81,7 +87,7 @@ export class ChapterService {
   async createChapter(input: CreateChapterInput): Promise<ChapterRecord> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
-      return new ChapterRepository(projectDatabase).createChapter({
+      const chapter = new ChapterRepository(projectDatabase).createChapter({
         chapterId: randomUUID(),
         projectId: input.projectId,
         title: input.title,
@@ -89,6 +95,21 @@ export class ChapterService {
         ...(input.sortOrder === undefined ? {} : { position: input.sortOrder }),
         ...(input.summary === undefined ? {} : { summary: input.summary }),
       });
+
+      new DomainEventRepository(projectDatabase).append({
+        aggregateId: chapter.id,
+        aggregateType: "chapter",
+        eventId: randomUUID(),
+        eventType: "chapter.created",
+        payload: {
+          title: chapter.title,
+          volumeId: chapter.volumeId,
+          workId: chapter.workId,
+        },
+        projectId: input.projectId,
+      });
+
+      return chapter;
     } finally {
       projectDatabase.close();
     }
@@ -220,13 +241,17 @@ export class ChapterService {
       const memoryRepository = new MemoryRepository(projectDatabase);
       const artifactRepository = new ArtifactRepository(projectDatabase);
       const modelCallRepository = new ModelCallRepository(projectDatabase);
+      const domainEventRepository = new DomainEventRepository(projectDatabase);
 
       const registry = new WorkflowRegistry().register(
         createChapterDraftWorkflow({
           buildContext: async ({ chapterId, instruction: taskInstruction, projectId }) => {
             const context = await new ContextBuilder({
               getChapter: async (contextProjectId, contextChapterId) => {
-                const contextChapter = chapterRepository.getById(contextProjectId, contextChapterId);
+                const contextChapter = chapterRepository.getById(
+                  contextProjectId,
+                  contextChapterId,
+                );
                 if (!contextChapter) {
                   throw new Error(`CHAPTER_NOT_FOUND: ${contextChapterId}`);
                 }
@@ -279,7 +304,12 @@ export class ChapterService {
               text: context.text,
             };
           },
-          generateDraft: async ({ chapterId, context, instruction: taskInstruction, projectId }) => {
+          generateDraft: async ({
+            chapterId,
+            context,
+            instruction: taskInstruction,
+            projectId,
+          }) => {
             const messages = buildPromptMessages({
               capability: "chapter_draft",
               context: context.text,
@@ -335,6 +365,21 @@ export class ChapterService {
                 workOrderId: workOrder.id,
                 title: draftInput.draft.title,
               });
+              domainEventRepository.append({
+                aggregateId: artifact.id,
+                aggregateType: "artifact",
+                eventId: randomUUID(),
+                eventType: "artifact.created",
+                payload: {
+                  kind: artifact.kind,
+                  targetId: artifact.targetId,
+                  targetType: artifact.targetType,
+                  title: artifact.title,
+                  workflowRunId: artifact.workflowRunId,
+                  workOrderId: artifact.workOrderId,
+                },
+                projectId: draftInput.projectId,
+              });
 
               memoryCandidates = draftInput.memoryCandidates.map((candidate) =>
                 memoryRepository.createCandidate({
@@ -353,6 +398,24 @@ export class ChapterService {
                     : { proposedRelations: candidate.proposedRelations }),
                 }),
               );
+              for (const candidate of memoryCandidates) {
+                domainEventRepository.append({
+                  aggregateId: candidate.id,
+                  aggregateType: "memory_candidate",
+                  eventId: randomUUID(),
+                  eventType: "memory_candidate.created",
+                  payload: {
+                    artifactId: artifact.id,
+                    content: candidate.content,
+                    entityId: candidate.entityId,
+                    entityType: candidate.entityType,
+                    kind: candidate.kind,
+                    sourceId: candidate.sourceId,
+                    sourceType: candidate.sourceType,
+                  },
+                  projectId: draftInput.projectId,
+                });
+              }
             });
             persist();
 

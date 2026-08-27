@@ -4,6 +4,7 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   DatabaseOutlined,
+  DeploymentUnitOutlined,
   FileTextOutlined,
   RobotOutlined,
 } from "@ant-design/icons";
@@ -28,6 +29,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ArtifactReviewPanel, type ArtifactReviewItem } from "../features/ai/ArtifactReviewPanel";
 import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
 import type { ChapterVersionItem } from "../features/chapter/ChapterVersionDrawer";
+import { GraphPreviewPanel, type GraphPreviewData } from "../features/memory/GraphPreviewPanel";
+import type { MemoryCandidateDecisionInput } from "../features/memory/MemoryConfirmDrawer";
 import { ProjectSidebar, type ProjectSidebarProject } from "../features/project/ProjectSidebar";
 import {
   WorkbenchHome,
@@ -55,6 +58,8 @@ export function ShellLayout() {
   const [aiOpen, setAiOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [graphPreview, setGraphPreview] = useState<GraphPreviewData | undefined>();
+  const [loadingGraphPreview, setLoadingGraphPreview] = useState(false);
   const [chapterVersions, setChapterVersions] = useState<readonly ChapterVersionItem[]>([]);
   const [loadingChapterVersions, setLoadingChapterVersions] = useState(false);
   const [loadingWorkbench, setLoadingWorkbench] = useState(true);
@@ -66,6 +71,7 @@ export function ShellLayout() {
   const selectChapter = useCallback((chapterId: string) => {
     setSelectedChapterId(chapterId);
     setChapterVersions([]);
+    setGraphPreview(undefined);
   }, []);
 
   const refreshBoard = useCallback(
@@ -101,7 +107,9 @@ export function ShellLayout() {
     async function loadInitialProject() {
       setLoadingWorkbench(true);
       try {
-        const recentProjects = (await storyPilotApi.listRecentProjects({ limit: 20 })) as WorkbenchProject[];
+        const recentProjects = (await storyPilotApi.listRecentProjects({
+          limit: 20,
+        })) as WorkbenchProject[];
         if (cancelled) {
           return;
         }
@@ -114,8 +122,12 @@ export function ShellLayout() {
           return;
         }
 
-        const project = (await storyPilotApi.openProject({ projectId: firstProject.id })) as WorkbenchProject;
-        const nextBoard = (await storyPilotApi.getWorkbenchBoard({ projectId: project.id })) as WorkbenchBoard;
+        const project = (await storyPilotApi.openProject({
+          projectId: firstProject.id,
+        })) as WorkbenchProject;
+        const nextBoard = (await storyPilotApi.getWorkbenchBoard({
+          projectId: project.id,
+        })) as WorkbenchBoard;
         if (cancelled) {
           return;
         }
@@ -146,7 +158,9 @@ export function ShellLayout() {
     async (values: CreateProjectFormValues) => {
       setCreatingProject(true);
       try {
-        const project = (await storyPilotApi.createProject(createProjectPayload(values))) as WorkbenchProject;
+        const project = (await storyPilotApi.createProject(
+          createProjectPayload(values),
+        )) as WorkbenchProject;
         setProjects((currentProjects) => upsertProject(currentProjects, project));
         await refreshBoard(project.id);
         setCreateProjectOpen(false);
@@ -331,19 +345,44 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
-  const acceptMemory = useCallback(
-    async (candidateId: string) => {
+  const loadGraphPreview = useCallback(async () => {
+    if (!activeProject || !selectedChapterId) {
+      setGraphPreview(undefined);
+      return;
+    }
+
+    setLoadingGraphPreview(true);
+    try {
+      const neighborhood = (await storyPilotApi.getGraphNeighborhood({
+        depth: 2,
+        nodeId: selectedChapterId,
+        nodeType: "chapter",
+        projectId: activeProject.id,
+      })) as GraphPreviewData;
+      setGraphPreview(neighborhood);
+    } catch (error) {
+      message.error(getErrorMessage(error));
+    } finally {
+      setLoadingGraphPreview(false);
+    }
+  }, [activeProject, message, selectedChapterId, storyPilotApi]);
+
+  const confirmMemory = useCallback(
+    async (input: MemoryCandidateDecisionInput) => {
       if (!activeProject) {
         return;
       }
 
       try {
         await storyPilotApi.confirmMemory({
-          candidateId,
+          candidateId: input.candidateId,
+          decision: input.decision,
+          ...(input.editedStatement ? { editedStatement: input.editedStatement } : {}),
+          ...(input.mergeTargetMemoryId ? { mergeTargetMemoryId: input.mergeTargetMemoryId } : {}),
           projectId: activeProject.id,
         });
-        setBoard((currentBoard) => filterMemoryCandidate(currentBoard, candidateId));
-        message.success("记忆已确认");
+        setBoard((currentBoard) => filterMemoryCandidate(currentBoard, input.candidateId));
+        message.success(resolveMemoryDecisionMessage(input.decision));
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -499,7 +538,7 @@ export function ShellLayout() {
           chapterVersions={chapterVersions}
           loadingChapterVersions={loadingChapterVersions}
           loading={loadingWorkbench}
-          onAcceptMemory={acceptMemory}
+          onConfirmMemory={confirmMemory}
           onCreateChapter={createChapter}
           onCreateCharacter={createCharacter}
           onCreateForeshadowing={createForeshadowing}
@@ -524,6 +563,11 @@ export function ShellLayout() {
         title="项目看板"
       >
         <Tabs
+          onChange={(key) => {
+            if (key === "graph") {
+              void loadGraphPreview();
+            }
+          }}
           items={[
             {
               children: (
@@ -586,6 +630,17 @@ export function ShellLayout() {
               label: (
                 <span>
                   <DatabaseOutlined /> 脉络
+                </span>
+              ),
+            },
+            {
+              children: (
+                <GraphPreviewPanel loading={loadingGraphPreview} neighborhood={graphPreview} />
+              ),
+              key: "graph",
+              label: (
+                <span>
+                  <DeploymentUnitOutlined /> 图谱
                 </span>
               ),
             },
@@ -670,6 +725,17 @@ function filterMemoryCandidate(
     ...board,
     memoryCandidates: board.memoryCandidates.filter((candidate) => candidate.id !== candidateId),
   };
+}
+
+function resolveMemoryDecisionMessage(decision: MemoryCandidateDecisionInput["decision"]): string {
+  switch (decision) {
+    case "canon":
+      return "记忆已确认";
+    case "hypothesis":
+      return "记忆已保留为假设";
+    case "merge":
+      return "记忆已合并";
+  }
 }
 
 function getErrorMessage(error: unknown): string {

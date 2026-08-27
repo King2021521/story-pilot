@@ -3,8 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Test, type TestingModule } from "@nestjs/testing";
+import { FakeModelProvider, ModelGateway } from "@story-pilot/ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
+import { ChapterModule } from "../chapter/chapter.module.js";
+import { ChapterService } from "../chapter/chapter.service.js";
 import { CharacterModule } from "../character/character.module.js";
 import { CharacterService } from "../character/character.service.js";
 import { PlotModule } from "../plot/plot.module.js";
@@ -136,6 +140,145 @@ describe("GraphService", () => {
       edges: expect.arrayContaining([
         expect.objectContaining({ label: "seeds", targetId: seedEvent.id }),
         expect.objectContaining({ label: "pays_off", targetId: payoffEvent.id }),
+      ]),
+    });
+  });
+
+  it("rebuilds chapter neighborhoods and artifact-generated memory candidates from service events", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-graph-service-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, CharacterModule, ChapterModule, PlotModule, GraphModule],
+    })
+      .overrideProvider(MODEL_GATEWAY)
+      .useValue(
+        new ModelGateway(
+          new FakeModelProvider({
+            objectResponses: {
+              ChapterDraftOutput: {
+                draft: {
+                  body: "雨夜里，林鸢从门缝下抽出一封旧信。",
+                  summary: "林鸢发现旧信。",
+                  title: "雨夜来信",
+                },
+                memoryCandidates: [
+                  {
+                    confidence: 0.8,
+                    content: "林鸢发现一封来历异常的旧信。",
+                    entityId: "char_linyuan",
+                    entityType: "character",
+                    kind: "event",
+                  },
+                ],
+                reviewNotes: ["旧信来历仍需用户确认。"],
+              },
+            },
+          }),
+        ),
+      )
+      .compile();
+    const projectService = moduleRef.get(ProjectService);
+    const characterService = moduleRef.get(CharacterService);
+    const chapterService = moduleRef.get(ChapterService);
+    const storyEventService = moduleRef.get(StoryEventService);
+    const foreshadowingService = moduleRef.get(ForeshadowingService);
+    const graphService = moduleRef.get(GraphService);
+
+    const project = await projectService.createProject({ title: "长夜序章", genre: "悬疑" });
+    const chapter = await chapterService.createChapter({
+      projectId: project.id,
+      title: "第一章",
+      volumeId: project.defaultVolumeId,
+    });
+    const linyuan = await characterService.createCharacter({
+      projectId: project.id,
+      name: "林鸢",
+      role: "protagonist",
+    });
+    const guyan = await characterService.createCharacter({
+      projectId: project.id,
+      name: "顾晏",
+      role: "support",
+    });
+    const zhouqian = await characterService.createCharacter({
+      projectId: project.id,
+      name: "周潜",
+      role: "antagonist",
+    });
+    await characterService.createRelation({
+      projectId: project.id,
+      relationType: "knows",
+      sourceEntityId: linyuan.id,
+      sourceEntityType: "character",
+      targetEntityId: guyan.id,
+      targetEntityType: "character",
+    });
+    await characterService.createRelation({
+      projectId: project.id,
+      relationType: "opposes",
+      sourceEntityId: guyan.id,
+      sourceEntityType: "character",
+      targetEntityId: zhouqian.id,
+      targetEntityType: "character",
+    });
+    const seedEvent = await storyEventService.createStoryEvent({
+      chapterId: chapter.id,
+      description: "林鸢发现旧报纸日期。",
+      eventType: "discovery",
+      participants: [{ entityId: linyuan.id, entityType: "character", role: "actor" }],
+      projectId: project.id,
+      title: "旧报纸日期",
+    });
+    const foreshadowing = await foreshadowingService.createForeshadowing({
+      description: "信纸水印暗示十年前档案。",
+      projectId: project.id,
+      seedEventId: seedEvent.id,
+      title: "水印伏笔",
+    });
+    const draft = await chapterService.generateDraft({
+      chapterId: chapter.id,
+      projectId: project.id,
+    });
+
+    await graphService.rebuild(project.id);
+
+    await expect(
+      graphService.getNeighborhood({
+        depth: 2,
+        entityId: chapter.id,
+        projectId: project.id,
+      }),
+    ).resolves.toMatchObject({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ id: chapter.id, type: "chapter" }),
+        expect.objectContaining({ id: seedEvent.id, type: "story_event" }),
+        expect.objectContaining({ id: linyuan.id, type: "character" }),
+        expect.objectContaining({ id: foreshadowing.id, type: "foreshadowing" }),
+      ]),
+    });
+    await expect(
+      graphService.getNeighborhood({
+        depth: 2,
+        entityId: linyuan.id,
+        projectId: project.id,
+      }),
+    ).resolves.toMatchObject({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ id: zhouqian.id, type: "character" }),
+      ]),
+    });
+    await expect(
+      graphService.getNeighborhood({
+        depth: 1,
+        entityId: draft.artifact.id,
+        projectId: project.id,
+      }),
+    ).resolves.toMatchObject({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ id: draft.artifact.id, type: "artifact" }),
+        expect.objectContaining({ type: "memory_candidate" }),
       ]),
     });
   });

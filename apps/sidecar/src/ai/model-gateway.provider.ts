@@ -23,7 +23,44 @@ export function createModelGatewayFromEnv(
     );
   }
 
-  return new ModelGateway(new FakeModelProvider());
+  return new ModelGateway(
+    new FakeModelProvider({
+      embedding: [0, 0, 0],
+      objectResponses: {
+        ChapterDraftOutput: {
+          draft: {
+            body: "雨夜里，林鸢从门缝下抽出一封来历异常的旧信。",
+            summary: "林鸢发现旧信，旧案线索被重新打开。",
+            title: "雨夜来信",
+          },
+          memoryCandidates: [
+            {
+              confidence: 0.8,
+              content: "林鸢发现一封来历异常的旧信。",
+              entityId: "char_linyuan",
+              entityType: "character",
+              kind: "event",
+              proposedRelations: [],
+            },
+          ],
+          reviewNotes: ["旧信来源仍需用户确认后再进入 canon。"],
+        },
+        MemoryExtractOutput: {
+          conflictNotes: [],
+          memoryCandidates: [
+            {
+              confidence: 0.7,
+              content: "文本中出现了需要长期追踪的剧情事实。",
+              entityType: "story_event",
+              kind: "event",
+              proposedRelations: [],
+              sourceSummary: "Fake provider 根据输入文本生成的待确认候选。",
+            },
+          ],
+        },
+      },
+    }),
+  );
 }
 
 export const modelGatewayProvider = {

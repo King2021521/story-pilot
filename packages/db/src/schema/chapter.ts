@@ -42,6 +42,7 @@ export const chapterVersions = sqliteTable(
       .references(() => chapters.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
     source: text("source").notNull(),
+    artifactId: text("artifact_id"),
     content: text("content").notNull(),
     summary: text("summary"),
     createdAt: integer("created_at").notNull(),

@@ -28,6 +28,7 @@ import {
 } from "../creative/CreativeElementsPanel";
 import type { ArtifactReviewItem } from "../ai/ArtifactReviewPanel";
 import { MemoryCandidateList, type MemoryCandidateItem } from "../memory/MemoryCandidateList";
+import type { MemoryCandidateDecisionInput } from "../memory/MemoryConfirmDrawer";
 
 export interface WorkbenchProject {
   readonly defaultVolumeId: string;
@@ -64,10 +65,10 @@ export interface WorkbenchHomeProps {
   readonly selectedChapterId?: string | undefined;
   readonly savingChapter?: boolean;
   onGenerateDraft(input: GenerateChapterDraftRequest): Promise<void> | void;
+  onConfirmMemory(input: MemoryCandidateDecisionInput): Promise<void> | void;
   onRejectMemory(candidateId: string): Promise<void> | void;
   onSaveChapter(input: SaveChapterRequest): Promise<void> | void;
   onSelectChapter(chapterId: string): void;
-  onAcceptMemory(candidateId: string): Promise<void> | void;
   onCreateChapter(input: CreateChapterRequest): Promise<void> | void;
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
@@ -82,7 +83,7 @@ export function WorkbenchHome({
   chapterVersions = [],
   loadingChapterVersions = false,
   loading = false,
-  onAcceptMemory,
+  onConfirmMemory,
   onCreateChapter,
   onCreateCharacter,
   onCreateForeshadowing,
@@ -177,7 +178,7 @@ export function WorkbenchHome({
             children: (
               <MemoryCandidateList
                 candidates={board.memoryCandidates}
-                onAccept={onAcceptMemory}
+                onConfirm={onConfirmMemory}
                 onReject={onRejectMemory}
               />
             ),

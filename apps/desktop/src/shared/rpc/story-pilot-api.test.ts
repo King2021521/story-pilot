@@ -132,4 +132,132 @@ describe("StoryPilotApiClient", () => {
       "foreshadowing.create",
     ]);
   });
+
+  it("wraps every MVP command exposed to the desktop workbench", async () => {
+    const send = vi.fn(
+      async <TCommand extends CommandName>(
+        _command: TCommand,
+        _payload: CommandPayload<TCommand>,
+      ): Promise<RpcResponse> => {
+        void _command;
+        void _payload;
+
+        const returnsItems = _command.includes(".list") || _command === "memory.search";
+
+        return {
+          data: returnsItems ? { items: [] } : {},
+          id: "req_test",
+          ok: true,
+        };
+      },
+    );
+    const api = new StoryPilotApiClient({ send });
+
+    await api.getProjectOverview({ projectId: "project_1" });
+    await api.backupProject({ projectId: "project_1" });
+    await api.getWorkbenchSnapshot({ projectId: "project_1" });
+    await api.listChapters({ projectId: "project_1" });
+    await api.getChapter({ chapterId: "chapter_1", projectId: "project_1" });
+    await api.reviewChapterContinuity({
+      chapterId: "chapter_1",
+      projectId: "project_1",
+      scope: "chapter",
+    });
+    await api.getArtifact({ artifactId: "artifact_1", projectId: "project_1" });
+    await api.listMemoryCandidates({ projectId: "project_1", status: "pending" });
+    await api.confirmMemory({
+      candidateId: "candidate_1",
+      decision: "hypothesis",
+      projectId: "project_1",
+    });
+    await api.mergeMemory({
+      candidateId: "candidate_1",
+      projectId: "project_1",
+      targetMemoryId: "memory_1",
+    });
+    await api.searchMemory({ limit: 20, projectId: "project_1", query: "旧信" });
+    await api.getGraphNeighborhood({
+      depth: 2,
+      nodeId: "char_1",
+      nodeType: "character",
+      projectId: "project_1",
+    });
+    await api.findGraphContradictions({ projectId: "project_1", scope: "project" });
+    await api.rebuildGraph({ projectId: "project_1" });
+    await api.listWorkOrders({ projectId: "project_1" });
+    await api.getWorkOrder({ projectId: "project_1", workOrderId: "work_order_1" });
+    await api.runWorkflow({
+      input: {},
+      projectId: "project_1",
+      targetId: "chapter_1",
+      targetType: "chapter",
+      workflowType: "memory_extract",
+    });
+    await api.cancelWorkflow({ projectId: "project_1", workflowRunId: "run_1" });
+    await api.retryWorkflow({ projectId: "project_1", workflowRunId: "run_1" });
+    await api.listCharacters({ projectId: "project_1" });
+    await api.updateCharacter({
+      characterId: "char_1",
+      patch: { goal: "找真相" },
+      projectId: "project_1",
+    });
+    await api.generateCharacterNames({ constraints: ["悬疑"], count: 3, projectId: "project_1" });
+    await api.listWorldRules({ projectId: "project_1" });
+    await api.updateWorldRule({
+      patch: { title: "新规则" },
+      projectId: "project_1",
+      worldRuleId: "rule_1",
+    });
+    await api.listPlotlines({ projectId: "project_1" });
+    await api.updatePlotlineNode({
+      patch: { status: "done" },
+      plotlineNodeId: "node_1",
+      projectId: "project_1",
+    });
+    await api.listStoryEvents({ projectId: "project_1" });
+    await api.createStoryEvent({
+      description: "发现旧信",
+      eventType: "discovery",
+      participants: [],
+      projectId: "project_1",
+      title: "旧信",
+    });
+    await api.listForeshadowings({ projectId: "project_1" });
+    await api.planForeshadowing({
+      projectId: "project_1",
+    });
+
+    expect(send.mock.calls.map(([command]) => command)).toEqual([
+      "project.getOverview",
+      "project.backup",
+      "workbench.getSnapshot",
+      "chapter.list",
+      "chapter.get",
+      "chapter.reviewContinuity",
+      "artifact.get",
+      "memory.listCandidates",
+      "memory.confirm",
+      "memory.merge",
+      "memory.search",
+      "graph.getNeighborhood",
+      "graph.findContradictions",
+      "graph.rebuild",
+      "workOrder.list",
+      "workOrder.get",
+      "workflow.run",
+      "workflow.cancel",
+      "workflow.retry",
+      "character.list",
+      "character.update",
+      "character.generateNames",
+      "worldRule.list",
+      "worldRule.update",
+      "plotline.list",
+      "plotline.updateNode",
+      "storyEvent.list",
+      "storyEvent.create",
+      "foreshadowing.list",
+      "foreshadowing.plan",
+    ]);
+  });
 });

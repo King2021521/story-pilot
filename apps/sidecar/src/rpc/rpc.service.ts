@@ -21,7 +21,10 @@ import {
 import { GraphService } from "../graph/graph.service.js";
 import { HealthService } from "../health/health.service.js";
 import { MemoryService } from "../memory/memory.service.js";
-import { ForeshadowingService, type CreateForeshadowingInput } from "../plot/foreshadowing.service.js";
+import {
+  ForeshadowingService,
+  type CreateForeshadowingInput,
+} from "../plot/foreshadowing.service.js";
 import { PlotlineService, type CreatePlotlineInput } from "../plot/plotline.service.js";
 import { StoryEventService, type CreateStoryEventInput } from "../plot/story-event.service.js";
 import { ProjectService, type CreateProjectInput } from "../project/project.service.js";
@@ -65,9 +68,18 @@ export class RpcService {
       payload = parseCommandPayload(request.command, request.payload);
     } catch (error) {
       if (getPayloadErrorCode(error) === "UNKNOWN_COMMAND") {
-        return createRpcError(request.id, "UNKNOWN_COMMAND", `Unsupported command: ${request.command}`);
+        return createRpcError(
+          request.id,
+          "UNKNOWN_COMMAND",
+          `Unsupported command: ${request.command}`,
+        );
       }
-      return createRpcError(request.id, getPayloadErrorCode(error), "RPC payload validation failed", serializeError(error));
+      return createRpcError(
+        request.id,
+        getPayloadErrorCode(error),
+        "RPC payload validation failed",
+        serializeError(error),
+      );
     }
 
     try {
@@ -105,9 +117,7 @@ export class RpcService {
       case "project.open": {
         const parsed = payload as CommandPayload<"project.open">;
         return this.projectService.openProject(
-          "projectId" in parsed
-            ? { projectId: parsed.projectId }
-            : { path: parsed.path },
+          "projectId" in parsed ? { projectId: parsed.projectId } : { path: parsed.path },
         );
       }
       case "project.getOverview": {
@@ -217,7 +227,9 @@ export class RpcService {
             candidateId: parsed.candidateId,
             projectId: parsed.projectId,
             targetMemoryId: parsed.mergeTargetMemoryId,
-            ...(parsed.editedStatement === undefined ? {} : { editedStatement: parsed.editedStatement }),
+            ...(parsed.editedStatement === undefined
+              ? {}
+              : { editedStatement: parsed.editedStatement }),
           });
         }
 
@@ -225,7 +237,9 @@ export class RpcService {
           candidateId: parsed.candidateId,
           decision: parsed.decision,
           projectId: parsed.projectId,
-          ...(parsed.editedStatement === undefined ? {} : { editedStatement: parsed.editedStatement }),
+          ...(parsed.editedStatement === undefined
+            ? {}
+            : { editedStatement: parsed.editedStatement }),
         });
       }
       case "memory.reject": {
@@ -253,7 +267,9 @@ export class RpcService {
       case "graph.getNeighborhood": {
         const parsed = payload as CommandPayload<"graph.getNeighborhood">;
         return this.graphService.getNeighborhood({
+          depth: parsed.depth,
           entityId: parsed.nodeId,
+          nodeType: parsed.nodeType,
           projectId: parsed.projectId,
         });
       }
@@ -262,7 +278,12 @@ export class RpcService {
         return this.graphService.rebuild(parsed.projectId);
       }
       case "graph.findContradictions": {
-        return this.graphService.findContradictions();
+        const parsed = payload as CommandPayload<"graph.findContradictions">;
+        return this.graphService.findContradictions({
+          projectId: parsed.projectId,
+          scope: parsed.scope,
+          ...(parsed.targetId === undefined ? {} : { targetId: parsed.targetId }),
+        });
       }
       case "workOrder.list": {
         const parsed = payload as CommandPayload<"workOrder.list">;
@@ -300,7 +321,11 @@ export class RpcService {
       }
       case "workflow.run": {
         const parsed = payload as CommandPayload<"workflow.run">;
-        if (parsed.workflowType === "chapter_draft" && parsed.targetType === "chapter" && parsed.targetId) {
+        if (
+          parsed.workflowType === "chapter_draft" &&
+          parsed.targetType === "chapter" &&
+          parsed.targetId
+        ) {
           const instruction = getString(parsed.input.instruction);
           const input: GenerateChapterDraftInput = {
             chapterId: parsed.targetId,
@@ -405,7 +430,9 @@ export class RpcService {
           projectId: parsed.projectId,
           title: parsed.title,
           ...(parsed.payoffEventId === undefined ? {} : { payoffEventId: parsed.payoffEventId }),
-          ...(parsed.payoffExpectation === undefined ? {} : { payoffExpectation: parsed.payoffExpectation }),
+          ...(parsed.payoffExpectation === undefined
+            ? {}
+            : { payoffExpectation: parsed.payoffExpectation }),
           ...(parsed.seedEventId === undefined ? {} : { seedEventId: parsed.seedEventId }),
         };
         return this.foreshadowingService.createForeshadowing(input);

@@ -20,6 +20,16 @@ describe("PromptRegistry", () => {
     expect(content).toContain("人物：林澈");
   });
 
+  it("keeps chapter draft prompt aligned with structured output fields", () => {
+    const prompt = PromptRegistry.getPrompt("chapter_draft", "v1");
+
+    expect(prompt.content).toContain('"body"');
+    expect(prompt.content).toContain('"summary"');
+    expect(prompt.content).toContain('"reviewNotes"');
+    expect(prompt.content).not.toContain('"content": "章节正文草稿"');
+    expect(prompt.content).not.toContain("continuityNotes");
+  });
+
   it("keeps extracted memories as candidates until user confirmation", () => {
     const prompt = PromptRegistry.getPrompt("memory_extract", "v1");
 

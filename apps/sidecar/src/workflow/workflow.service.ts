@@ -4,6 +4,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import {
   ArtifactRepository,
   ChapterRepository,
+  DomainEventRepository,
   MemoryRepository,
   ModelCallRepository,
   WorkflowRepository,
@@ -142,7 +143,10 @@ export class WorkflowService {
   async getWorkOrder(input: GetWorkOrderInput) {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
-      const workOrder = new WorkflowRepository(projectDatabase).getWorkOrder(input.projectId, input.workOrderId);
+      const workOrder = new WorkflowRepository(projectDatabase).getWorkOrder(
+        input.projectId,
+        input.workOrderId,
+      );
       if (!workOrder) {
         throw new Error(`WORK_ORDER_NOT_FOUND: ${input.workOrderId}`);
       }
@@ -156,7 +160,10 @@ export class WorkflowService {
   async getWorkflowRun(input: RetryWorkflowInput): Promise<WorkflowRunRecord> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
-      const run = new WorkflowRepository(projectDatabase).getWorkflowRun(input.projectId, input.workflowRunId);
+      const run = new WorkflowRepository(projectDatabase).getWorkflowRun(
+        input.projectId,
+        input.workflowRunId,
+      );
       if (!run) {
         throw new Error(`WORKFLOW_RUN_NOT_FOUND: ${input.workflowRunId}`);
       }
@@ -210,6 +217,7 @@ export class WorkflowService {
       const chapterRepository = new ChapterRepository(projectDatabase);
       const memoryRepository = new MemoryRepository(projectDatabase);
       const modelCallRepository = new ModelCallRepository(projectDatabase);
+      const domainEventRepository = new DomainEventRepository(projectDatabase);
       const capability = CapabilityRegistry.get("memory.extract");
       const registry = new WorkflowRegistry().register(
         createMemoryExtractWorkflow({
@@ -252,25 +260,49 @@ export class WorkflowService {
 
             return result.object;
           },
-          persistCandidates: async ({ memoryCandidates, projectId, sourceId, sourceType }) => ({
-            memoryCandidateIds: memoryCandidates.map((candidate) =>
-              memoryRepository.createCandidate({
-                candidateId: randomUUID(),
-                confidence: candidate.confidence,
-                content: candidate.content,
-                entityType: candidate.entityType,
-                kind: candidate.kind,
-                projectId,
-                sourceId,
-                sourceType,
-                ...(candidate.entityId === undefined ? {} : { entityId: candidate.entityId }),
-                ...(modelCallId === undefined ? {} : { modelCallId }),
-                ...(candidate.proposedRelations === undefined
-                  ? {}
-                  : { proposedRelations: candidate.proposedRelations }),
-              }).id,
-            ),
-          }),
+          persistCandidates: async ({ memoryCandidates, projectId, sourceId, sourceType }) => {
+            const persist = projectDatabase.client.transaction(() =>
+              memoryCandidates.map((candidate) => {
+                const record = memoryRepository.createCandidate({
+                  candidateId: randomUUID(),
+                  confidence: candidate.confidence,
+                  content: candidate.content,
+                  entityType: candidate.entityType,
+                  kind: candidate.kind,
+                  projectId,
+                  sourceId,
+                  sourceType,
+                  ...(candidate.entityId === undefined ? {} : { entityId: candidate.entityId }),
+                  ...(modelCallId === undefined ? {} : { modelCallId }),
+                  ...(candidate.proposedRelations === undefined
+                    ? {}
+                    : { proposedRelations: candidate.proposedRelations }),
+                });
+                domainEventRepository.append({
+                  aggregateId: record.id,
+                  aggregateType: "memory_candidate",
+                  eventId: randomUUID(),
+                  eventType: "memory_candidate.created",
+                  payload: {
+                    ...(sourceType === "artifact" ? { artifactId: sourceId } : {}),
+                    content: record.content,
+                    entityId: record.entityId,
+                    entityType: record.entityType,
+                    kind: record.kind,
+                    sourceId,
+                    sourceType,
+                  },
+                  projectId,
+                });
+
+                return record.id;
+              }),
+            );
+
+            return {
+              memoryCandidateIds: persist(),
+            };
+          },
           prepareSource: async (sourceInput) =>
             resolveMemoryExtractSource({
               artifactRepository,
@@ -281,7 +313,8 @@ export class WorkflowService {
       );
       const workflowInput = {
         ...input.input,
-        ...(getString(input.input.sourceText) === undefined && getString(input.input.text) !== undefined
+        ...(getString(input.input.sourceText) === undefined &&
+        getString(input.input.text) !== undefined
           ? { sourceText: getString(input.input.text) }
           : {}),
         ...(input.targetId === undefined ? {} : { targetId: input.targetId }),
@@ -346,7 +379,10 @@ function createDefaultWorkflowRegistry(): WorkflowRegistry {
       steps: [
         {
           name: "wait_for_memory_confirmation",
-          execute: async () => ({ status: "waiting_user", output: { reason: "needs_memory_review" } }),
+          execute: async () => ({
+            status: "waiting_user",
+            output: { reason: "needs_memory_review" },
+          }),
         },
       ],
     })

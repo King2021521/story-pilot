@@ -4,6 +4,7 @@ import { Injectable } from "@nestjs/common";
 import {
   ArtifactRepository,
   ChapterRepository,
+  DomainEventRepository,
   type ArtifactRecord,
   type ChapterRecord,
 } from "@story-pilot/db";
@@ -84,7 +85,11 @@ export class ArtifactService {
         throw new Error(`ARTIFACT_NOT_PENDING: ${artifactId}`);
       }
 
-      return new ArtifactRepository(projectDatabase).markRejected(projectId, artifactId, Date.now());
+      return new ArtifactRepository(projectDatabase).markRejected(
+        projectId,
+        artifactId,
+        Date.now(),
+      );
     } finally {
       projectDatabase.close();
     }
@@ -111,18 +116,47 @@ export class ArtifactService {
         throw new Error(`CHAPTER_NOT_FOUND: ${artifact.targetId}`);
       }
 
-      const baseVersion = input.targetVersion ?? chapter.version;
-      const nextContent = resolveChapterContent(chapter.content, artifact.body, input.applyMode);
-      const appliedChapter = chapterRepository.saveContent({
-        baseVersion,
-        chapterId: chapter.id,
-        content: nextContent,
-        nextVersion: createNextChapterVersion(chapter.version),
-        projectId: input.projectId,
-        source: "ai_artifact",
-        versionId: randomUUID(),
+      let appliedArtifact: ArtifactRecord | undefined;
+      let appliedChapter: ChapterRecord | undefined;
+      const apply = projectDatabase.client.transaction(() => {
+        const baseVersion = input.targetVersion ?? chapter.version;
+        const nextContent = resolveChapterContent(chapter.content, artifact.body, input.applyMode);
+        const nextVersion = createNextChapterVersion(chapter.version);
+        const appliedAt = Date.now();
+
+        appliedChapter = chapterRepository.saveContentWithinTransaction({
+          artifactId: artifact.id,
+          baseVersion,
+          chapterId: chapter.id,
+          content: nextContent,
+          nextVersion,
+          projectId: input.projectId,
+          source: "ai",
+          updateCurrentContent: input.applyMode !== "create_version_only",
+          versionId: randomUUID(),
+          now: appliedAt,
+        });
+        appliedArtifact = artifactRepository.markApplied(input.projectId, artifact.id, appliedAt);
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: artifact.id,
+          aggregateType: "artifact",
+          eventId: randomUUID(),
+          eventType: "artifact.applied",
+          now: appliedAt,
+          payload: {
+            applyMode: input.applyMode,
+            artifactId: artifact.id,
+            chapterId: chapter.id,
+            version: nextVersion,
+          },
+          projectId: input.projectId,
+        });
       });
-      const appliedArtifact = artifactRepository.markApplied(input.projectId, artifact.id, Date.now());
+      apply();
+
+      if (!appliedArtifact || !appliedChapter) {
+        throw new Error(`ARTIFACT_NOT_APPLIED: ${artifact.id}`);
+      }
 
       return {
         artifact: appliedArtifact,
@@ -132,7 +166,6 @@ export class ArtifactService {
       projectDatabase.close();
     }
   }
-
 }
 
 function resolveChapterContent(
@@ -142,6 +175,7 @@ function resolveChapterContent(
 ): string {
   switch (applyMode) {
     case "replace":
+      return artifactBody;
     case "create_version_only":
       return artifactBody;
     case "append":

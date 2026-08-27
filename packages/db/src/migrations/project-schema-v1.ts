@@ -58,6 +58,7 @@ create table if not exists chapter_versions (
   chapter_id text not null references chapters(id) on delete cascade,
   version integer not null,
   source text not null,
+  artifact_id text references artifacts(id) on delete set null,
   content text not null,
   summary text,
   created_at integer not null,

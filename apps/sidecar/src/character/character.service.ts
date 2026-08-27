@@ -109,9 +109,14 @@ export class CharacterService {
         eventId: randomUUID(),
         eventType: "entity_relation.confirmed",
         payload: {
+          description: relation.description,
+          polarity: relation.polarity,
           relationType: relation.relationType,
           sourceEntityId: relation.sourceEntityId,
+          sourceEntityType: relation.sourceEntityType,
+          strength: relation.strength,
           targetEntityId: relation.targetEntityId,
+          targetEntityType: relation.targetEntityType,
         },
         projectId: input.projectId,
       });
@@ -176,7 +181,8 @@ export class CharacterService {
     const familyNames = ["林", "顾", "沈", "陆", "江", "程", "许", "闻", "秦", "宋"];
     const givenNames = ["鸢", "澈", "晏", "疏", "衡", "砚", "微", "宁", "舟", "栀"];
     const style = input.style?.trim() || "通用";
-    const constraintHint = input.constraints.length > 0 ? input.constraints.join("、") : "符合人物定位";
+    const constraintHint =
+      input.constraints.length > 0 ? input.constraints.join("、") : "符合人物定位";
 
     return {
       items: Array.from({ length: input.count }, (_, index) => {

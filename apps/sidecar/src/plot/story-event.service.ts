@@ -9,7 +9,16 @@ export interface CreateStoryEventInput {
   readonly projectId: string;
   readonly title: string;
   readonly description: string;
-  readonly eventType: "decision" | "discovery" | "conflict" | "reveal" | "loss" | "victory" | "betrayal" | "travel" | "custom";
+  readonly eventType:
+    | "decision"
+    | "discovery"
+    | "conflict"
+    | "reveal"
+    | "loss"
+    | "victory"
+    | "betrayal"
+    | "travel"
+    | "custom";
   readonly chapterId?: string;
   readonly sceneId?: string;
   readonly storyTime?: string;
@@ -52,13 +61,16 @@ export class StoryEventService {
         eventId: randomUUID(),
         eventType: "story_event.created",
         payload: {
+          chapterId: input.chapterId,
           eventType: event.eventType,
           participants: event.participants.map((participant) => ({
             entityId: participant.entityId,
             entityType: participant.entityType,
             role: participant.role,
           })),
+          sceneId: input.sceneId,
           summary: event.summary,
+          storyTime: input.storyTime,
           title: event.title,
         },
         projectId: input.projectId,

@@ -1,9 +1,43 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { ChapterDraftOutputSchema, MemoryExtractOutputSchema } from "@story-pilot/ai";
 
 import { createModelGatewayFromEnv } from "./model-gateway.provider.js";
 
 describe("createModelGatewayFromEnv", () => {
+  it("uses deterministic fake MVP responses when local LLM env is missing", async () => {
+    const gateway = createModelGatewayFromEnv({});
+
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "写第一章" }],
+        purpose: "chapter_draft",
+        schema: ChapterDraftOutputSchema,
+        schemaName: "ChapterDraftOutput",
+      }),
+    ).resolves.toMatchObject({
+      object: {
+        draft: {
+          body: expect.any(String),
+          summary: expect.any(String),
+          title: expect.any(String),
+        },
+      },
+    });
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "提取记忆" }],
+        purpose: "memory_extract",
+        schema: MemoryExtractOutputSchema,
+        schemaName: "MemoryExtractOutput",
+      }),
+    ).resolves.toMatchObject({
+      object: {
+        memoryCandidates: expect.any(Array),
+      },
+    });
+  });
+
   it("creates an OpenAI-compatible gateway from local LLM env settings", async () => {
     const calls: string[] = [];
     const gateway = createModelGatewayFromEnv(

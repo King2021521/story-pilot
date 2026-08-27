@@ -42,6 +42,8 @@ export class WorldRuleService {
         eventType: "world_rule.created",
         payload: {
           category: rule.category,
+          constraintLevel: rule.source,
+          statement: rule.content,
           title: rule.title,
         },
         projectId: input.projectId,
@@ -85,6 +87,8 @@ export class WorldRuleService {
         eventType: "world_rule.updated",
         payload: {
           category: rule.category,
+          constraintLevel: rule.source,
+          statement: rule.content,
           title: rule.title,
         },
         projectId: input.projectId,

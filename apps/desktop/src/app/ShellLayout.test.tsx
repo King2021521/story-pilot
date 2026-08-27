@@ -17,7 +17,10 @@ describe("ShellLayout", () => {
     invokeMock.mockImplementation(async (_tauriCommand, args) => {
       const request = getRpcRequest(args);
 
-      return rpcSuccess(request.id, request.command === "project.listRecent" ? { items: [] } : null);
+      return rpcSuccess(
+        request.id,
+        request.command === "project.listRecent" ? { items: [] } : null,
+      );
     });
   });
 
@@ -160,7 +163,8 @@ describe("ShellLayout", () => {
 
     const acceptedCandidate = screen.getByText("林鸢发现一封来历异常的旧信。").closest("li");
     expect(acceptedCandidate).not.toBeNull();
-    fireEvent.click(within(acceptedCandidate as HTMLElement).getByRole("button", { name: "接受" }));
+    fireEvent.click(within(acceptedCandidate as HTMLElement).getByRole("button", { name: "确认" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认记忆" }));
 
     const rejectedCandidate = await screen.findByText("旧城区钟楼在雨夜会停摆。");
     const rejectedCandidateItem = rejectedCandidate.closest("li");
@@ -239,7 +243,9 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.change(screen.getByLabelText("规则标题"), { target: { value: "旧城区治理" } });
-    fireEvent.change(screen.getByLabelText("规则内容"), { target: { value: "旧城区由钟楼议会管理。" } });
+    fireEvent.change(screen.getByLabelText("规则内容"), {
+      target: { value: "旧城区由钟楼议会管理。" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "创建规则" }));
     await waitFor(() => {
       expect(rpcPayload("worldRule.create")).toMatchObject({
@@ -252,7 +258,9 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.change(screen.getByLabelText("故事线标题"), { target: { value: "旧信谜团" } });
-    fireEvent.change(screen.getByLabelText("故事线摘要"), { target: { value: "围绕旧信来源展开。" } });
+    fireEvent.change(screen.getByLabelText("故事线摘要"), {
+      target: { value: "围绕旧信来源展开。" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "创建故事线" }));
     await waitFor(() => {
       expect(rpcPayload("plotline.create")).toMatchObject({
@@ -265,7 +273,9 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.change(screen.getByLabelText("伏笔标题"), { target: { value: "水印伏笔" } });
-    fireEvent.change(screen.getByLabelText("伏笔内容"), { target: { value: "信纸水印暗示十年前档案。" } });
+    fireEvent.change(screen.getByLabelText("伏笔内容"), {
+      target: { value: "信纸水印暗示十年前档案。" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "创建伏笔" }));
 
     await waitFor(() => {
@@ -377,7 +387,9 @@ describe("ShellLayout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "新建章节" }));
     fireEvent.change(screen.getByLabelText("章节标题"), { target: { value: "第二章 钟楼停摆" } });
-    fireEvent.change(screen.getByLabelText("章节摘要"), { target: { value: "林鸢追查钟楼线索。" } });
+    fireEvent.change(screen.getByLabelText("章节摘要"), {
+      target: { value: "林鸢追查钟楼线索。" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "创建章节" }));
 
     await waitFor(() => {
@@ -422,7 +434,9 @@ describe("ShellLayout", () => {
     const rejectedArtifact = await screen.findByText("废弃草稿");
     const rejectedArtifactItem = rejectedArtifact.closest("li");
     expect(rejectedArtifactItem).not.toBeNull();
-    fireEvent.click(within(rejectedArtifactItem as HTMLElement).getByRole("button", { name: "拒绝" }));
+    fireEvent.click(
+      within(rejectedArtifactItem as HTMLElement).getByRole("button", { name: "拒绝" }),
+    );
 
     await waitFor(() => {
       expect(rpcPayload("artifact.reject")).toMatchObject({
@@ -430,6 +444,65 @@ describe("ShellLayout", () => {
         projectId: "project_1",
       });
     });
+  });
+
+  it("loads a graph preview for the selected chapter from the project board", async () => {
+    const project = createProject();
+    const chapter = {
+      content: "雨夜里，林鸢发现门缝下有一封旧信。",
+      id: "chapter_1",
+      title: "第一章 雨夜来信",
+      version: 1,
+    };
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [chapter],
+            memoryCandidates: [],
+            project,
+            workOrders: [],
+          });
+        case "graph.getNeighborhood":
+          return rpcSuccess(request.id, {
+            edges: [{ label: "actor", sourceId: "char_1", targetId: "event_1" }],
+            nodes: [
+              { id: "chapter_1", label: "第一章 雨夜来信", type: "chapter" },
+              { id: "char_1", label: "林鸢", type: "character" },
+            ],
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    await screen.findByLabelText("章节正文");
+    fireEvent.click(screen.getByRole("button", { name: "项目看板" }));
+    fireEvent.click(await screen.findByRole("tab", { name: /图谱/ }));
+
+    await waitFor(() => {
+      expect(rpcPayload("graph.getNeighborhood")).toMatchObject({
+        depth: 2,
+        nodeId: "chapter_1",
+        nodeType: "chapter",
+        projectId: "project_1",
+      });
+    });
+    expect(await screen.findByText("林鸢")).toBeInTheDocument();
+    expect(screen.getByText("1 条关系")).toBeInTheDocument();
   });
 });
 

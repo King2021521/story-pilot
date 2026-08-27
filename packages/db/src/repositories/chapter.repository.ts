@@ -22,6 +22,7 @@ export interface ChapterVersionRecord {
   readonly chapterId: string;
   readonly version: number;
   readonly source: string;
+  readonly artifactId: string | null;
   readonly content: string;
   readonly summary: string | null;
   readonly createdAt: number;
@@ -44,7 +45,9 @@ export interface SaveChapterContentInput {
   readonly content: string;
   readonly baseVersion: number;
   readonly nextVersion: number;
-  readonly source: "user" | "ai_artifact" | "restore";
+  readonly source: "user" | "ai" | "restore";
+  readonly artifactId?: string;
+  readonly updateCurrentContent?: boolean;
   readonly now?: number;
 }
 
@@ -75,6 +78,7 @@ interface ChapterVersionRow {
   readonly chapter_id: string;
   readonly version: number;
   readonly source: string;
+  readonly artifact_id: string | null;
   readonly content: string;
   readonly summary: string | null;
   readonly created_at: number;
@@ -95,12 +99,17 @@ export class ChapterRepository {
 
     const position =
       input.position ??
-      ((this.projectDatabase.client
-        .prepare("select coalesce(max(position), 0) + 1 as next_position from chapters where volume_id = ?")
-        .get(input.volumeId) as { next_position: number }).next_position);
+      (
+        this.projectDatabase.client
+          .prepare(
+            "select coalesce(max(position), 0) + 1 as next_position from chapters where volume_id = ?",
+          )
+          .get(input.volumeId) as { next_position: number }
+      ).next_position;
 
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into chapters (
           id, project_id, work_id, volume_id, title, status, position, synopsis,
           content, word_count, version, created_at, updated_at
@@ -109,7 +118,8 @@ export class ChapterRepository {
           @chapterId, @projectId, @workId, @volumeId, @title, 'draft', @position, @summary,
           '', 0, 0, @now, @now
         )
-      `)
+      `,
+      )
       .run({
         chapterId: input.chapterId,
         projectId: input.projectId,
@@ -137,10 +147,7 @@ export class ChapterRepository {
     return row ? mapChapterRow(row) : undefined;
   }
 
-  listChapters(input: {
-    readonly projectId: string;
-    readonly volumeId?: string;
-  }): ChapterRecord[] {
+  listChapters(input: { readonly projectId: string; readonly volumeId?: string }): ChapterRecord[] {
     if (input.volumeId) {
       return this.projectDatabase.client
         .prepare(
@@ -167,24 +174,37 @@ export class ChapterRepository {
   }
 
   saveContent(input: SaveChapterContentInput): ChapterRecord {
-    const save = this.projectDatabase.client.transaction(() => {
-      const chapter = this.getById(input.projectId, input.chapterId);
-      if (!chapter) {
-        throw new Error(`CHAPTER_NOT_FOUND: ${input.chapterId}`);
-      }
-      if (chapter.version !== input.baseVersion) {
-        throw new Error(`CHAPTER_VERSION_CONFLICT: expected ${input.baseVersion}, got ${chapter.version}`);
-      }
+    const save = this.projectDatabase.client.transaction(() =>
+      this.saveContentWithinTransaction(input),
+    );
 
-      const now = input.now ?? Date.now();
+    return save();
+  }
+
+  saveContentWithinTransaction(input: SaveChapterContentInput): ChapterRecord {
+    const chapter = this.getById(input.projectId, input.chapterId);
+    if (!chapter) {
+      throw new Error(`CHAPTER_NOT_FOUND: ${input.chapterId}`);
+    }
+    if (chapter.version !== input.baseVersion) {
+      throw new Error(
+        `CHAPTER_VERSION_CONFLICT: expected ${input.baseVersion}, got ${chapter.version}`,
+      );
+    }
+
+    const now = input.now ?? Date.now();
+    const updateCurrentContent = input.updateCurrentContent ?? true;
+
+    if (updateCurrentContent) {
       const wordCount = countWords(input.content);
-
       this.projectDatabase.client
-        .prepare(`
+        .prepare(
+          `
           update chapters
           set content = @content, word_count = @wordCount, version = @nextVersion, updated_at = @now
           where project_id = @projectId and id = @chapterId
-        `)
+        `,
+        )
         .run({
           chapterId: input.chapterId,
           content: input.content,
@@ -193,28 +213,44 @@ export class ChapterRepository {
           projectId: input.projectId,
           wordCount,
         });
-
+    } else {
       this.projectDatabase.client
-        .prepare(`
-          insert into chapter_versions (
-            id, project_id, chapter_id, version, source, content, created_at
-          )
-          values (
-            @versionId, @projectId, @chapterId, @nextVersion, @source, @content, @now
-          )
-        `)
+        .prepare(
+          `
+          update chapters
+          set version = @nextVersion, updated_at = @now
+          where project_id = @projectId and id = @chapterId
+        `,
+        )
         .run({
           chapterId: input.chapterId,
-          content: input.content,
           nextVersion: input.nextVersion,
           now,
           projectId: input.projectId,
-          source: input.source,
-          versionId: input.versionId,
         });
-    });
+    }
 
-    save();
+    this.projectDatabase.client
+      .prepare(
+        `
+        insert into chapter_versions (
+          id, project_id, chapter_id, version, source, artifact_id, content, created_at
+        )
+        values (
+          @versionId, @projectId, @chapterId, @nextVersion, @source, @artifactId, @content, @now
+        )
+      `,
+      )
+      .run({
+        artifactId: input.artifactId ?? null,
+        chapterId: input.chapterId,
+        content: input.content,
+        nextVersion: input.nextVersion,
+        now,
+        projectId: input.projectId,
+        source: input.source,
+        versionId: input.versionId,
+      });
 
     const saved = this.getById(input.projectId, input.chapterId);
     if (!saved) {
@@ -266,6 +302,7 @@ function mapChapterRow(row: ChapterRow): ChapterRecord {
 
 function mapChapterVersionRow(row: ChapterVersionRow): ChapterVersionRecord {
   return {
+    artifactId: row.artifact_id,
     chapterId: row.chapter_id,
     content: row.content,
     createdAt: row.created_at,

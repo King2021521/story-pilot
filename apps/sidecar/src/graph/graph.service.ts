@@ -6,6 +6,7 @@ import {
   GraphProjector,
   getNeighborhood,
   initializeGraphSchema,
+  listContradictions,
   type GraphNeighborhood,
   type GraphStore,
 } from "@story-pilot/graph";
@@ -15,6 +16,8 @@ import { ProjectStorageService } from "../storage/project-storage.service.js";
 export interface GraphNeighborhoodRequest {
   readonly projectId: string;
   readonly entityId: string;
+  readonly nodeType?: string;
+  readonly depth?: number;
 }
 
 export interface GraphRebuildResult {
@@ -24,6 +27,12 @@ export interface GraphRebuildResult {
 
 export interface GraphContradictionResult {
   readonly items: readonly unknown[];
+}
+
+export interface GraphContradictionRequest {
+  readonly projectId: string;
+  readonly scope?: string;
+  readonly targetId?: string;
 }
 
 interface DomainEventRow {
@@ -42,7 +51,9 @@ export class GraphService implements OnModuleDestroy {
   constructor(private readonly projectStorage: ProjectStorageService) {}
 
   async onModuleDestroy(): Promise<void> {
-    await Promise.all([...this.graphStores.keys()].map((projectId) => this.closeProjectStore(projectId)));
+    await Promise.all(
+      [...this.graphStores.keys()].map((projectId) => this.closeProjectStore(projectId)),
+    );
   }
 
   async rebuild(projectId: string): Promise<GraphRebuildResult> {
@@ -83,12 +94,14 @@ export class GraphService implements OnModuleDestroy {
         .prepare("delete from projection_checkpoints where project_id = ? and projection_name = ?")
         .run(projectId, "kuzu_main");
       projectDatabase.client
-        .prepare(`
+        .prepare(
+          `
           insert into projection_checkpoints (
             id, project_id, projection_name, last_domain_event_id, rebuilt_at, updated_at
           )
           values (?, ?, ?, ?, ?, ?)
-        `)
+        `,
+        )
         .run(`kuzu_main:${projectId}`, projectId, "kuzu_main", lastEventId, now, now);
 
       return {
@@ -105,8 +118,14 @@ export class GraphService implements OnModuleDestroy {
     return getNeighborhood(store, input);
   }
 
-  findContradictions(): GraphContradictionResult {
-    return { items: [] };
+  async findContradictions(input: GraphContradictionRequest): Promise<GraphContradictionResult> {
+    const store = await this.getProjectStore(input.projectId);
+    return {
+      items: await listContradictions(store, {
+        projectId: input.projectId,
+        ...(input.targetId === undefined ? {} : { targetId: input.targetId }),
+      }),
+    };
   }
 
   private async getProjectStore(projectId: string): Promise<GraphStore> {

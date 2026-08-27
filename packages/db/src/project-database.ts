@@ -50,4 +50,16 @@ export async function runProjectMigrations(projectDatabase: ProjectDatabase): Pr
   });
 
   migrate();
+  ensureProjectSchemaCompatibility(projectDatabase);
+}
+
+function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): void {
+  const chapterVersionColumns = projectDatabase.client
+    .prepare("pragma table_info(chapter_versions)")
+    .all()
+    .map((row) => (row as { name: string }).name);
+
+  if (!chapterVersionColumns.includes("artifact_id")) {
+    projectDatabase.client.exec("alter table chapter_versions add column artifact_id text");
+  }
 }

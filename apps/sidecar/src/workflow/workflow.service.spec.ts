@@ -71,10 +71,14 @@ describe("WorkflowService", () => {
     const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
     try {
       expect(
-        projectDatabase.client.prepare("select status from work_orders where id = ?").get(workOrder.id),
+        projectDatabase.client
+          .prepare("select status from work_orders where id = ?")
+          .get(workOrder.id),
       ).toMatchObject({ status: "completed" });
       expect(
-        projectDatabase.client.prepare("select workflow_name, status from workflow_runs where id = ?").get(run.id),
+        projectDatabase.client
+          .prepare("select workflow_name, status from workflow_runs where id = ?")
+          .get(run.id),
       ).toMatchObject({ status: "completed", workflow_name: "review" });
       expect(
         projectDatabase.client
@@ -187,7 +191,9 @@ describe("WorkflowService", () => {
     try {
       expect(
         projectDatabase.client
-          .prepare("select content, status, source_type, source_id, model_call_id from memory_candidates")
+          .prepare(
+            "select content, status, source_type, source_id, model_call_id from memory_candidates",
+          )
           .all(),
       ).toEqual([
         expect.objectContaining({
@@ -205,6 +211,17 @@ describe("WorkflowService", () => {
         prompt_version: "memory-extract.v1",
         purpose: "memory_extract",
         status: "completed",
+      });
+      expect(
+        projectDatabase.client
+          .prepare(
+            "select aggregate_type, event_type, payload from domain_events where event_type = ?",
+          )
+          .get("memory_candidate.created"),
+      ).toMatchObject({
+        aggregate_type: "memory_candidate",
+        event_type: "memory_candidate.created",
+        payload: expect.stringContaining("chapter_1"),
       });
     } finally {
       projectDatabase.close();
