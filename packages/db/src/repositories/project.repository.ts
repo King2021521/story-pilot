@@ -6,6 +6,7 @@ export interface CreateProjectRecordInput {
   readonly defaultVolumeId: string;
   readonly title: string;
   readonly genre: string;
+  readonly style?: string;
   readonly rootPath: string;
   readonly logline?: string;
   readonly wordCountGoal?: number;
@@ -18,6 +19,7 @@ export interface ProjectOverviewRecord {
   readonly defaultVolumeId: string;
   readonly title: string;
   readonly genre: string;
+  readonly style: string | null;
   readonly status: string;
   readonly rootPath: string;
   readonly createdAt: number;
@@ -31,12 +33,12 @@ export class ProjectRepository {
     const now = input.now ?? Date.now();
 
     const insertProject = this.projectDatabase.client.prepare(`
-      insert into projects (id, title, genre, status, root_path, created_at, updated_at, opened_at)
-      values (@projectId, @title, @genre, 'planning', @rootPath, @now, @now, @now)
+      insert into projects (id, title, genre, style, status, root_path, created_at, updated_at, opened_at)
+      values (@projectId, @title, @genre, @style, 'planning', @rootPath, @now, @now, @now)
     `);
     const insertWork = this.projectDatabase.client.prepare(`
-      insert into works (id, project_id, title, genre, target_length, status, logline, created_at, updated_at)
-      values (@workId, @projectId, @title, @genre, @wordCountGoal, 'planning', @logline, @now, @now)
+      insert into works (id, project_id, title, genre, style, target_length, status, logline, created_at, updated_at)
+      values (@workId, @projectId, @title, @genre, @style, @wordCountGoal, 'planning', @logline, @now, @now)
     `);
     const insertDefaultVolume = this.projectDatabase.client.prepare(`
       insert into volumes (id, project_id, work_id, title, position, created_at, updated_at)
@@ -49,6 +51,7 @@ export class ProjectRepository {
         now,
         projectId: input.projectId,
         rootPath: input.rootPath,
+        style: input.style ?? null,
         title: input.title,
       });
       insertWork.run({
@@ -56,6 +59,7 @@ export class ProjectRepository {
         logline: input.logline ?? null,
         now,
         projectId: input.projectId,
+        style: input.style ?? null,
         title: input.title,
         wordCountGoal: input.wordCountGoal ?? null,
         workId: input.workId,
@@ -77,6 +81,7 @@ export class ProjectRepository {
       id: input.projectId,
       rootPath: input.rootPath,
       status: "planning",
+      style: input.style ?? null,
       title: input.title,
       updatedAt: now,
       workId: input.workId,
@@ -91,6 +96,7 @@ export class ProjectRepository {
           p.id,
           p.title,
           p.genre,
+          p.style,
           p.status,
           p.root_path,
           p.created_at,
@@ -118,6 +124,7 @@ export class ProjectRepository {
           p.id,
           p.title,
           p.genre,
+          p.style,
           p.status,
           p.root_path,
           p.created_at,
@@ -154,6 +161,7 @@ interface ProjectOverviewRow {
   readonly id: string;
   readonly title: string;
   readonly genre: string;
+  readonly style: string | null;
   readonly status: string;
   readonly root_path: string;
   readonly created_at: number;
@@ -174,6 +182,7 @@ function mapProjectOverviewRow(row: ProjectOverviewRow): ProjectOverviewRecord {
     id: row.id,
     rootPath: row.root_path,
     status: row.status,
+    style: row.style,
     title: row.title,
     updatedAt: row.updated_at,
     workId: row.work_id,

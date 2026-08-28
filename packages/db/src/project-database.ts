@@ -54,12 +54,23 @@ export async function runProjectMigrations(projectDatabase: ProjectDatabase): Pr
 }
 
 function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): void {
-  const chapterVersionColumns = projectDatabase.client
-    .prepare("pragma table_info(chapter_versions)")
+  ensureTableColumn(projectDatabase, "projects", "style", "style text");
+  ensureTableColumn(projectDatabase, "works", "style", "style text");
+  ensureTableColumn(projectDatabase, "chapter_versions", "artifact_id", "artifact_id text");
+}
+
+function ensureTableColumn(
+  projectDatabase: ProjectDatabase,
+  tableName: string,
+  columnName: string,
+  columnDefinition: string,
+): void {
+  const columns = projectDatabase.client
+    .prepare(`pragma table_info(${tableName})`)
     .all()
     .map((row) => (row as { name: string }).name);
 
-  if (!chapterVersionColumns.includes("artifact_id")) {
-    projectDatabase.client.exec("alter table chapter_versions add column artifact_id text");
+  if (!columns.includes(columnName)) {
+    projectDatabase.client.exec(`alter table ${tableName} add column ${columnDefinition}`);
   }
 }

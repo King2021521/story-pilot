@@ -17,13 +17,18 @@ import {
 import type { ChapterVersionItem } from "../chapter/ChapterVersionDrawer";
 import {
   CreativeElementsPanel,
+  type AcceptElementCandidatesValues,
   type CharacterElement,
   type CreateCharacterValues,
   type CreateForeshadowingValues,
   type CreatePlotlineValues,
   type CreateWorldRuleValues,
+  type GenerateElementCandidatesResult,
+  type GenerateElementCandidatesValues,
+  type ElementCandidateItem,
   type ForeshadowingElement,
   type PlotlineElement,
+  type WorldElement,
   type WorldRuleElement,
 } from "../creative/CreativeElementsPanel";
 import type { ArtifactReviewItem } from "../ai/ArtifactReviewPanel";
@@ -35,6 +40,7 @@ export interface WorkbenchProject {
   readonly genre: string;
   readonly id: string;
   readonly status: string;
+  readonly style?: string | null;
   readonly title: string;
 }
 
@@ -50,7 +56,10 @@ export interface WorkbenchBoard {
   readonly chapters: readonly WorkbenchChapter[];
   readonly characters?: readonly CharacterElement[];
   readonly foreshadowings?: readonly ForeshadowingElement[];
+  readonly items?: readonly WorldElement[];
+  readonly locations?: readonly WorldElement[];
   readonly memoryCandidates: readonly MemoryCandidateItem[];
+  readonly organizations?: readonly WorldElement[];
   readonly plotlines?: readonly PlotlineElement[];
   readonly project: WorkbenchProject;
   readonly workOrders: readonly unknown[];
@@ -74,6 +83,14 @@ export interface WorkbenchHomeProps {
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
   onCreateWorldRule(input: CreateWorldRuleValues): Promise<void> | void;
+  onAcceptElementCandidates(input: AcceptElementCandidatesValues): Promise<void> | void;
+  onGenerateElementCandidates(
+    input: GenerateElementCandidatesValues,
+  ):
+    | Promise<GenerateElementCandidatesResult | readonly ElementCandidateItem[] | void>
+    | GenerateElementCandidatesResult
+    | readonly ElementCandidateItem[]
+    | void;
   onLoadChapterVersions(input: LoadChapterVersionsRequest): Promise<void> | void;
   onRestoreChapterVersion(input: RestoreChapterVersionRequest): Promise<void> | void;
 }
@@ -84,12 +101,14 @@ export function WorkbenchHome({
   loadingChapterVersions = false,
   loading = false,
   onConfirmMemory,
+  onAcceptElementCandidates,
   onCreateChapter,
   onCreateCharacter,
   onCreateForeshadowing,
   onCreatePlotline,
   onCreateWorldRule,
   onGenerateDraft,
+  onGenerateElementCandidates,
   onLoadChapterVersions,
   onRejectMemory,
   onRestoreChapterVersion,
@@ -163,11 +182,18 @@ export function WorkbenchHome({
               <CreativeElementsPanel
                 characters={board.characters ?? []}
                 foreshadowings={board.foreshadowings ?? []}
+                items={board.items ?? []}
+                locations={board.locations ?? []}
+                onAcceptElementCandidates={onAcceptElementCandidates}
                 onCreateCharacter={onCreateCharacter}
                 onCreateForeshadowing={onCreateForeshadowing}
                 onCreatePlotline={onCreatePlotline}
                 onCreateWorldRule={onCreateWorldRule}
+                onGenerateElementCandidates={onGenerateElementCandidates}
+                organizations={board.organizations ?? []}
                 plotlines={board.plotlines ?? []}
+                projectGenre={board.project.genre}
+                projectStyle={board.project.style}
                 worldRules={board.worldRules ?? []}
               />
             ),

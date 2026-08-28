@@ -1,5 +1,26 @@
-import { PlusOutlined } from "@ant-design/icons";
-import { Button, Col, Empty, Form, Input, InputNumber, List, Row, Select, Space, Tag, Typography } from "antd";
+import { PlusOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import {
+  COUNT_PRESETS,
+  ELEMENT_TYPE_PRESETS,
+  STYLE_PRESETS,
+  type CountPresetValue,
+  type ElementTypePresetValue,
+} from "@story-pilot/presets";
+import {
+  Button,
+  Checkbox,
+  Col,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from "antd";
+import { useEffect, useMemo, useState } from "react";
 
 const { Text, Title } = Typography;
 
@@ -17,6 +38,14 @@ export interface WorldRuleElement {
   readonly title: string;
 }
 
+export interface WorldElement {
+  readonly description?: string | null;
+  readonly id: string;
+  readonly name: string;
+  readonly status?: string;
+  readonly type: string;
+}
+
 export interface PlotlineElement {
   readonly id: string;
   readonly name: string;
@@ -31,6 +60,31 @@ export interface ForeshadowingElement {
   readonly seedText: string | null;
   readonly status: string;
   readonly title: string;
+}
+
+export interface ElementCandidateItem {
+  readonly description?: string;
+  readonly name: string;
+  readonly rationale?: string;
+  readonly tags?: readonly string[];
+  readonly type: ElementTypePresetValue;
+}
+
+export interface GenerateElementCandidatesValues {
+  readonly constraints: readonly string[];
+  readonly count: CountPresetValue;
+  readonly elementType: ElementTypePresetValue;
+  readonly genre: string;
+  readonly style?: string;
+  readonly worldRuleIds: readonly string[];
+}
+
+export interface AcceptElementCandidatesValues {
+  readonly items: readonly ElementCandidateItem[];
+}
+
+export interface GenerateElementCandidatesResult {
+  readonly items: readonly ElementCandidateItem[];
 }
 
 export interface CreateCharacterValues {
@@ -59,34 +113,213 @@ export interface CreateForeshadowingValues {
   readonly title: string;
 }
 
+interface CandidateFormValues {
+  readonly constraints?: string[];
+  readonly count: CountPresetValue;
+  readonly elementType: ElementTypePresetValue;
+  readonly style?: string;
+  readonly worldRuleIds?: string[];
+}
+
 export interface CreativeElementsPanelProps {
   readonly characters: readonly CharacterElement[];
   readonly foreshadowings: readonly ForeshadowingElement[];
+  readonly items: readonly WorldElement[];
+  readonly locations: readonly WorldElement[];
+  readonly organizations: readonly WorldElement[];
   readonly plotlines: readonly PlotlineElement[];
+  readonly projectGenre: string;
+  readonly projectStyle?: string | null | undefined;
   readonly worldRules: readonly WorldRuleElement[];
+  onAcceptElementCandidates(input: AcceptElementCandidatesValues): Promise<void> | void;
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
   onCreateWorldRule(input: CreateWorldRuleValues): Promise<void> | void;
+  onGenerateElementCandidates(
+    input: GenerateElementCandidatesValues,
+  ):
+    | Promise<GenerateElementCandidatesResult | readonly ElementCandidateItem[] | void>
+    | GenerateElementCandidatesResult
+    | readonly ElementCandidateItem[]
+    | void;
 }
 
 export function CreativeElementsPanel({
   characters,
   foreshadowings,
+  items,
+  locations,
+  onAcceptElementCandidates,
   onCreateCharacter,
   onCreateForeshadowing,
   onCreatePlotline,
   onCreateWorldRule,
+  onGenerateElementCandidates,
+  organizations,
   plotlines,
+  projectGenre,
+  projectStyle,
   worldRules,
 }: CreativeElementsPanelProps) {
+  const [candidateForm] = Form.useForm<CandidateFormValues>();
   const [characterForm] = Form.useForm<CreateCharacterValues>();
   const [worldRuleForm] = Form.useForm<CreateWorldRuleValues>();
   const [plotlineForm] = Form.useForm<CreatePlotlineValues>();
   const [foreshadowingForm] = Form.useForm<CreateForeshadowingValues>();
+  const [candidateItems, setCandidateItems] = useState<readonly ElementCandidateItem[]>([]);
+  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<readonly string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+
+  const worldRuleOptions = useMemo(
+    () => worldRules.map((rule) => ({ label: rule.title, value: rule.id })),
+    [worldRules],
+  );
+  const defaultStyle = projectStyle?.trim() || "通用";
+
+  useEffect(() => {
+    candidateForm.setFieldsValue({
+      style: defaultStyle,
+      worldRuleIds: worldRules.map((rule) => rule.id),
+    });
+  }, [candidateForm, defaultStyle, worldRules]);
+
+  const selectedCandidates = candidateItems.filter((candidate, index) =>
+    selectedCandidateKeys.includes(candidateKey(candidate, index)),
+  );
 
   return (
     <Row className="creative-elements" gutter={[14, 14]}>
+      <Col span={24}>
+        <section className="creative-panel creative-panel--candidate">
+          <header className="creative-panel__header">
+            <Title level={5}>AI 候选生成</Title>
+            <Text type="secondary">
+              {projectGenre} / {defaultStyle}
+            </Text>
+          </header>
+          <Form
+            form={candidateForm}
+            initialValues={{
+              constraints: [],
+              count: 10,
+              elementType: "weapon",
+              style: defaultStyle,
+              worldRuleIds: worldRules.map((rule) => rule.id),
+            }}
+            layout="vertical"
+            name="elementCandidateForm"
+            onFinish={async (values) => {
+              setGenerating(true);
+              try {
+                const result = await onGenerateElementCandidates({
+                  constraints: values.constraints ?? [],
+                  count: values.count,
+                  elementType: values.elementType,
+                  genre: projectGenre,
+                  ...(values.style === undefined ? {} : { style: values.style }),
+                  worldRuleIds: values.worldRuleIds ?? [],
+                });
+                const generatedItems = normalizeCandidateResult(result);
+                setCandidateItems(generatedItems);
+                setSelectedCandidateKeys([]);
+              } finally {
+                setGenerating(false);
+              }
+            }}
+          >
+            <Row gutter={[12, 0]}>
+              <Col lg={6} sm={12} xs={24}>
+                <Form.Item label="候选类型" name="elementType">
+                  <Select aria-label="候选类型" options={[...ELEMENT_TYPE_PRESETS]} />
+                </Form.Item>
+              </Col>
+              <Col lg={4} sm={12} xs={24}>
+                <Form.Item label="数量" name="count">
+                  <Select aria-label="数量" options={[...COUNT_PRESETS]} />
+                </Form.Item>
+              </Col>
+              <Col lg={6} sm={12} xs={24}>
+                <Form.Item label="候选风格" name="style">
+                  <Select aria-label="候选风格" options={[...STYLE_PRESETS]} />
+                </Form.Item>
+              </Col>
+              <Col lg={8} sm={12} xs={24}>
+                <Form.Item label="世界观约束" name="worldRuleIds">
+                  <Select
+                    aria-label="世界观约束"
+                    mode="multiple"
+                    optionFilterProp="label"
+                    options={worldRuleOptions}
+                    placeholder="选择世界规则"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item label="额外约束" name="constraints">
+                  <Select
+                    aria-label="额外约束"
+                    mode="tags"
+                    options={[
+                      { label: "避免现代感", value: "避免现代感" },
+                      { label: "可反复出场", value: "可反复出场" },
+                      { label: "适合主线冲突", value: "适合主线冲突" },
+                    ]}
+                    placeholder="选择或补充少量约束"
+                    tokenSeparators={["，", ","]}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Space wrap>
+              <Button
+                aria-label="批量生成候选"
+                htmlType="submit"
+                icon={<ThunderboltOutlined />}
+                loading={generating}
+                type="primary"
+              >
+                批量生成候选
+              </Button>
+              <Button
+                aria-label="采纳选中"
+                disabled={selectedCandidates.length === 0}
+                loading={accepting}
+                onClick={async () => {
+                  setAccepting(true);
+                  try {
+                    await onAcceptElementCandidates({ items: selectedCandidates });
+                    setCandidateItems((currentItems) =>
+                      currentItems.filter(
+                        (candidate, index) =>
+                          !selectedCandidateKeys.includes(candidateKey(candidate, index)),
+                      ),
+                    );
+                    setSelectedCandidateKeys([]);
+                  } finally {
+                    setAccepting(false);
+                  }
+                }}
+              >
+                采纳选中
+              </Button>
+            </Space>
+          </Form>
+          <CandidateList
+            items={candidateItems}
+            selectedKeys={selectedCandidateKeys}
+            onToggle={(key, checked) => {
+              setSelectedCandidateKeys((currentKeys) =>
+                checked
+                  ? [...currentKeys, key]
+                  : currentKeys.filter((currentKey) => currentKey !== key),
+              );
+            }}
+          />
+        </section>
+      </Col>
+
       <Col lg={12} xs={24}>
         <section className="creative-panel">
           <Title level={5}>人物</Title>
@@ -101,7 +334,11 @@ export function CreativeElementsPanel({
               characterForm.setFieldValue("role", "support");
             }}
           >
-            <Form.Item label="人物名称" name="name" rules={[{ required: true, message: "请输入人物名称" }]}>
+            <Form.Item
+              label="人物名称"
+              name="name"
+              rules={[{ required: true, message: "请输入人物名称" }]}
+            >
               <Input />
             </Form.Item>
             <Form.Item label="人物定位" name="role">
@@ -143,10 +380,18 @@ export function CreativeElementsPanel({
               worldRuleForm.setFieldsValue({ category: "custom", constraintLevel: "soft" });
             }}
           >
-            <Form.Item label="规则标题" name="title" rules={[{ required: true, message: "请输入规则标题" }]}>
+            <Form.Item
+              label="规则标题"
+              name="title"
+              rules={[{ required: true, message: "请输入规则标题" }]}
+            >
               <Input />
             </Form.Item>
-            <Form.Item label="规则内容" name="statement" rules={[{ required: true, message: "请输入规则内容" }]}>
+            <Form.Item
+              label="规则内容"
+              name="statement"
+              rules={[{ required: true, message: "请输入规则内容" }]}
+            >
               <Input.TextArea autoSize={{ maxRows: 4, minRows: 2 }} />
             </Form.Item>
             <Space align="start" className="creative-panel__inline">
@@ -191,6 +436,35 @@ export function CreativeElementsPanel({
 
       <Col lg={12} xs={24}>
         <section className="creative-panel">
+          <Title level={5}>世界要素</Title>
+          <CompactList
+            emptyText="暂无世界要素"
+            items={[
+              ...locations.map((location) => ({
+                description: location.description ?? undefined,
+                id: location.id,
+                label: location.name,
+                tags: [location.type],
+              })),
+              ...organizations.map((organization) => ({
+                description: organization.description ?? undefined,
+                id: organization.id,
+                label: organization.name,
+                tags: [organization.type],
+              })),
+              ...items.map((item) => ({
+                description: item.description ?? undefined,
+                id: item.id,
+                label: item.name,
+                tags: [item.type],
+              })),
+            ]}
+          />
+        </section>
+      </Col>
+
+      <Col lg={12} xs={24}>
+        <section className="creative-panel">
           <Title level={5}>故事线</Title>
           <Form
             form={plotlineForm}
@@ -203,7 +477,11 @@ export function CreativeElementsPanel({
               plotlineForm.setFieldsValue({ kind: "branch", priority: 0 });
             }}
           >
-            <Form.Item label="故事线标题" name="title" rules={[{ required: true, message: "请输入故事线标题" }]}>
+            <Form.Item
+              label="故事线标题"
+              name="title"
+              rules={[{ required: true, message: "请输入故事线标题" }]}
+            >
               <Input />
             </Form.Item>
             <Form.Item label="故事线摘要" name="summary">
@@ -226,7 +504,12 @@ export function CreativeElementsPanel({
                 <InputNumber min={0} />
               </Form.Item>
             </Space>
-            <Button aria-label="创建故事线" htmlType="submit" icon={<PlusOutlined />} type="primary">
+            <Button
+              aria-label="创建故事线"
+              htmlType="submit"
+              icon={<PlusOutlined />}
+              type="primary"
+            >
               创建故事线
             </Button>
           </Form>
@@ -256,10 +539,18 @@ export function CreativeElementsPanel({
               foreshadowingForm.setFieldValue("importance", 3);
             }}
           >
-            <Form.Item label="伏笔标题" name="title" rules={[{ required: true, message: "请输入伏笔标题" }]}>
+            <Form.Item
+              label="伏笔标题"
+              name="title"
+              rules={[{ required: true, message: "请输入伏笔标题" }]}
+            >
               <Input />
             </Form.Item>
-            <Form.Item label="伏笔内容" name="description" rules={[{ required: true, message: "请输入伏笔内容" }]}>
+            <Form.Item
+              label="伏笔内容"
+              name="description"
+              rules={[{ required: true, message: "请输入伏笔内容" }]}
+            >
               <Input.TextArea autoSize={{ maxRows: 4, minRows: 2 }} />
             </Form.Item>
             <Form.Item label="重要性" name="importance">
@@ -284,6 +575,48 @@ export function CreativeElementsPanel({
   );
 }
 
+function CandidateList({
+  items,
+  onToggle,
+  selectedKeys,
+}: {
+  readonly items: readonly ElementCandidateItem[];
+  readonly selectedKeys: readonly string[];
+  onToggle(key: string, checked: boolean): void;
+}) {
+  if (items.length === 0) {
+    return <Empty description="暂无 AI 候选" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <ul className="creative-list creative-list--candidate">
+      {items.map((item, index) => {
+        const key = candidateKey(item, index);
+        return (
+          <li className="creative-list__item" key={key}>
+            <Checkbox
+              aria-label={`选择候选 ${item.name}`}
+              checked={selectedKeys.includes(key)}
+              onChange={(event) => onToggle(key, event.target.checked)}
+            />
+            <div className="creative-list__content">
+              <Text strong>{item.name}</Text>
+              {item.description ? <Text type="secondary">{item.description}</Text> : null}
+              {item.rationale ? <Text type="secondary">{item.rationale}</Text> : null}
+              <Space size={6} wrap>
+                <Tag>{item.type}</Tag>
+                {(item.tags ?? []).map((tag) => (
+                  <Tag key={tag}>{tag}</Tag>
+                ))}
+              </Space>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 interface CompactListItem {
   readonly description?: string | undefined;
   readonly id: string;
@@ -291,18 +624,22 @@ interface CompactListItem {
   readonly tags: readonly string[];
 }
 
-function CompactList({ emptyText, items }: { readonly emptyText: string; readonly items: readonly CompactListItem[] }) {
+function CompactList({
+  emptyText,
+  items,
+}: {
+  readonly emptyText: string;
+  readonly items: readonly CompactListItem[];
+}) {
   if (items.length === 0) {
     return <Empty description={emptyText} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
 
   return (
-    <List
-      className="creative-list"
-      dataSource={[...items]}
-      renderItem={(item) => (
-        <List.Item>
-          <Space direction="vertical" size={4}>
+    <ul className="creative-list">
+      {items.map((item) => (
+        <li className="creative-list__item" key={item.id}>
+          <div className="creative-list__content">
             <Text strong>{item.label}</Text>
             {item.description ? <Text type="secondary">{item.description}</Text> : null}
             <Space size={6} wrap>
@@ -310,9 +647,35 @@ function CompactList({ emptyText, items }: { readonly emptyText: string; readonl
                 <Tag key={tag}>{tag}</Tag>
               ))}
             </Space>
-          </Space>
-        </List.Item>
-      )}
-    />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function candidateKey(item: ElementCandidateItem, index: number): string {
+  return `${index}:${item.type}:${item.name}`;
+}
+
+function normalizeCandidateResult(
+  result: GenerateElementCandidatesResult | readonly ElementCandidateItem[] | void,
+): readonly ElementCandidateItem[] {
+  if (!result) {
+    return [];
+  }
+  if (hasCandidateItems(result)) {
+    return result.items;
+  }
+
+  return result;
+}
+
+function hasCandidateItems(value: unknown): value is GenerateElementCandidatesResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "items" in value &&
+    Array.isArray((value as { readonly items?: unknown }).items)
   );
 }

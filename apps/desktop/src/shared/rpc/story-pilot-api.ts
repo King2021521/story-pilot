@@ -150,6 +150,14 @@ export class StoryPilotApiClient {
     return this.send("character.generateNames", input);
   }
 
+  generateElementCandidates(input: CommandPayload<"element.generateCandidates">) {
+    return this.send("element.generateCandidates", input);
+  }
+
+  acceptElementCandidates(input: CommandPayload<"element.acceptCandidates">) {
+    return this.send("element.acceptCandidates", input);
+  }
+
   listWorldRules(input: CommandPayload<"worldRule.list">) {
     return this.sendItems("worldRule.list", input);
   }

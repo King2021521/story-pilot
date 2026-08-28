@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { Test } from "@nestjs/testing";
 import { FakeModelProvider, ModelGateway } from "@story-pilot/ai";
+import { createProjectDatabase, PROJECT_DATABASE_FILE } from "@story-pilot/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
@@ -594,6 +595,181 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("generates AI element candidates and accepts them into creative object stores", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_elements",
+          payload: { genre: "玄幻", style: "热血", title: "万象夜行" },
+        }),
+      );
+      expect(project).toMatchObject({ genre: "玄幻", style: "热血" });
+
+      const worldRule = await expectRpcOk(
+        rpcService.handle({
+          command: "worldRule.create",
+          id: "req_element_rule",
+          payload: {
+            category: "magic",
+            constraintLevel: "hard",
+            projectId: getString(project, "id"),
+            statement: "所有兵器和功法都必须受星轨潮汐影响。",
+            title: "星轨潮汐",
+          },
+        }),
+      );
+      const generated = await expectRpcOk(
+        rpcService.handle({
+          command: "element.generateCandidates",
+          id: "req_element_generate",
+          payload: {
+            count: 5,
+            elementType: "weapon",
+            projectId: getString(project, "id"),
+            style: "热血",
+            worldRuleIds: [getString(worldRule, "id")],
+          },
+        }),
+      );
+      const generatedItems = getRecordArray(generated, "items");
+      expect(generatedItems).toHaveLength(5);
+      expect(generatedItems).toEqual([
+        expect.objectContaining({
+          name: "潮汐断星刃",
+          type: "weapon",
+        }),
+        expect.objectContaining({ type: "weapon" }),
+        expect.objectContaining({ type: "weapon" }),
+        expect.objectContaining({ type: "weapon" }),
+        expect.objectContaining({ type: "weapon" }),
+      ]);
+
+      const accepted = await expectRpcOk(
+        rpcService.handle({
+          command: "element.acceptCandidates",
+          id: "req_element_accept",
+          payload: {
+            items: [
+              {
+                description: "身负星轨潮汐异象的少年。",
+                name: "沈逐星",
+                rationale: "适合作为热血玄幻主角名。",
+                tags: ["主角", "星轨"],
+                type: "character_name",
+              },
+              {
+                description: "潮汐最高时会显出双月倒影的城池。",
+                name: "照潮城",
+                rationale: "能承载星轨潮汐规则。",
+                tags: ["城市"],
+                type: "city",
+              },
+              {
+                description: "掌控星轨历法的古老宗门。",
+                name: "司星阁",
+                rationale: "能制造修行秩序冲突。",
+                tags: ["宗门"],
+                type: "organization",
+              },
+              {
+                description: "星轨潮汐最强的古老观星台。",
+                name: "落星台",
+                rationale: "适合作为关键修行地点。",
+                tags: ["地点"],
+                type: "location",
+              },
+              {
+                description: "流传星潮传说的荒原。",
+                name: "星回原",
+                rationale: "可承载远行与遗迹探索。",
+                tags: ["地名"],
+                type: "place_name",
+              },
+              generatedItems[0],
+              {
+                description: "借星轨潮汐淬炼经脉的功法。",
+                name: "星潮九转",
+                rationale: "适合主角成长线。",
+                tags: ["功法"],
+                type: "technique",
+              },
+              {
+                description: "可辨识潮汐方向的古旧罗盘。",
+                name: "旧星罗盘",
+                rationale: "可作为寻找秘境的线索道具。",
+                tags: ["道具"],
+                type: "item",
+              },
+            ],
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_element_board",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+
+      expect(getRecordArray(accepted, "accepted")).toEqual([
+        expect.objectContaining({ name: "沈逐星", target: "character" }),
+        expect.objectContaining({ name: "照潮城", target: "location" }),
+        expect.objectContaining({ name: "司星阁", target: "organization" }),
+        expect.objectContaining({ name: "落星台", target: "location" }),
+        expect.objectContaining({ name: "星回原", target: "location" }),
+        expect.objectContaining({ name: "潮汐断星刃", target: "item" }),
+        expect.objectContaining({ name: "星潮九转", target: "item" }),
+        expect.objectContaining({ name: "旧星罗盘", target: "item" }),
+      ]);
+      expect(getRecordArray(board, "characters")).toEqual([
+        expect.objectContaining({ name: "沈逐星" }),
+      ]);
+      const boardLocations = getRecordArray(board, "locations");
+      expect(boardLocations).toHaveLength(3);
+      expect(boardLocations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "照潮城", type: "city" }),
+          expect.objectContaining({ name: "星回原", type: "place" }),
+          expect.objectContaining({ name: "落星台", type: "location" }),
+        ]),
+      );
+      expect(getRecordArray(board, "organizations")).toEqual([
+        expect.objectContaining({ name: "司星阁", type: "organization" }),
+      ]);
+      const boardItems = getRecordArray(board, "items");
+      expect(boardItems).toHaveLength(3);
+      expect(boardItems).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "潮汐断星刃", type: "weapon" }),
+          expect.objectContaining({ name: "旧星罗盘", type: "item" }),
+          expect.objectContaining({ name: "星潮九转", type: "technique" }),
+        ]),
+      );
+
+      const projectDatabase = createProjectDatabase(
+        join(getString(project, "rootPath"), PROJECT_DATABASE_FILE),
+      );
+      try {
+        const eventTypes = projectDatabase.client
+          .prepare("select event_type from domain_events order by created_at asc")
+          .all()
+          .map((row) => (row as { event_type: string }).event_type);
+        expect(eventTypes).toContain("character.created");
+        expect(eventTypes).toContain("location.created");
+        expect(eventTypes).toContain("organization.created");
+        expect(eventTypes).toContain("item.created");
+      } finally {
+        projectDatabase.close();
+      }
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("supports workflow, artifact, memory search, and graph utility commands", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
@@ -835,6 +1011,24 @@ async function createRpcHarness(tempDirs: string[]) {
                   entityType: "story_event",
                   kind: "event",
                   sourceQuote: "林鸢发现门缝下有一封旧信。",
+                },
+              ],
+            },
+            ElementCandidateOutput: {
+              items: [
+                {
+                  description: "受星轨潮汐影响的刀器，潮声越近锋芒越亮。",
+                  name: "潮汐断星刃",
+                  rationale: "贴合热血玄幻题材，并能服务星轨潮汐世界规则。",
+                  tags: ["武器", "星轨", "潮汐"],
+                  type: "weapon",
+                },
+                {
+                  description: "混入的地点候选不应出现在武器生成结果里。",
+                  name: "照潮城",
+                  rationale: "用于验证服务层按所选类型过滤。",
+                  tags: ["城市"],
+                  type: "city",
                 },
               ],
             },

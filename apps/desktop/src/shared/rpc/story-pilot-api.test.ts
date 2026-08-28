@@ -202,6 +202,26 @@ describe("StoryPilotApiClient", () => {
       projectId: "project_1",
     });
     await api.generateCharacterNames({ constraints: ["悬疑"], count: 3, projectId: "project_1" });
+    await api.generateElementCandidates({
+      constraints: [],
+      count: 5,
+      elementType: "weapon",
+      genre: "玄幻",
+      projectId: "project_1",
+      style: "热血",
+      worldRuleIds: ["rule_1"],
+    });
+    await api.acceptElementCandidates({
+      items: [
+        {
+          description: "受星轨潮汐影响的刀器。",
+          name: "潮汐断星刃",
+          tags: [],
+          type: "weapon",
+        },
+      ],
+      projectId: "project_1",
+    });
     await api.listWorldRules({ projectId: "project_1" });
     await api.updateWorldRule({
       patch: { title: "新规则" },
@@ -250,6 +270,8 @@ describe("StoryPilotApiClient", () => {
       "character.list",
       "character.update",
       "character.generateNames",
+      "element.generateCandidates",
+      "element.acceptCandidates",
       "worldRule.list",
       "worldRule.update",
       "plotline.list",

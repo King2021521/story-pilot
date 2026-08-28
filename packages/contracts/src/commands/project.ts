@@ -8,13 +8,16 @@ export const projectCommandSchemas = {
     title: z.string().min(1),
     subtitle: z.string().min(1).optional(),
     genre: z.string().min(1).optional(),
+    style: z.string().min(1).optional(),
     targetAudience: z.string().min(1).optional(),
     logline: z.string().min(1).optional(),
     wordCountGoal: z.number().int().positive().optional(),
   }),
-  "project.listRecent": z.object({
-    limit: z.number().int().positive().max(100).optional(),
-  }).default({}),
+  "project.listRecent": z
+    .object({
+      limit: z.number().int().positive().max(100).optional(),
+    })
+    .default({}),
   "project.open": z.union([
     z.object({ projectId: z.string().min(1) }),
     z.object({ path: z.string().min(1) }),

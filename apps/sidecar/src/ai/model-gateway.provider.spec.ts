@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ChapterDraftOutputSchema,
   ContinuityReviewOutputSchema,
+  ElementCandidateOutputSchema,
   ForeshadowingPlanOutputSchema,
   MemoryExtractOutputSchema,
 } from "@story-pilot/ai";
@@ -65,6 +66,18 @@ describe("createModelGatewayFromEnv", () => {
       object: {
         suggestions: expect.any(Array),
         summary: expect.any(String),
+      },
+    });
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "生成武器候选" }],
+        purpose: "element_generate",
+        schema: ElementCandidateOutputSchema,
+        schemaName: "ElementCandidateOutput",
+      }),
+    ).resolves.toMatchObject({
+      object: {
+        items: [expect.objectContaining({ name: expect.any(String), type: "weapon" })],
       },
     });
   });

@@ -11,5 +11,6 @@ export * from "./providers/fake-model-provider.js";
 export * from "./providers/openai-compatible-provider.js";
 export * from "./structured-output/chapter-draft.schema.js";
 export * from "./structured-output/continuity-review.schema.js";
+export * from "./structured-output/element-candidate.schema.js";
 export * from "./structured-output/foreshadowing-plan.schema.js";
 export * from "./structured-output/memory-extract.schema.js";

@@ -25,6 +25,8 @@ describe("command registry", () => {
       "character.create",
       "character.update",
       "character.generateNames",
+      "element.generateCandidates",
+      "element.acceptCandidates",
       "worldRule.list",
       "worldRule.create",
       "worldRule.update",
@@ -64,11 +66,78 @@ describe("command registry", () => {
       parseCommandPayload("project.create", {
         title: "长夜序章",
         genre: "悬疑",
+        style: "悬疑推理",
       }),
     ).toEqual({
       title: "长夜序章",
       genre: "悬疑",
+      style: "悬疑推理",
     });
+  });
+
+  it("parses element candidate generation and acceptance payloads", () => {
+    expect(
+      parseCommandPayload("element.generateCandidates", {
+        constraints: ["不使用现代科技词"],
+        count: 10,
+        elementType: "weapon",
+        genre: "玄幻",
+        projectId: "proj_1",
+        style: "热血",
+        worldRuleIds: ["rule_1"],
+      }),
+    ).toEqual({
+      constraints: ["不使用现代科技词"],
+      count: 10,
+      elementType: "weapon",
+      genre: "玄幻",
+      projectId: "proj_1",
+      style: "热血",
+      worldRuleIds: ["rule_1"],
+    });
+
+    expect(
+      parseCommandPayload("element.acceptCandidates", {
+        items: [
+          {
+            description: "旧城禁军遗失的短刃。",
+            name: "夜照",
+            rationale: "适合悬疑题材里的线索武器。",
+            tags: ["旧城", "线索"],
+            type: "weapon",
+          },
+        ],
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      items: [
+        {
+          description: "旧城禁军遗失的短刃。",
+          name: "夜照",
+          rationale: "适合悬疑题材里的线索武器。",
+          tags: ["旧城", "线索"],
+          type: "weapon",
+        },
+      ],
+      projectId: "proj_1",
+    });
+  });
+
+  it("rejects unsupported element candidate counts and empty acceptance batches", () => {
+    expect(() =>
+      parseCommandPayload("element.generateCandidates", {
+        count: 7,
+        elementType: "weapon",
+        projectId: "proj_1",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseCommandPayload("element.acceptCandidates", {
+        items: [],
+        projectId: "proj_1",
+      }),
+    ).toThrow();
   });
 
   it("parses chapter.saveContent payloads", () => {

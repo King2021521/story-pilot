@@ -9,6 +9,7 @@ import {
   RobotOutlined,
 } from "@ant-design/icons";
 import type { CommandPayload } from "@story-pilot/contracts";
+import { GENRE_PRESETS, STYLE_PRESETS } from "@story-pilot/presets";
 import {
   App as AntApp,
   Button,
@@ -18,6 +19,7 @@ import {
   Input,
   Layout,
   Modal,
+  Select,
   Space,
   Tabs,
   Tag,
@@ -29,6 +31,12 @@ import { useCallback, useEffect, useState } from "react";
 import { ArtifactReviewPanel, type ArtifactReviewItem } from "../features/ai/ArtifactReviewPanel";
 import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
 import type { ChapterVersionItem } from "../features/chapter/ChapterVersionDrawer";
+import type {
+  AcceptElementCandidatesValues,
+  ElementCandidateItem,
+  GenerateElementCandidatesResult,
+  GenerateElementCandidatesValues,
+} from "../features/creative/CreativeElementsPanel";
 import { GraphPreviewPanel, type GraphPreviewData } from "../features/memory/GraphPreviewPanel";
 import type { MemoryCandidateDecisionInput } from "../features/memory/MemoryConfirmDrawer";
 import { ProjectSidebar, type ProjectSidebarProject } from "../features/project/ProjectSidebar";
@@ -46,6 +54,7 @@ const { Text, Title } = Typography;
 interface CreateProjectFormValues {
   readonly genre?: string;
   readonly logline?: string;
+  readonly style?: string;
   readonly title: string;
 }
 
@@ -490,6 +499,61 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const generateElementCandidates = useCallback(
+    async (input: GenerateElementCandidatesValues): Promise<GenerateElementCandidatesResult> => {
+      if (!activeProject) {
+        return { items: [] };
+      }
+
+      try {
+        return (await storyPilotApi.generateElementCandidates({
+          constraints: [...input.constraints],
+          count: input.count,
+          elementType: input.elementType,
+          genre: input.genre,
+          projectId: activeProject.id,
+          ...(input.style === undefined ? {} : { style: input.style }),
+          worldRuleIds: [...input.worldRuleIds],
+        })) as GenerateElementCandidatesResult;
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        return { items: [] };
+      }
+    },
+    [activeProject, message, storyPilotApi],
+  );
+
+  const acceptElementCandidates = useCallback(
+    async (input: AcceptElementCandidatesValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      const items: CommandPayload<"element.acceptCandidates">["items"] = input.items.map(
+        (item: ElementCandidateItem) => ({
+          name: item.name,
+          type: item.type,
+          ...(item.description === undefined ? {} : { description: item.description }),
+          ...(item.rationale === undefined ? {} : { rationale: item.rationale }),
+          tags: [...(item.tags ?? [])],
+        }),
+      );
+
+      try {
+        await storyPilotApi.acceptElementCandidates({
+          items,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("候选已采纳");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        throw error;
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   return (
     <Layout className="story-shell">
       <Sider aria-label="作品管理区" className="story-shell__sidebar" width={292}>
@@ -539,12 +603,14 @@ export function ShellLayout() {
           loadingChapterVersions={loadingChapterVersions}
           loading={loadingWorkbench}
           onConfirmMemory={confirmMemory}
+          onAcceptElementCandidates={acceptElementCandidates}
           onCreateChapter={createChapter}
           onCreateCharacter={createCharacter}
           onCreateForeshadowing={createForeshadowing}
           onCreatePlotline={createPlotline}
           onCreateWorldRule={createWorldRule}
           onGenerateDraft={generateDraft}
+          onGenerateElementCandidates={generateElementCandidates}
           onLoadChapterVersions={loadChapterVersions}
           onRejectMemory={rejectMemory}
           onRestoreChapterVersion={restoreChapterVersion}
@@ -656,7 +722,12 @@ export function ShellLayout() {
         open={createProjectOpen}
         title="新建作品"
       >
-        <Form form={createProjectForm} layout="vertical" onFinish={createProject}>
+        <Form
+          form={createProjectForm}
+          initialValues={{ genre: "悬疑", style: "悬疑推理" }}
+          layout="vertical"
+          onFinish={createProject}
+        >
           <Form.Item
             label="作品名称"
             name="title"
@@ -665,7 +736,10 @@ export function ShellLayout() {
             <Input autoFocus />
           </Form.Item>
           <Form.Item label="题材" name="genre">
-            <Input placeholder="悬疑 / 都市 / 奇幻" />
+            <Select aria-label="题材" options={[...GENRE_PRESETS]} />
+          </Form.Item>
+          <Form.Item label="风格" name="style">
+            <Select aria-label="风格" options={[...STYLE_PRESETS]} />
           </Form.Item>
           <Form.Item label="一句话简介" name="logline">
             <Input.TextArea autoSize={{ maxRows: 4, minRows: 3 }} />
@@ -685,10 +759,12 @@ export function ShellLayout() {
 function createProjectPayload(values: CreateProjectFormValues): CommandPayload<"project.create"> {
   const genre = values.genre?.trim();
   const logline = values.logline?.trim();
+  const style = values.style?.trim();
 
   return {
     ...(genre ? { genre } : {}),
     ...(logline ? { logline } : {}),
+    ...(style ? { style } : {}),
     title: values.title.trim(),
   };
 }

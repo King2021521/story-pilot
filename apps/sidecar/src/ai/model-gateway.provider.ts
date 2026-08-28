@@ -81,6 +81,17 @@ export function createModelGatewayFromEnv(
             },
           ],
         },
+        ElementCandidateOutput: {
+          items: [
+            {
+              description: "受星轨潮汐影响的刀器，潮声越近锋芒越亮。",
+              name: "潮汐断星刃",
+              rationale: "贴合当前题材和世界观规则，可直接用于角色成长或关键战斗。",
+              tags: ["武器", "星轨", "潮汐"],
+              type: "weapon",
+            },
+          ],
+        },
       },
     }),
   );

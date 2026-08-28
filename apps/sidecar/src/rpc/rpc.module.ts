@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 import { ArtifactModule } from "../artifact/artifact.module.js";
 import { CharacterModule } from "../character/character.module.js";
 import { ChapterModule } from "../chapter/chapter.module.js";
+import { CreativeModule } from "../creative/creative.module.js";
 import { GraphModule } from "../graph/graph.module.js";
 import { HealthModule } from "../health/health.module.js";
 import { MemoryModule } from "../memory/memory.module.js";
@@ -20,6 +21,7 @@ import { RpcService } from "./rpc.service.js";
     ArtifactModule,
     CharacterModule,
     ChapterModule,
+    CreativeModule,
     GraphModule,
     HealthModule,
     MemoryModule,

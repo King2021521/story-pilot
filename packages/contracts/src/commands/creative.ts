@@ -2,6 +2,25 @@ import { z } from "zod";
 
 import { projectIdPayloadSchema } from "./shared.js";
 
+const elementTypeSchema = z.enum([
+  "character_name",
+  "city",
+  "location",
+  "organization",
+  "weapon",
+  "technique",
+  "item",
+  "place_name",
+]);
+
+const elementCandidateSchema = z.object({
+  name: z.string().min(1),
+  type: elementTypeSchema,
+  description: z.string().min(1).optional(),
+  rationale: z.string().min(1).optional(),
+  tags: z.array(z.string().min(1)).default([]),
+});
+
 export const creativeCommandSchemas = {
   "character.list": projectIdPayloadSchema,
   "character.create": projectIdPayloadSchema.extend({
@@ -24,6 +43,17 @@ export const creativeCommandSchemas = {
     style: z.string().optional(),
     gender: z.string().optional(),
     constraints: z.array(z.string()).default([]),
+  }),
+  "element.generateCandidates": projectIdPayloadSchema.extend({
+    elementType: elementTypeSchema,
+    count: z.union([z.literal(5), z.literal(10), z.literal(20)]).default(10),
+    genre: z.string().min(1).optional(),
+    style: z.string().min(1).optional(),
+    worldRuleIds: z.array(z.string().min(1)).default([]),
+    constraints: z.array(z.string().min(1)).default([]),
+  }),
+  "element.acceptCandidates": projectIdPayloadSchema.extend({
+    items: z.array(elementCandidateSchema).min(1).max(50),
   }),
   "worldRule.list": projectIdPayloadSchema,
   "worldRule.create": projectIdPayloadSchema.extend({
@@ -52,7 +82,17 @@ export const creativeCommandSchemas = {
     title: z.string().min(1),
     description: z.string().min(1),
     eventType: z
-      .enum(["decision", "discovery", "conflict", "reveal", "loss", "victory", "betrayal", "travel", "custom"])
+      .enum([
+        "decision",
+        "discovery",
+        "conflict",
+        "reveal",
+        "loss",
+        "victory",
+        "betrayal",
+        "travel",
+        "custom",
+      ])
       .default("custom"),
     chapterId: z.string().min(1).optional(),
     sceneId: z.string().min(1).optional(),

@@ -65,13 +65,15 @@ describe("ShellLayout", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /新建作品/ }));
+    expect(screen.getByLabelText("题材")).toHaveAttribute("role", "combobox");
+    expect(screen.getByLabelText("风格")).toHaveAttribute("role", "combobox");
     fireEvent.change(screen.getByLabelText("作品名称"), { target: { value: "雾都案卷" } });
-    fireEvent.change(screen.getByLabelText("题材"), { target: { value: "悬疑" } });
     fireEvent.click(screen.getByRole("button", { name: "创建作品" }));
 
     await waitFor(() => {
       expect(rpcPayload("project.create")).toMatchObject({
         genre: "悬疑",
+        style: "悬疑推理",
         title: "雾都案卷",
       });
     });
@@ -213,11 +215,37 @@ describe("ShellLayout", () => {
             chapters: [],
             characters: [],
             foreshadowings: [],
+            items: [],
+            locations: [],
             memoryCandidates: [],
+            organizations: [],
             plotlines: [],
             project,
             workOrders: [],
             worldRules: [],
+          });
+        case "element.generateCandidates":
+          return rpcSuccess(request.id, {
+            items: [
+              {
+                description: "受星轨潮汐影响的刀器。",
+                name: "潮汐断星刃",
+                rationale: "贴合玄幻战斗节奏。",
+                tags: ["武器"],
+                type: "weapon",
+              },
+            ],
+          });
+        case "element.acceptCandidates":
+          return rpcSuccess(request.id, {
+            accepted: [
+              {
+                id: "item_1",
+                name: "潮汐断星刃",
+                target: "item",
+                type: "weapon",
+              },
+            ],
           });
         default:
           return rpcSuccess(request.id, { id: `${request.command}:result` });
@@ -231,6 +259,26 @@ describe("ShellLayout", () => {
     );
 
     fireEvent.click(await screen.findByRole("tab", { name: "创作要素" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "批量生成候选" }));
+    await waitFor(() => {
+      expect(rpcPayload("element.generateCandidates")).toMatchObject({
+        count: 10,
+        elementType: "weapon",
+        genre: "悬疑",
+        projectId: "project_1",
+        style: "悬疑推理",
+      });
+    });
+    expect(await screen.findByText("潮汐断星刃")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("选择候选 潮汐断星刃"));
+    fireEvent.click(screen.getByRole("button", { name: "采纳选中" }));
+    await waitFor(() => {
+      expect(rpcPayload("element.acceptCandidates")).toMatchObject({
+        items: [expect.objectContaining({ name: "潮汐断星刃", type: "weapon" })],
+        projectId: "project_1",
+      });
+    });
 
     fireEvent.change(screen.getByLabelText("人物名称"), { target: { value: "林鸢" } });
     fireEvent.click(screen.getByRole("button", { name: "创建人物" }));
@@ -537,6 +585,7 @@ function createProject() {
     id: "project_1",
     rootPath: "/tmp/story-pilot/project_1",
     status: "planning",
+    style: "悬疑推理",
     title: "雾都案卷",
     updatedAt: 1,
     workId: "work_1",

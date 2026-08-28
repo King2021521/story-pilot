@@ -15,8 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "test": "pnpm --filter @story-pilot/contracts build && pnpm -r --if-present test",
-    "typecheck": "pnpm --filter @story-pilot/contracts build && pnpm -r --if-present typecheck"
+    "test": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/presets build && pnpm -r --if-present test",
+    "typecheck": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/presets build && pnpm -r --if-present typecheck"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -57,4 +57,13 @@ describe("PromptRegistry", () => {
     expect(prompt.content).toContain("suggestions");
     expect(prompt.content).toContain("action");
   });
+
+  it("loads element generation prompt for non-canon candidate batches", () => {
+    const prompt = PromptRegistry.getPrompt("element_generate", "v1");
+
+    expect(prompt.content).toContain("要素候选生成器");
+    expect(prompt.content).toContain("items");
+    expect(prompt.content).toContain("不得写入正式 canon");
+    expect(prompt.content).toContain("避免同质化命名");
+  });
 });

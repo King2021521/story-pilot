@@ -16,6 +16,7 @@ import { ProjectStorageService } from "../storage/project-storage.service.js";
 export interface CreateProjectInput {
   readonly title: string;
   readonly genre?: string;
+  readonly style?: string;
   readonly logline?: string;
   readonly wordCountGoal?: number;
 }
@@ -44,6 +45,7 @@ export class ProjectService {
   async createProject(input: CreateProjectInput): Promise<ProjectOverview> {
     const title = input.title.trim();
     const genre = input.genre?.trim() || "未分类";
+    const style = input.style?.trim();
     const projectId = randomUUID();
     const workId = randomUUID();
     const defaultVolumeId = randomUUID();
@@ -61,6 +63,7 @@ export class ProjectService {
         rootPath: layout.rootPath,
         title,
         workId,
+        ...(style === undefined || style.length === 0 ? {} : { style }),
         ...(input.logline === undefined ? {} : { logline: input.logline }),
         ...(input.wordCountGoal === undefined ? {} : { wordCountGoal: input.wordCountGoal }),
       });
@@ -85,6 +88,7 @@ export class ProjectService {
         id: project.id,
         rootPath: project.rootPath,
         status: project.status,
+        style: null,
         title: project.title,
         updatedAt: project.updatedAt,
         workId: project.workId,

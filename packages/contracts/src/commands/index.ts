@@ -27,6 +27,8 @@ export const MVP_COMMAND_NAMES = [
   "character.create",
   "character.update",
   "character.generateNames",
+  "element.generateCandidates",
+  "element.acceptCandidates",
   "worldRule.list",
   "worldRule.create",
   "worldRule.update",
@@ -68,7 +70,9 @@ export const commandSchemas = {
 
 export type CommandSchemas = typeof commandSchemas;
 
-export type CommandPayload<TCommand extends keyof CommandSchemas> = z.infer<CommandSchemas[TCommand]>;
+export type CommandPayload<TCommand extends keyof CommandSchemas> = z.infer<
+  CommandSchemas[TCommand]
+>;
 
 export function isCommandName(command: string): command is CommandName {
   return Object.prototype.hasOwnProperty.call(commandSchemas, command);

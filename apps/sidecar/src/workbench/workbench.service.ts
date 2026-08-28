@@ -33,7 +33,10 @@ export interface WorkbenchBoard {
   readonly characters: readonly unknown[];
   readonly artifacts: readonly unknown[];
   readonly foreshadowings: readonly unknown[];
+  readonly items: readonly unknown[];
+  readonly locations: readonly unknown[];
   readonly memoryCandidates: readonly unknown[];
+  readonly organizations: readonly unknown[];
   readonly plotlines: readonly unknown[];
   readonly worldRules: readonly unknown[];
   readonly workOrders: readonly unknown[];
@@ -85,15 +88,19 @@ export class WorkbenchService {
   async getBoard(projectId: string): Promise<WorkbenchBoard> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
     try {
+      const worldRepository = new WorldRepository(projectDatabase);
       return {
         artifacts: new ArtifactRepository(projectDatabase).listByProject({ projectId }),
         chapters: new ChapterRepository(projectDatabase).listChapters({ projectId }),
         characters: new CharacterRepository(projectDatabase).listCharacters(projectId),
         foreshadowings: new PlotRepository(projectDatabase).listForeshadowings(projectId),
+        items: worldRepository.listItems(projectId),
+        locations: worldRepository.listLocations(projectId),
         memoryCandidates: new MemoryRepository(projectDatabase).listCandidates({ projectId }),
+        organizations: worldRepository.listOrganizations(projectId),
         plotlines: new PlotRepository(projectDatabase).listPlotlines(projectId),
         project: getProjectOrThrow(new ProjectRepository(projectDatabase), projectId),
-        worldRules: new WorldRepository(projectDatabase).listWorldRules(projectId),
+        worldRules: worldRepository.listWorldRules(projectId),
         workOrders: new WorkflowRepository(projectDatabase).listWorkOrders({ projectId }),
       };
     } finally {

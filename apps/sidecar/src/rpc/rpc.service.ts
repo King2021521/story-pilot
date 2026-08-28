@@ -18,6 +18,7 @@ import {
   type CreateChapterInput,
   type GenerateChapterDraftInput,
 } from "../chapter/chapter.service.js";
+import { ElementCandidateService } from "../creative/element-candidate.service.js";
 import { GraphService } from "../graph/graph.service.js";
 import { HealthService } from "../health/health.service.js";
 import { MemoryService } from "../memory/memory.service.js";
@@ -38,6 +39,7 @@ export class RpcService {
     private readonly artifactService: ArtifactService,
     private readonly characterService: CharacterService,
     private readonly chapterService: ChapterService,
+    private readonly elementCandidateService: ElementCandidateService,
     private readonly foreshadowingService: ForeshadowingService,
     private readonly graphService: GraphService,
     private readonly healthService: HealthService,
@@ -101,6 +103,7 @@ export class RpcService {
         const input: CreateProjectInput = {
           title: parsed.title,
           ...(parsed.genre === undefined ? {} : { genre: parsed.genre }),
+          ...(parsed.style === undefined ? {} : { style: parsed.style }),
           ...(parsed.logline === undefined ? {} : { logline: parsed.logline }),
           ...(parsed.wordCountGoal === undefined ? {} : { wordCountGoal: parsed.wordCountGoal }),
         };
@@ -376,6 +379,16 @@ export class RpcService {
           count: parsed.count,
           ...(parsed.style === undefined ? {} : { style: parsed.style }),
         });
+      }
+      case "element.generateCandidates": {
+        return this.elementCandidateService.generateCandidates(
+          payload as CommandPayload<"element.generateCandidates">,
+        );
+      }
+      case "element.acceptCandidates": {
+        return this.elementCandidateService.acceptCandidates(
+          payload as CommandPayload<"element.acceptCandidates">,
+        );
       }
       case "worldRule.create": {
         return this.worldRuleService.createWorldRule(payload as CommandPayload<"worldRule.create">);

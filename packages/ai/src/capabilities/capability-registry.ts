@@ -9,7 +9,7 @@ export const AI_CAPABILITY_NAMES = [
   "memory.extract",
   "continuity.review",
   "foreshadowing.plan",
-  "element.generateNames",
+  "element.generateCandidates",
 ] as const;
 
 export type AiCapabilityName = (typeof AI_CAPABILITY_NAMES)[number];
@@ -31,9 +31,10 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
     promptCapability: "continuity_review",
     purpose: "continuity_review",
   },
-  "element.generateNames": {
-    name: "element.generateNames",
-    purpose: "element_generate_names",
+  "element.generateCandidates": {
+    name: "element.generateCandidates",
+    promptCapability: "element_generate",
+    purpose: "element_generate",
   },
   "foreshadowing.plan": {
     name: "foreshadowing.plan",

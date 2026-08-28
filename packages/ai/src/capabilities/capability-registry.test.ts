@@ -13,7 +13,7 @@ describe("CapabilityRegistry", () => {
       "memory.extract",
       "continuity.review",
       "foreshadowing.plan",
-      "element.generateNames",
+      "element.generateCandidates",
     ]);
     expect(CapabilityRegistry.get("chapter.draft")).toMatchObject({
       name: "chapter.draft",
@@ -24,6 +24,11 @@ describe("CapabilityRegistry", () => {
       name: "memory.extract",
       promptCapability: "memory_extract",
       purpose: "memory_extract",
+    });
+    expect(CapabilityRegistry.get("element.generateCandidates")).toMatchObject({
+      name: "element.generateCandidates",
+      promptCapability: "element_generate",
+      purpose: "element_generate",
     });
   });
 });
