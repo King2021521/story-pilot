@@ -62,6 +62,7 @@ export interface BuildChapterDraftContextInput {
   readonly instruction: string;
   readonly relatedEntityIds?: readonly string[];
   readonly tokenBudget?: number;
+  readonly additionalItems?: readonly ContextPackageItem[];
 }
 
 export interface ContextBuilderReadModel {
@@ -111,6 +112,7 @@ export class ContextBuilder {
       ...neighborhoods.map((neighborhood, index) =>
         buildGraphItem(neighborhood, `graph_${index}`, index + 400),
       ),
+      ...(input.additionalItems ?? []),
       {
         itemId: input.chapterId,
         itemType: "instruction",
@@ -127,6 +129,7 @@ export class ContextBuilder {
       items: trimItems(sortedItems, budget),
       package: {
         inputHash: hashContextInput({
+          additionalItems: input.additionalItems ?? [],
           chapterId: input.chapterId,
           instruction: input.instruction,
           projectId: input.projectId,

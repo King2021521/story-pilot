@@ -41,6 +41,11 @@ export const MVP_COMMAND_NAMES = [
   "outline.generate",
   "outline.approveChapterOutline",
   "outline.applyChapterOutline",
+  "plot.generateBookPlan",
+  "plot.applyBookPlan",
+  "plot.generateRollingOutline",
+  "plot.applyChapterPlans",
+  "plot.analyzeOutlineImpact",
   "chapter.list",
   "chapter.get",
   "chapter.create",
@@ -49,6 +54,7 @@ export const MVP_COMMAND_NAMES = [
   "chapter.restoreVersion",
   "chapter.generateDraft",
   "chapter.generateDraftFromOutline",
+  "chapter.generateDraftFromPlan",
   "chapter.reviewContinuity",
   "character.list",
   "character.create",
@@ -83,6 +89,7 @@ export const MVP_COMMAND_NAMES = [
   "graph.getNeighborhood",
   "graph.findContradictions",
   "graph.rebuild",
+  "graph.projectSinceCheckpoint",
 ] as const;
 
 export type CommandName = (typeof MVP_COMMAND_NAMES)[number];

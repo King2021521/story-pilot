@@ -108,10 +108,19 @@ export class MemoryService {
         content: input.editedStatement?.trim() || candidate.content,
         entityId: candidate.entityId,
         entityType: candidate.entityType,
+        evidence: {
+          candidateId: candidate.id,
+          proposedRelations: candidate.proposedRelations,
+          sourceId: candidate.sourceId,
+          sourceType: candidate.sourceType,
+        },
         kind: candidate.kind,
         memoryId: randomUUID(),
         projectId: input.projectId,
         sourceCandidateId: candidate.id,
+        sourceId: candidate.sourceId,
+        sourceQuote: candidate.content,
+        sourceType: candidate.sourceType,
         status: memoryStatus,
       });
       const resolvedCandidate = repository.updateCandidateStatus({
@@ -133,7 +142,7 @@ export class MemoryService {
         memory,
       };
     });
-    await this.graphService.rebuild(input.projectId);
+    await this.graphService.projectSinceCheckpoint(input.projectId);
 
     return result;
   }
@@ -206,7 +215,7 @@ export class MemoryService {
         memory,
       };
     });
-    await this.graphService.rebuild(input.projectId);
+    await this.graphService.projectSinceCheckpoint(input.projectId);
 
     return result;
   }

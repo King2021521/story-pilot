@@ -37,6 +37,11 @@ describe("command registry", () => {
       "outline.generate",
       "outline.approveChapterOutline",
       "outline.applyChapterOutline",
+      "plot.generateBookPlan",
+      "plot.applyBookPlan",
+      "plot.generateRollingOutline",
+      "plot.applyChapterPlans",
+      "plot.analyzeOutlineImpact",
       "chapter.list",
       "chapter.get",
       "chapter.create",
@@ -45,6 +50,7 @@ describe("command registry", () => {
       "chapter.restoreVersion",
       "chapter.generateDraft",
       "chapter.generateDraftFromOutline",
+      "chapter.generateDraftFromPlan",
       "chapter.reviewContinuity",
       "character.list",
       "character.create",
@@ -79,6 +85,7 @@ describe("command registry", () => {
       "graph.getNeighborhood",
       "graph.findContradictions",
       "graph.rebuild",
+      "graph.projectSinceCheckpoint",
     ]);
   });
 
@@ -273,6 +280,70 @@ describe("command registry", () => {
     });
   });
 
+  it("parses longform planning payloads", () => {
+    expect(
+      parseCommandPayload("plot.generateBookPlan", {
+        projectId: "proj_1",
+        targetWordCount: 3_000_000,
+        volumeCount: 8,
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      targetWordCount: 3_000_000,
+      volumeCount: 8,
+    });
+
+    expect(
+      parseCommandPayload("plot.applyBookPlan", {
+        artifactId: "artifact_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      artifactId: "artifact_1",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.generateRollingOutline", {
+        chapterCount: 20,
+        projectId: "proj_1",
+        startChapterIndex: 41,
+        volumePlanId: "volume_plan_1",
+      }),
+    ).toEqual({
+      chapterCount: 20,
+      projectId: "proj_1",
+      startChapterIndex: 41,
+      volumePlanId: "volume_plan_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.applyChapterPlans", {
+        artifactId: "artifact_2",
+        projectId: "proj_1",
+        selectedChapterPlanIds: ["draft_chapter_plan_1"],
+      }),
+    ).toEqual({
+      artifactId: "artifact_2",
+      projectId: "proj_1",
+      selectedChapterPlanIds: ["draft_chapter_plan_1"],
+    });
+
+    expect(
+      parseCommandPayload("plot.analyzeOutlineImpact", {
+        patch: { title: "新的卷目标" },
+        projectId: "proj_1",
+        targetId: "chapter_plan_1",
+        targetType: "chapter_plan",
+      }),
+    ).toEqual({
+      patch: { title: "新的卷目标" },
+      projectId: "proj_1",
+      targetId: "chapter_plan_1",
+      targetType: "chapter_plan",
+    });
+  });
+
   it("parses creative path and outline payloads", () => {
     expect(
       parseCommandPayload("brief.save", {
@@ -315,6 +386,18 @@ describe("command registry", () => {
     ).toEqual({
       chapterOutlineId: "chapter_outline_1",
       instruction: "强化悬疑钩子",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("chapter.generateDraftFromPlan", {
+        chapterPlanId: "chapter_plan_1",
+        instruction: "强化章末钩子",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      chapterPlanId: "chapter_plan_1",
+      instruction: "强化章末钩子",
       projectId: "proj_1",
     });
 

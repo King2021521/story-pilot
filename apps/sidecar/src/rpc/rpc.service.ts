@@ -18,6 +18,7 @@ import {
   ChapterService,
   type CreateChapterInput,
   type GenerateChapterDraftInput,
+  type GenerateChapterDraftFromPlanInput,
 } from "../chapter/chapter.service.js";
 import { ElementCandidateService } from "../creative/element-candidate.service.js";
 import { CreativePathService } from "../creative-path/creative-path.service.js";
@@ -30,6 +31,7 @@ import {
   ForeshadowingService,
   type CreateForeshadowingInput,
 } from "../plot/foreshadowing.service.js";
+import { LongformPlanService } from "../plot/longform-plan.service.js";
 import { PlotlineService, type CreatePlotlineInput } from "../plot/plotline.service.js";
 import { StoryEventService, type CreateStoryEventInput } from "../plot/story-event.service.js";
 import { ProjectService, type CreateProjectInput } from "../project/project.service.js";
@@ -54,6 +56,7 @@ export class RpcService {
     private readonly memoryService: MemoryService,
     private readonly outlineService: OutlineService,
     private readonly plotlineService: PlotlineService,
+    private readonly longformPlanService: LongformPlanService,
     private readonly projectService: ProjectService,
     private readonly settingsService: SettingsService,
     private readonly storyEventService: StoryEventService,
@@ -254,6 +257,31 @@ export class RpcService {
         const parsed = payload as CommandPayload<"outline.applyChapterOutline">;
         return this.outlineService.applyChapterOutline(parsed);
       }
+      case "plot.generateBookPlan": {
+        return this.longformPlanService.generateBookPlan(
+          payload as CommandPayload<"plot.generateBookPlan">,
+        );
+      }
+      case "plot.applyBookPlan": {
+        return this.longformPlanService.applyBookPlan(
+          payload as CommandPayload<"plot.applyBookPlan">,
+        );
+      }
+      case "plot.generateRollingOutline": {
+        return this.longformPlanService.generateRollingOutline(
+          payload as CommandPayload<"plot.generateRollingOutline">,
+        );
+      }
+      case "plot.applyChapterPlans": {
+        return this.longformPlanService.applyChapterPlans(
+          payload as CommandPayload<"plot.applyChapterPlans">,
+        );
+      }
+      case "plot.analyzeOutlineImpact": {
+        return this.longformPlanService.analyzeOutlineImpact(
+          payload as CommandPayload<"plot.analyzeOutlineImpact">,
+        );
+      }
       case "chapter.list": {
         const parsed = payload as CommandPayload<"chapter.list">;
         return {
@@ -314,6 +342,15 @@ export class RpcService {
           projectId: parsed.projectId,
           ...(parsed.instruction === undefined ? {} : { instruction: parsed.instruction }),
         });
+      }
+      case "chapter.generateDraftFromPlan": {
+        const parsed = payload as CommandPayload<"chapter.generateDraftFromPlan">;
+        const input: GenerateChapterDraftFromPlanInput = {
+          chapterPlanId: parsed.chapterPlanId,
+          projectId: parsed.projectId,
+          ...(parsed.instruction === undefined ? {} : { instruction: parsed.instruction }),
+        };
+        return this.chapterService.generateDraftFromPlan(input);
       }
       case "artifact.apply": {
         const parsed = payload as CommandPayload<"artifact.apply">;
@@ -402,6 +439,10 @@ export class RpcService {
       case "graph.rebuild": {
         const parsed = payload as CommandPayload<"graph.rebuild">;
         return this.graphService.rebuild(parsed.projectId);
+      }
+      case "graph.projectSinceCheckpoint": {
+        const parsed = payload as CommandPayload<"graph.projectSinceCheckpoint">;
+        return this.graphService.projectSinceCheckpoint(parsed.projectId);
       }
       case "graph.findContradictions": {
         const parsed = payload as CommandPayload<"graph.findContradictions">;

@@ -8,6 +8,8 @@ export const AI_CAPABILITY_NAMES = [
   "relationship.generate",
   "plotArc.generate",
   "outline.generate",
+  "bookPlan.generate",
+  "rollingOutline.generate",
   "chapter.draft",
   "chapter.rewrite",
   "continuity.review",
@@ -44,6 +46,14 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
     outputSchemaName: "BriefRefineOutput",
     promptCapability: "brief_refine",
     purpose: "brief_refine",
+  },
+  "bookPlan.generate": {
+    defaultPromptVersion: "v1",
+    displayName: "全书规划生成",
+    name: "bookPlan.generate",
+    outputSchemaName: "BookPlanGenerateOutput",
+    promptCapability: "book_plan_generate",
+    purpose: "book_plan_generate",
   },
   "character.generate": {
     defaultPromptVersion: "v1",
@@ -108,6 +118,14 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
     outputSchemaName: "OutlineGenerateOutput",
     promptCapability: "outline_generate",
     purpose: "outline_generate",
+  },
+  "rollingOutline.generate": {
+    defaultPromptVersion: "v1",
+    displayName: "滚动章节规划",
+    name: "rollingOutline.generate",
+    outputSchemaName: "RollingChapterPlanGenerateOutput",
+    promptCapability: "rolling_chapter_plan_generate",
+    purpose: "rolling_chapter_plan_generate",
   },
   "plotArc.generate": {
     defaultPromptVersion: "v1",

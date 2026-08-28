@@ -811,6 +811,57 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const generateBookPlan = useCallback(
+    async (input: { readonly targetWordCount: number; readonly volumeCount: number }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.generateBookPlan({
+          projectId: activeProject.id,
+          targetWordCount: input.targetWordCount,
+          volumeCount: input.volumeCount,
+        });
+        setAiOpen(true);
+        await refreshBoard(activeProject.id);
+        message.success("全书规划已生成");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const generateRollingOutline = useCallback(
+    async (input: {
+      readonly volumePlanId?: string;
+      readonly arcPlanId?: string;
+      readonly startChapterIndex: number;
+      readonly chapterCount: 10 | 20;
+    }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.generateRollingOutline({
+          chapterCount: input.chapterCount,
+          projectId: activeProject.id,
+          startChapterIndex: input.startChapterIndex,
+          ...optionalText("arcPlanId", input.arcPlanId),
+          ...optionalText("volumePlanId", input.volumePlanId),
+        });
+        setAiOpen(true);
+        await refreshBoard(activeProject.id);
+        message.success("滚动章纲已生成");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const approveChapterOutline = useCallback(
     async (input: { readonly chapterOutlineId: string }) => {
       if (!activeProject) {
@@ -868,6 +919,27 @@ export function ShellLayout() {
         setAiOpen(true);
         await refreshBoard(activeProject.id);
         message.success("章纲草稿已进入产物区");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const generateDraftFromPlan = useCallback(
+    async (input: { readonly chapterPlanId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.generateChapterDraftFromPlan({
+          chapterPlanId: input.chapterPlanId,
+          projectId: activeProject.id,
+        });
+        setAiOpen(true);
+        await refreshBoard(activeProject.id);
+        message.success("结构章纲草稿已进入产物区");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -1002,10 +1074,13 @@ export function ShellLayout() {
           onCreateWorldRule={createWorldRule}
           onEvaluateStageGate={evaluateStageGate}
           onGenerateBlueprint={generateBlueprint}
+          onGenerateBookPlan={generateBookPlan}
           onGenerateDraft={generateDraft}
           onGenerateDraftFromOutline={generateDraftFromOutline}
+          onGenerateDraftFromPlan={generateDraftFromPlan}
           onGenerateElementCandidates={generateElementCandidates}
           onGenerateOutline={generateOutline}
+          onGenerateRollingOutline={generateRollingOutline}
           onLoadChapterVersions={loadChapterVersions}
           onRejectMemory={rejectMemory}
           onReopenStage={reopenStage}

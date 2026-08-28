@@ -185,7 +185,11 @@ importers:
 
   packages/search: {}
 
-  packages/testing: {}
+  packages/testing:
+    dependencies:
+      "@story-pilot/db":
+        specifier: workspace:^
+        version: link:../db
 
   packages/workflow-runtime: {}
 

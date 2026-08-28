@@ -292,6 +292,145 @@ export const sceneOutlines = sqliteTable(
   ],
 );
 
+export const bookPlans = sqliteTable(
+  "book_plans",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    targetWordCount: integer("target_word_count").notNull(),
+    corePromise: text("core_promise").notNull(),
+    endingDirection: text("ending_direction"),
+    mainPlotlineId: text("main_plotline_id"),
+    status: text("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    sourceArtifactId: text("source_artifact_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("book_plans_project_id_idx").on(table.projectId),
+    index("book_plans_status_idx").on(table.projectId, table.status),
+  ],
+);
+
+export const volumePlans = sqliteTable(
+  "volume_plans",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    bookPlanId: text("book_plan_id")
+      .notNull()
+      .references(() => bookPlans.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    volumeIndex: integer("volume_index").notNull(),
+    purpose: text("purpose").notNull(),
+    majorConflict: text("major_conflict").notNull(),
+    climax: text("climax"),
+    targetWordCount: integer("target_word_count").notNull(),
+    status: text("status").notNull().default("draft"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("volume_plans_project_id_idx").on(table.projectId),
+    index("volume_plans_book_plan_idx").on(table.bookPlanId, table.volumeIndex),
+  ],
+);
+
+export const arcPlans = sqliteTable(
+  "arc_plans",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    volumePlanId: text("volume_plan_id")
+      .notNull()
+      .references(() => volumePlans.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    arcIndex: integer("arc_index").notNull(),
+    plotlineId: text("plotline_id"),
+    characterArcId: text("character_arc_id"),
+    startChapterIndex: integer("start_chapter_index"),
+    endChapterIndex: integer("end_chapter_index"),
+    purpose: text("purpose").notNull(),
+    escalationJson: text("escalation_json").notNull().default("[]"),
+    status: text("status").notNull().default("draft"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("arc_plans_project_id_idx").on(table.projectId),
+    index("arc_plans_volume_plan_idx").on(table.volumePlanId, table.arcIndex),
+  ],
+);
+
+export const chapterPlans = sqliteTable(
+  "chapter_plans",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    arcPlanId: text("arc_plan_id").references(() => arcPlans.id, { onDelete: "set null" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    chapterIndex: integer("chapter_index").notNull(),
+    title: text("title").notNull(),
+    chapterGoal: text("chapter_goal").notNull(),
+    conflict: text("conflict").notNull(),
+    informationGain: text("information_gain").notNull(),
+    emotionalTurn: text("emotional_turn").notNull(),
+    hook: text("hook").notNull(),
+    targetWordCount: integer("target_word_count").notNull(),
+    relatedPlotlineIdsJson: text("related_plotline_ids_json").notNull().default("[]"),
+    relatedCharacterIdsJson: text("related_character_ids_json").notNull().default("[]"),
+    relatedForeshadowingIdsJson: text("related_foreshadowing_ids_json").notNull().default("[]"),
+    status: text("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    sourceArtifactId: text("source_artifact_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("chapter_plans_project_id_idx").on(table.projectId),
+    index("chapter_plans_arc_plan_idx").on(table.arcPlanId, table.chapterIndex),
+    index("chapter_plans_chapter_idx").on(table.chapterId),
+    index("chapter_plans_status_idx").on(table.projectId, table.status),
+  ],
+);
+
+export const scenePlans = sqliteTable(
+  "scene_plans",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    chapterPlanId: text("chapter_plan_id")
+      .notNull()
+      .references(() => chapterPlans.id, { onDelete: "cascade" }),
+    sceneIndex: integer("scene_index").notNull(),
+    povCharacterId: text("pov_character_id"),
+    locationId: text("location_id"),
+    sceneGoal: text("scene_goal").notNull(),
+    conflictTurn: text("conflict_turn").notNull(),
+    outcome: text("outcome").notNull(),
+    memoryTargetsJson: text("memory_targets_json").notNull().default("[]"),
+    status: text("status").notNull().default("draft"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("scene_plans_project_id_idx").on(table.projectId),
+    index("scene_plans_chapter_plan_idx").on(table.chapterPlanId, table.sceneIndex),
+  ],
+);
+
 export const reviewIssues = sqliteTable(
   "review_issues",
   {

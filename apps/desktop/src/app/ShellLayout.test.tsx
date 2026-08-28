@@ -335,6 +335,54 @@ describe("ShellLayout", () => {
             chapterOutlines: creativePath.chapterOutlines,
             outline: creativePath.outlines[0],
           });
+        case "plot.generateBookPlan":
+          creativePath.bookPlans = [
+            {
+              id: "book_plan_1",
+              targetWordCount: request.payload.targetWordCount as number,
+              title: "星潮纪全书规划",
+            },
+          ];
+          creativePath.volumePlans = [
+            {
+              bookPlanId: "book_plan_1",
+              id: "volume_plan_1",
+              title: "第一卷 星潮初醒",
+              volumeIndex: 1,
+            },
+          ];
+          creativePath.arcPlans = [
+            {
+              id: "arc_plan_1",
+              title: "旧城钟楼案",
+              volumePlanId: "volume_plan_1",
+            },
+          ];
+          return rpcSuccess(request.id, {
+            artifact: { id: "artifact_book_plan_1", status: "pending" },
+            workflowRun: { id: "run_book_plan_1", status: "completed" },
+          });
+        case "plot.generateRollingOutline":
+          creativePath.chapterPlans = [
+            {
+              chapterGoal: "用雨夜旧信建立开局钩子。",
+              chapterIndex: request.payload.startChapterIndex as number,
+              id: "chapter_plan_1",
+              status: "draft",
+              title: "第 1 章：开局钩子",
+            },
+          ];
+          creativePath.scenePlans = [
+            {
+              chapterPlanId: "chapter_plan_1",
+              id: "scene_plan_1",
+              sceneIndex: 1,
+            },
+          ];
+          return rpcSuccess(request.id, {
+            artifact: { id: "artifact_rolling_1", status: "pending" },
+            workflowRun: { id: "run_rolling_1", status: "completed" },
+          });
         case "outline.approveChapterOutline":
           creativePath.chapterOutlines = creativePath.chapterOutlines.map((chapterOutline) => ({
             ...chapterOutline,
@@ -372,6 +420,12 @@ describe("ShellLayout", () => {
             memoryCandidates: [],
             workflowRun: { id: "run_1", status: "completed" },
           });
+        case "chapter.generateDraftFromPlan":
+          return rpcSuccess(request.id, {
+            artifact: { id: "artifact_plan_draft_1", status: "pending", title: "结构章纲草稿" },
+            memoryCandidates: [],
+            workflowRun: { id: "run_plan_1", status: "completed" },
+          });
         default:
           return rpcSuccess(request.id, null);
       }
@@ -398,8 +452,17 @@ describe("ShellLayout", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成创作蓝图" }));
     await screen.findByText("雨夜旧信揭开旧城钟楼案。");
     fireEvent.click(screen.getByRole("button", { name: "应用蓝图" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成全书规划" }));
+    await screen.findByText("星潮纪全书规划");
+    fireEvent.click(screen.getByRole("button", { name: "生成未来 10 章章纲" }));
+    await waitFor(() => {
+      expect(screen.getAllByText("第 1 章：开局钩子").length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "基于结构章纲生成草稿 第 1 章：开局钩子" }));
     fireEvent.click(screen.getByRole("button", { name: "生成前 10 章章纲" }));
-    await screen.findByText("第 1 章：开局钩子");
+    await waitFor(() => {
+      expect(screen.getAllByText("第 1 章：开局钩子").length).toBeGreaterThan(0);
+    });
     fireEvent.click(screen.getByRole("button", { name: /批准章纲/ }));
     fireEvent.click(screen.getByRole("button", { name: /应用为空章节/ }));
     fireEvent.click(screen.getByRole("button", { name: /基于章纲生成草稿/ }));
@@ -416,6 +479,21 @@ describe("ShellLayout", () => {
       });
       expect(rpcPayload("blueprint.apply")).toMatchObject({
         blueprintId: "blueprint_1",
+        projectId: "project_1",
+      });
+      expect(rpcPayload("plot.generateBookPlan")).toMatchObject({
+        projectId: "project_1",
+        targetWordCount: 3_000_000,
+        volumeCount: 6,
+      });
+      expect(rpcPayload("plot.generateRollingOutline")).toMatchObject({
+        chapterCount: 10,
+        projectId: "project_1",
+        startChapterIndex: 1,
+        volumePlanId: "volume_plan_1",
+      });
+      expect(rpcPayload("chapter.generateDraftFromPlan")).toMatchObject({
+        chapterPlanId: "chapter_plan_1",
         projectId: "project_1",
       });
       expect(allRpcPayloads("ai.generate").at(1)).toMatchObject({
@@ -1046,6 +1124,34 @@ interface TestCreativePathBoard {
     status: string;
     title: string;
   }>;
+  bookPlans: Array<{
+    id: string;
+    targetWordCount: number;
+    title: string;
+  }>;
+  volumePlans: Array<{
+    bookPlanId: string;
+    id: string;
+    title: string;
+    volumeIndex: number;
+  }>;
+  arcPlans: Array<{
+    id: string;
+    title: string;
+    volumePlanId: string;
+  }>;
+  chapterPlans: Array<{
+    chapterGoal: string;
+    chapterIndex: number;
+    id: string;
+    status: string;
+    title: string;
+  }>;
+  scenePlans: Array<{
+    chapterPlanId: string;
+    id: string;
+    sceneIndex: number;
+  }>;
   reviewIssues: unknown[];
 }
 
@@ -1105,9 +1211,13 @@ function createCreativePathBoard(
       subgenres: ["探案单元剧"],
       targetAudience: "悬疑强钩子",
     },
+    arcPlans: [],
+    bookPlans: [],
     chapterOutlines: [],
+    chapterPlans: [],
     outlines: [],
     reviewIssues: [],
+    scenePlans: [],
     stages: [
       { readinessScore: 20, stageKey: "brief", status: "available" },
       { readinessScore: 0, stageKey: "blueprint", status: "locked" },
@@ -1119,6 +1229,7 @@ function createCreativePathBoard(
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    volumePlans: [],
     ...overrides,
   };
 }

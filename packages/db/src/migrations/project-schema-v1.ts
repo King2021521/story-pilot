@@ -178,6 +178,92 @@ create table if not exists scene_outlines (
   updated_at integer not null
 );
 
+create table if not exists book_plans (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  title text not null,
+  target_word_count integer not null,
+  core_promise text not null,
+  ending_direction text,
+  main_plotline_id text,
+  status text not null default 'draft',
+  version integer not null default 1,
+  source_artifact_id text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists volume_plans (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  book_plan_id text not null references book_plans(id) on delete cascade,
+  title text not null,
+  volume_index integer not null,
+  purpose text not null,
+  major_conflict text not null,
+  climax text,
+  target_word_count integer not null,
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists arc_plans (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  volume_plan_id text not null references volume_plans(id) on delete cascade,
+  title text not null,
+  arc_index integer not null,
+  plotline_id text,
+  character_arc_id text,
+  start_chapter_index integer,
+  end_chapter_index integer,
+  purpose text not null,
+  escalation_json text not null default '[]',
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists chapter_plans (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  arc_plan_id text references arc_plans(id) on delete set null,
+  chapter_id text references chapters(id) on delete set null,
+  chapter_index integer not null,
+  title text not null,
+  chapter_goal text not null,
+  conflict text not null,
+  information_gain text not null,
+  emotional_turn text not null,
+  hook text not null,
+  target_word_count integer not null,
+  related_plotline_ids_json text not null default '[]',
+  related_character_ids_json text not null default '[]',
+  related_foreshadowing_ids_json text not null default '[]',
+  status text not null default 'draft',
+  version integer not null default 1,
+  source_artifact_id text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists scene_plans (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  chapter_plan_id text not null references chapter_plans(id) on delete cascade,
+  scene_index integer not null,
+  pov_character_id text,
+  location_id text,
+  scene_goal text not null,
+  conflict_turn text not null,
+  outcome text not null,
+  memory_targets_json text not null default '[]',
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
 create table if not exists review_issues (
   id text primary key,
   project_id text not null references projects(id) on delete cascade,
@@ -233,6 +319,18 @@ create index if not exists chapter_outlines_status_idx on chapter_outlines(proje
 create index if not exists chapter_outlines_chapter_id_idx on chapter_outlines(chapter_id);
 create index if not exists scene_outlines_chapter_outline_id_idx on scene_outlines(chapter_outline_id);
 create index if not exists scene_outlines_sort_order_idx on scene_outlines(chapter_outline_id, sort_order);
+create index if not exists book_plans_project_id_idx on book_plans(project_id);
+create index if not exists book_plans_status_idx on book_plans(project_id, status);
+create index if not exists volume_plans_project_id_idx on volume_plans(project_id);
+create index if not exists volume_plans_book_plan_idx on volume_plans(book_plan_id, volume_index);
+create index if not exists arc_plans_project_id_idx on arc_plans(project_id);
+create index if not exists arc_plans_volume_plan_idx on arc_plans(volume_plan_id, arc_index);
+create index if not exists chapter_plans_project_id_idx on chapter_plans(project_id);
+create index if not exists chapter_plans_arc_plan_idx on chapter_plans(arc_plan_id, chapter_index);
+create index if not exists chapter_plans_chapter_idx on chapter_plans(chapter_id);
+create index if not exists chapter_plans_status_idx on chapter_plans(project_id, status);
+create index if not exists scene_plans_project_id_idx on scene_plans(project_id);
+create index if not exists scene_plans_chapter_plan_idx on scene_plans(chapter_plan_id, scene_index);
 create index if not exists review_issues_project_id_idx on review_issues(project_id);
 create index if not exists review_issues_target_idx on review_issues(target_type, target_id);
 create index if not exists review_issues_status_idx on review_issues(project_id, status);
@@ -636,9 +734,19 @@ create table if not exists memories (
   entity_id text,
   kind text not null,
   content text not null,
+  scope text not null default 'project',
+  valid_from_chapter_index integer,
+  valid_to_chapter_index integer,
+  source_type text,
+  source_id text,
+  source_quote text,
+  evidence_json text not null default '{}',
   source_candidate_id text references memory_candidates(id) on delete set null,
   confidence real not null default 1,
   status text not null default 'canon',
+  supersedes_memory_id text,
+  contradiction_group_id text,
+  embedding_ref text,
   created_at integer not null,
   updated_at integer not null
 );

@@ -4,10 +4,12 @@ import {
   ChapterRepository,
   CharacterRepository,
   CreativePathRepository,
+  LongformPlanRepository,
   MemoryRepository,
   OutlineRepository,
   PlotRepository,
   ProjectRepository,
+  ReviewIssueRepository,
   WorkflowRepository,
   WorldRepository,
 } from "@story-pilot/db";
@@ -93,6 +95,7 @@ export class WorkbenchService {
     try {
       const worldRepository = new WorldRepository(projectDatabase);
       const creativePathRepository = new CreativePathRepository(projectDatabase);
+      const longformPlanRepository = new LongformPlanRepository(projectDatabase);
       const outlineRepository = new OutlineRepository(projectDatabase);
       if (creativePathRepository.listStages(projectId).length === 0) {
         creativePathRepository.initializePath(projectId);
@@ -104,9 +107,17 @@ export class WorkbenchService {
         characters: new CharacterRepository(projectDatabase).listCharacters(projectId),
         creativePath: {
           ...creativePath,
+          arcPlans: longformPlanRepository.listArcPlans(projectId),
+          bookPlans: longformPlanRepository.listBookPlans(projectId),
           chapterOutlines: outlineRepository.listChapterOutlines(projectId),
+          chapterPlans: longformPlanRepository.listChapterPlans(projectId),
           outlines: outlineRepository.listOutlines(projectId),
-          reviewIssues: [],
+          reviewIssues: new ReviewIssueRepository(projectDatabase).listByProject({
+            projectId,
+            status: "open",
+          }),
+          scenePlans: longformPlanRepository.listScenePlans(projectId),
+          volumePlans: longformPlanRepository.listVolumePlans(projectId),
         },
         foreshadowings: new PlotRepository(projectDatabase).listForeshadowings(projectId),
         items: worldRepository.listItems(projectId),

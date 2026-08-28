@@ -13,6 +13,8 @@ describe("CapabilityRegistry", () => {
       "relationship.generate",
       "plotArc.generate",
       "outline.generate",
+      "bookPlan.generate",
+      "rollingOutline.generate",
       "chapter.draft",
       "chapter.rewrite",
       "continuity.review",
@@ -50,6 +52,18 @@ describe("CapabilityRegistry", () => {
       outputSchemaName: "ElementCandidateOutput",
       promptCapability: "element_generate",
       purpose: "element_generate",
+    });
+    expect(CapabilityRegistry.get("bookPlan.generate")).toMatchObject({
+      name: "bookPlan.generate",
+      outputSchemaName: "BookPlanGenerateOutput",
+      promptCapability: "book_plan_generate",
+      purpose: "book_plan_generate",
+    });
+    expect(CapabilityRegistry.get("rollingOutline.generate")).toMatchObject({
+      name: "rollingOutline.generate",
+      outputSchemaName: "RollingChapterPlanGenerateOutput",
+      promptCapability: "rolling_chapter_plan_generate",
+      purpose: "rolling_chapter_plan_generate",
     });
   });
 });

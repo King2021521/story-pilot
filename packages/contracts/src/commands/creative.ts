@@ -33,6 +33,8 @@ const creativeStageKeySchema = z.enum([
   "retrospective",
 ]);
 
+const outlineImpactTargetSchema = z.enum(["book_plan", "volume_plan", "arc_plan", "chapter_plan"]);
+
 export const creativePathCommandSchemas = {
   "creativeStage.getPath": projectIdPayloadSchema,
   "creativeStage.evaluateGate": projectIdPayloadSchema.extend({
@@ -88,6 +90,28 @@ export const creativePathCommandSchemas = {
   }),
   "outline.applyChapterOutline": projectIdPayloadSchema.extend({
     chapterOutlineId: z.string().min(1),
+  }),
+  "plot.generateBookPlan": projectIdPayloadSchema.extend({
+    targetWordCount: z.number().int().min(100_000).max(10_000_000),
+    volumeCount: z.number().int().min(1).max(30),
+  }),
+  "plot.applyBookPlan": projectIdPayloadSchema.extend({
+    artifactId: z.string().min(1),
+  }),
+  "plot.generateRollingOutline": projectIdPayloadSchema.extend({
+    arcPlanId: z.string().min(1).optional(),
+    chapterCount: z.union([z.literal(10), z.literal(20)]).default(10),
+    startChapterIndex: z.number().int().positive(),
+    volumePlanId: z.string().min(1).optional(),
+  }),
+  "plot.applyChapterPlans": projectIdPayloadSchema.extend({
+    artifactId: z.string().min(1),
+    selectedChapterPlanIds: z.array(z.string().min(1)).min(1).max(20),
+  }),
+  "plot.analyzeOutlineImpact": projectIdPayloadSchema.extend({
+    patch: z.record(z.string(), z.unknown()),
+    targetId: z.string().min(1),
+    targetType: outlineImpactTargetSchema,
   }),
 };
 

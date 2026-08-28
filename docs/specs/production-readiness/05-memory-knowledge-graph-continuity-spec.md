@@ -31,6 +31,34 @@ P4 的生产级目标是建立长篇连续性的事实系统。记忆和图谱�
 - 与 canon 冲突的 hypothesis 不能作为正文生成事实。
 - 图谱投影失败必须进入诊断和看板，不能静默失败。
 
+## 生产投入补强方案
+
+P4 的目标是让系统具备长期一致性。完成 P4 后，记忆和知识图谱不只是资料陈列，而是章节生成、章节审稿、阶段门禁和复盘的事实来源。
+
+必须补强的闭环：
+
+| 补强项     | 生产标准                                              | 失败处理                                      |
+| ---------- | ----------------------------------------------------- | --------------------------------------------- |
+| Memory V2  | 每条记忆有来源、证据、范围、有效章节、状态、置信度    | 缺来源或状态不合法的记忆不能入 canon          |
+| 用户确认   | AI 抽取结果先进入 candidate 或 hypothesis             | 未确认记忆只用于风险提示，不作为正文事实      |
+| 图谱投影   | 人物、事件、关系、地点、物品、规则、伏笔、plan 可投影 | 增量失败进入看板和 diagnostics                |
+| 连续性规则 | 生成前后检查死亡行动、物品归属、规则违反、伏笔顺序等  | error 级问题阻断 ready 状态                   |
+| 混合检索   | context package 结合 canon、图谱邻域、FTS、embedding  | 超预算时保留结构化摘要，舍弃全文              |
+| 冲突处理   | contradiction group、supersedes、deprecated 可追溯    | 冲突未处理时看板提示并影响 memory_review gate |
+
+工程落点：
+
+- `packages/db` 扩展 memory、continuity issue、projection checkpoint 和检索索引。
+- `apps/sidecar` 新增 context retrieval、continuity rule、graph projection service。
+- `packages/graph` 或 sidecar graph adapter 负责 Kuzu schema、增量投影和邻域查询。
+- 前端升级“记忆与图谱校验”工作台，提供候选确认、冲突处理和来源追溯。
+
+阶段出口：
+
+- 章节生成前能构建包含相关 canon、近期摘要、章纲引用和图谱邻域的 context package。
+- 章节生成后能抽取记忆候选、跑连续性检查、更新图谱 checkpoint。
+- 至少覆盖死亡后行动、物品无转移双归属、payoff 早于 seed、世界规则违反四类 error。
+
 ## 范围
 
 本阶段必须完成：

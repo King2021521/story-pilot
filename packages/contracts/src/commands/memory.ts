@@ -34,4 +34,5 @@ export const memoryCommandSchemas = {
     targetId: z.string().min(1).optional(),
   }),
   "graph.rebuild": projectIdPayloadSchema,
+  "graph.projectSinceCheckpoint": projectIdPayloadSchema,
 };

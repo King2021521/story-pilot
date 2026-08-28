@@ -135,6 +135,62 @@ export function createModelGatewayFromEnv(
           },
           riskNotes: [],
         },
+        BookPlanGenerateOutput: {
+          bookPlan: {
+            corePromise: "以持续升级的目标、代价和反转支撑长篇阅读期待。",
+            endingDirection: "主角完成身份跃迁，同时偿还早期选择留下的代价。",
+            targetWordCount: 3_000_000,
+            title: "全书结构规划",
+          },
+          riskNotes: ["长篇规划需要在每卷结束后复盘，避免中段目标重复。"],
+          volumePlans: [
+            {
+              arcs: [
+                {
+                  arcIndex: 1,
+                  endChapterIndex: 30,
+                  escalation: ["异常入局", "目标确立", "首次胜利暴露更大危机"],
+                  purpose: "完成开篇承诺、核心角色绑定和第一轮冲突升级。",
+                  startChapterIndex: 1,
+                  title: "入局与承诺",
+                },
+              ],
+              climax: "主角以明确代价赢下阶段胜利，但发现真正敌人尚未现身。",
+              majorConflict: "主角追求阶段目标时，被既有秩序和信息差持续压制。",
+              purpose: "建立世界规则、主角动机、爽点节奏和长期伏笔。",
+              targetWordCount: 500_000,
+              title: "第一卷：入局",
+              volumeIndex: 1,
+            },
+          ],
+        },
+        RollingChapterPlanGenerateOutput: {
+          chapterPlans: [
+            {
+              chapterGoal: "让主角主动进入下一轮事件，并获得一个可验证的新线索。",
+              chapterIndex: 1,
+              conflict: "主角想保留退路，但外部压力迫使其当场做出选择。",
+              emotionalTurn: "从试探和迟疑转为明确下注。",
+              hook: "新线索指向更高层级的隐藏规则。",
+              informationGain: "确认异常事件不是偶发，而是有人刻意推动。",
+              relatedCharacterIds: [],
+              relatedForeshadowingIds: [],
+              relatedPlotlineIds: [],
+              scenes: [
+                {
+                  conflictTurn: "关键证据出现，但使用它会暴露主角的真实意图。",
+                  memoryTargets: ["主角目标", "异常规则", "对立力量"],
+                  outcome: "主角拿到线索，同时被对立方标记。",
+                  sceneGoal: "完成本章行动目标并制造下一章追问。",
+                  sceneIndex: 1,
+                },
+              ],
+              targetWordCount: 3_000,
+              title: "第 1 章：线索入手",
+            },
+          ],
+          riskNotes: ["每批章纲生成后需要与已确认记忆做连续性复核。"],
+        },
       },
     }),
   );

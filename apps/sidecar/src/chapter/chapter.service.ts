@@ -6,9 +6,11 @@ import {
   ChapterRepository,
   ContextRepository,
   DomainEventRepository,
+  LongformPlanRepository,
   MemoryRepository,
   ModelCallRepository,
   OutlineRepository,
+  ProjectRepository,
   WorkflowRepository,
   type ArtifactRecord,
   type ChapterRecord,
@@ -20,6 +22,7 @@ import {
   ChapterDraftOutputSchema,
   ContextBuilder,
   type ModelGateway,
+  type ContextPackageItem,
 } from "@story-pilot/ai";
 import { createNextChapterVersion } from "@story-pilot/domain";
 import {
@@ -71,11 +74,18 @@ export interface GenerateChapterDraftInput {
   readonly relatedEntityIds?: readonly string[];
   readonly workflowRunId?: string;
   readonly workOrderId?: string;
+  readonly additionalContextItems?: readonly ContextPackageItem[];
 }
 
 export interface GenerateChapterDraftFromOutlineInput {
   readonly projectId: string;
   readonly chapterOutlineId: string;
+  readonly instruction?: string;
+}
+
+export interface GenerateChapterDraftFromPlanInput {
+  readonly projectId: string;
+  readonly chapterPlanId: string;
   readonly instruction?: string;
 }
 
@@ -287,6 +297,7 @@ export class ChapterService {
                   statuses,
                 }),
             }).buildChapterDraftContext({
+              additionalItems: input.additionalContextItems ?? [],
               chapterId,
               instruction: taskInstruction,
               projectId,
@@ -574,6 +585,188 @@ export class ChapterService {
       },
     };
   }
+
+  async generateDraftFromPlan(
+    input: GenerateChapterDraftFromPlanInput,
+  ): Promise<GenerateChapterDraftResult> {
+    let chapterId: string;
+    let chapterPlanContextItems: ContextPackageItem[];
+    let instruction: string;
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const project = new ProjectRepository(projectDatabase).getOverview(input.projectId);
+      if (!project) {
+        throw new Error(`PROJECT_NOT_FOUND: ${input.projectId}`);
+      }
+
+      const chapterRepository = new ChapterRepository(projectDatabase);
+      const longformPlanRepository = new LongformPlanRepository(projectDatabase);
+      const chapterPlan = longformPlanRepository.getChapterPlan(
+        input.projectId,
+        input.chapterPlanId,
+      );
+      if (!chapterPlan) {
+        throw new Error(`CHAPTER_PLAN_REQUIRED: ${input.chapterPlanId}`);
+      }
+      const scenePlans = longformPlanRepository.listScenePlans(input.projectId, chapterPlan.id);
+
+      if (chapterPlan.chapterId) {
+        chapterId = chapterPlan.chapterId;
+      } else {
+        const chapter = chapterRepository.createChapter({
+          chapterId: randomUUID(),
+          position: chapterPlan.chapterIndex,
+          projectId: input.projectId,
+          summary: chapterPlan.chapterGoal,
+          title: chapterPlan.title,
+          volumeId: project.defaultVolumeId,
+        });
+        chapterId = chapter.id;
+        longformPlanRepository.linkChapterPlanToChapter({
+          chapterId,
+          chapterPlanId: chapterPlan.id,
+          projectId: input.projectId,
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: chapterPlan.id,
+          aggregateType: "chapter_plan",
+          eventId: randomUUID(),
+          eventType: "chapter_plan.applied_to_chapter",
+          payload: {
+            chapterId,
+            chapterIndex: chapterPlan.chapterIndex,
+            title: chapterPlan.title,
+          },
+          projectId: input.projectId,
+        });
+      }
+
+      chapterPlanContextItems = [
+        {
+          content: formatChapterPlanContext(chapterPlan),
+          itemId: chapterPlan.id,
+          itemType: "chapter_plan",
+          metadata: {
+            chapterIndex: chapterPlan.chapterIndex,
+            sourceArtifactId: chapterPlan.sourceArtifactId,
+            status: chapterPlan.status,
+          },
+          rank: 2,
+        },
+        ...scenePlans.map((scenePlan, index) => ({
+          content: formatScenePlanContext(scenePlan),
+          itemId: scenePlan.id,
+          itemType: "scene_plan",
+          metadata: {
+            chapterPlanId: scenePlan.chapterPlanId,
+            sceneIndex: scenePlan.sceneIndex,
+            status: scenePlan.status,
+          },
+          rank: 3 + index,
+        })),
+      ];
+      instruction = [
+        `基于结构章纲生成正文：${chapterPlan.title}`,
+        `章节目标：${chapterPlan.chapterGoal}`,
+        `本章冲突：${chapterPlan.conflict}`,
+        `信息增量：${chapterPlan.informationGain}`,
+        `情绪转折：${chapterPlan.emotionalTurn}`,
+        `章末钩子：${chapterPlan.hook}`,
+        `目标字数：${chapterPlan.targetWordCount}`,
+        input.instruction ?? "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    } finally {
+      projectDatabase.close();
+    }
+
+    const result = await this.generateDraft({
+      additionalContextItems: chapterPlanContextItems,
+      chapterId,
+      instruction,
+      projectId: input.projectId,
+    });
+
+    const metadataDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const existingMetadata = parseJsonRecord(result.artifact.metadata);
+      metadataDatabase.client
+        .prepare(
+          "update artifacts set metadata = ?, updated_at = ? where project_id = ? and id = ?",
+        )
+        .run(
+          JSON.stringify({
+            ...existingMetadata,
+            chapterPlanId: input.chapterPlanId,
+          }),
+          Date.now(),
+          input.projectId,
+          result.artifact.id,
+        );
+      new DomainEventRepository(metadataDatabase).append({
+        aggregateId: result.artifact.id,
+        aggregateType: "artifact",
+        eventId: randomUUID(),
+        eventType: "chapter_draft.generated_from_plan",
+        payload: {
+          chapterId,
+          chapterPlanId: input.chapterPlanId,
+        },
+        projectId: input.projectId,
+      });
+    } finally {
+      metadataDatabase.close();
+    }
+
+    return {
+      ...result,
+      artifact: {
+        ...result.artifact,
+        metadata: JSON.stringify({
+          ...parseJsonRecord(result.artifact.metadata),
+          chapterPlanId: input.chapterPlanId,
+        }),
+      },
+    };
+  }
+}
+
+function formatChapterPlanContext(chapterPlan: {
+  readonly chapterGoal: string;
+  readonly chapterIndex: number;
+  readonly conflict: string;
+  readonly emotionalTurn: string;
+  readonly hook: string;
+  readonly informationGain: string;
+  readonly targetWordCount: number;
+  readonly title: string;
+}): string {
+  return [
+    `chapter plan: ${chapterPlan.title}`,
+    `chapter index: ${chapterPlan.chapterIndex}`,
+    `goal: ${chapterPlan.chapterGoal}`,
+    `conflict: ${chapterPlan.conflict}`,
+    `information gain: ${chapterPlan.informationGain}`,
+    `emotional turn: ${chapterPlan.emotionalTurn}`,
+    `hook: ${chapterPlan.hook}`,
+    `target word count: ${chapterPlan.targetWordCount}`,
+  ].join("\n");
+}
+
+function formatScenePlanContext(scenePlan: {
+  readonly conflictTurn: string;
+  readonly memoryTargets: readonly string[];
+  readonly outcome: string;
+  readonly sceneGoal: string;
+  readonly sceneIndex: number;
+}): string {
+  return [
+    `scene plan ${scenePlan.sceneIndex}: ${scenePlan.sceneGoal}`,
+    `conflict turn: ${scenePlan.conflictTurn}`,
+    `outcome: ${scenePlan.outcome}`,
+    `memory targets: ${scenePlan.memoryTargets.join(", ")}`,
+  ].join("\n");
 }
 
 function parseJsonRecord(value: string | null): Record<string, unknown> {

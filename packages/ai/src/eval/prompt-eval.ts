@@ -50,6 +50,18 @@ export const DEFAULT_PROMPT_EVAL_FIXTURES: readonly PromptEvalFixture[] = [
     requiredPhrases: ["章节大纲", "因果", "钩子", "JSON"],
     version: "v1",
   },
+  {
+    capability: "book_plan_generate",
+    id: "book-plan-layered-longform",
+    requiredPhrases: ["Book Plan", "Volume Plan", "Arc Plan", "JSON"],
+    version: "v1",
+  },
+  {
+    capability: "rolling_chapter_plan_generate",
+    id: "rolling-outline-chapter-scene",
+    requiredPhrases: ["Chapter Plan", "Scene Plan", "10-20", "JSON"],
+    version: "v1",
+  },
 ];
 
 export function runPromptEvals(

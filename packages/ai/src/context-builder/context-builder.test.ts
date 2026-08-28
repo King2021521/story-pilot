@@ -56,4 +56,51 @@ describe("ContextBuilder", () => {
       "instruction",
     ]);
   });
+
+  it("includes ranked supplemental planning items in chapter draft context", async () => {
+    const builder = new ContextBuilder({
+      async getChapter() {
+        return {
+          id: "chapter_1",
+          title: "第一章 星潮禁令",
+          version: 0,
+        };
+      },
+      async getGraphNeighborhood() {
+        return { edges: [], nodes: [] };
+      },
+      async listMemories() {
+        return [];
+      },
+    });
+
+    const context = await builder.buildChapterDraftContext({
+      additionalItems: [
+        {
+          content: "chapter plan: 主角第一次触碰星潮禁令。",
+          itemId: "chapter_plan_1",
+          itemType: "chapter_plan",
+          rank: 5,
+        },
+        {
+          content: "scene plan: 展示禁区规则和主角动机。",
+          itemId: "scene_plan_1",
+          itemType: "scene_plan",
+          rank: 6,
+        },
+      ],
+      chapterId: "chapter_1",
+      instruction: "生成正文",
+      projectId: "project_1",
+    });
+
+    expect(context.text).toContain("chapter plan: 主角第一次触碰星潮禁令。");
+    expect(context.text).toContain("scene plan: 展示禁区规则和主角动机。");
+    expect(context.items.map((item) => item.itemType)).toEqual([
+      "chapter",
+      "chapter_plan",
+      "scene_plan",
+      "instruction",
+    ]);
+  });
 });

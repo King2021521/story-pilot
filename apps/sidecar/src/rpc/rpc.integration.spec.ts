@@ -418,6 +418,190 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("generates and applies layered longform plans before chapter production", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await createConfirmedBriefAndBlueprint(rpcService, {
+        genre: "玄幻",
+        title: "星潮纪",
+      });
+      const projectId = getString(project, "id");
+
+      const bookPlanDraft = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.generateBookPlan",
+          id: "req_longform_book_plan",
+          payload: {
+            projectId,
+            targetWordCount: 3_000_000,
+            volumeCount: 2,
+          },
+        }),
+      );
+      const bookPlanArtifact = getRecord(bookPlanDraft, "artifact");
+      const bookPlanApplied = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.applyBookPlan",
+          id: "req_longform_apply_book_plan",
+          payload: {
+            artifactId: getString(bookPlanArtifact, "id"),
+            projectId,
+          },
+        }),
+      );
+      const volumePlan = getRecordArray(bookPlanApplied, "volumePlans")[0];
+      const arcPlan = getRecordArray(bookPlanApplied, "arcPlans")[0];
+
+      const rollingDraft = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.generateRollingOutline",
+          id: "req_longform_rolling_outline",
+          payload: {
+            chapterCount: 10,
+            projectId,
+            startChapterIndex: 1,
+            volumePlanId: getString(volumePlan, "id"),
+          },
+        }),
+      );
+      const rollingArtifact = getRecord(rollingDraft, "artifact");
+      const rollingBody = parseJsonRecord(getString(rollingArtifact, "body"));
+      const firstDraftChapterPlan = getRecordArray(rollingBody, "chapterPlans")[0];
+      const appliedChapterPlans = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.applyChapterPlans",
+          id: "req_longform_apply_chapter_plans",
+          payload: {
+            artifactId: getString(rollingArtifact, "id"),
+            projectId,
+            selectedChapterPlanIds: [getString(firstDraftChapterPlan, "id")],
+          },
+        }),
+      );
+      const chapterPlan = getRecordArray(appliedChapterPlans, "chapterPlans")[0];
+      const draftFromPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.generateDraftFromPlan",
+          id: "req_longform_draft_from_plan",
+          payload: {
+            chapterPlanId: getString(chapterPlan, "id"),
+            projectId,
+          },
+        }),
+      );
+      const draftFromPlanArtifact = getRecord(draftFromPlan, "artifact");
+      const impact = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.analyzeOutlineImpact",
+          id: "req_longform_outline_impact",
+          payload: {
+            patch: { hook: "章末钩子改为旧名单现身。" },
+            projectId,
+            targetId: getString(chapterPlan, "id"),
+            targetType: "chapter_plan",
+          },
+        }),
+      );
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_longform_board",
+          payload: { projectId },
+        }),
+      );
+      const boardCreativePath = getRecord(board, "creativePath");
+
+      expect(bookPlanDraft).toMatchObject({
+        artifact: {
+          kind: "book_plan_draft",
+          status: "pending",
+          targetType: "project",
+        },
+        workflowRun: {
+          status: "completed",
+          workflowName: "book_plan_generate",
+        },
+      });
+      expect(parseJsonRecord(getString(bookPlanArtifact, "metadata"))).toMatchObject({
+        contextPackageId: expect.any(String),
+        modelCallId: expect.any(String),
+        targetWordCount: 3_000_000,
+        volumeCount: 2,
+      });
+      expect(bookPlanApplied).toMatchObject({
+        bookPlan: {
+          corePromise: expect.stringContaining("每卷"),
+          sourceArtifactId: getString(bookPlanArtifact, "id"),
+          targetWordCount: 3_000_000,
+        },
+      });
+      expect(getRecordArray(bookPlanApplied, "volumePlans")).toHaveLength(2);
+      expect(getRecordArray(bookPlanApplied, "arcPlans")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: getString(arcPlan, "id"),
+            volumePlanId: getString(volumePlan, "id"),
+          }),
+        ]),
+      );
+      expect(rollingDraft).toMatchObject({
+        artifact: {
+          kind: "rolling_chapter_plan_draft",
+          status: "pending",
+          targetId: getString(volumePlan, "id"),
+          targetType: "volume_plan",
+        },
+        workflowRun: {
+          status: "completed",
+          workflowName: "rolling_chapter_plan_generate",
+        },
+      });
+      expect(getRecordArray(rollingBody, "chapterPlans")).toHaveLength(10);
+      expect(appliedChapterPlans).toMatchObject({
+        chapterPlans: [
+          {
+            arcPlanId: getString(arcPlan, "id"),
+            chapterIndex: 1,
+            sourceArtifactId: getString(rollingArtifact, "id"),
+          },
+        ],
+      });
+      expect(getRecordArray(appliedChapterPlans, "scenePlans")).toEqual([
+        expect.objectContaining({
+          chapterPlanId: getString(chapterPlan, "id"),
+          sceneIndex: 1,
+        }),
+      ]);
+      expect(draftFromPlanArtifact).toMatchObject({
+        kind: "chapter_draft",
+        status: "pending",
+        targetType: "chapter",
+      });
+      expect(getString(draftFromPlanArtifact, "metadata")).toContain(getString(chapterPlan, "id"));
+      expect(getRecordArray(impact, "impactedTargets")).toEqual([
+        expect.objectContaining({
+          severity: "warning",
+          targetId: getString(chapterPlan, "id"),
+          targetType: "chapter_plan",
+        }),
+        expect.objectContaining({
+          targetType: "scene_plan",
+        }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "bookPlans")).toEqual([
+        expect.objectContaining({ id: getString(getRecord(bookPlanApplied, "bookPlan"), "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "chapterPlans")).toEqual([
+        expect.objectContaining({ id: getString(chapterPlan, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "scenePlans")).toEqual([
+        expect.objectContaining({ chapterPlanId: getString(chapterPlan, "id") }),
+      ]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("initializes the nine-step creative path for new projects", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
@@ -1570,6 +1754,16 @@ describe("RpcService MVP command integration", () => {
           },
         }),
       );
+      const boardAfterReview = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_review_issue_board",
+          payload: {
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const boardCreativePath = getRecord(boardAfterReview, "creativePath");
 
       expect(updatedCharacter).toMatchObject({ motivation: "保护证人" });
       expect(getRecordArray(generatedNames, "items")).toHaveLength(3);
@@ -1590,6 +1784,15 @@ describe("RpcService MVP command integration", () => {
         status: "completed",
         workflowName: "review",
       });
+      expect(getRecordArray(boardCreativePath, "reviewIssues")).toEqual([
+        expect.objectContaining({
+          issueType: "world_rule",
+          severity: "warning",
+          status: "open",
+          targetId: getString(chapter, "id"),
+          targetType: "chapter",
+        }),
+      ]);
       expect(planRun).toMatchObject({
         output: { artifactId: expect.any(String) },
         status: "completed",
@@ -1962,6 +2165,15 @@ describe("RpcService MVP command integration", () => {
           },
         }),
       );
+      const incrementalProjection = await expectRpcOk(
+        rpcService.handle({
+          command: "graph.projectSinceCheckpoint",
+          id: "req_graph_incremental",
+          payload: {
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
 
       expect(artifact).toMatchObject({ id: getString(firstArtifact, "id") });
       expect(rejectedArtifact).toMatchObject({
@@ -1977,6 +2189,11 @@ describe("RpcService MVP command integration", () => {
         expect.objectContaining({ content: expect.stringContaining("旧信") }),
       ]);
       expect(getRecordArray(contradictions, "items")).toEqual([]);
+      expect(incrementalProjection).toMatchObject({
+        lastDomainEventId: expect.any(String),
+        projectedEvents: expect.any(Number),
+        projectionName: "kuzu_main",
+      });
     } finally {
       await moduleRef.close();
     }
@@ -2129,6 +2346,53 @@ async function createRpcHarness(tempDirs: string[]) {
                 },
               ],
             },
+            BookPlanGenerateOutput: {
+              bookPlan: {
+                corePromise: "每卷完成一次境界突破和一次关系反转。",
+                endingDirection: "主角以失去旧身份为代价重塑天道。",
+                targetWordCount: 3_000_000,
+                title: "星潮纪全书规划",
+              },
+              riskNotes: ["前期要避免升级节奏过快。"],
+              volumePlans: [
+                {
+                  arcs: [
+                    {
+                      arcIndex: 1,
+                      endChapterIndex: 20,
+                      escalation: ["发现禁令", "第一次越界", "暴露代价"],
+                      purpose: "建立修行规则和第一重代价。",
+                      startChapterIndex: 1,
+                      title: "星潮初醒",
+                    },
+                  ],
+                  climax: "主角公开打破司星阁第一条禁令。",
+                  majorConflict: "主角想借星潮修行，司星阁禁止底层接触星潮。",
+                  purpose: "完成世界规则展示和主角初次突破。",
+                  targetWordCount: 360_000,
+                  title: "第一卷 星潮初醒",
+                  volumeIndex: 1,
+                },
+                {
+                  arcs: [
+                    {
+                      arcIndex: 1,
+                      endChapterIndex: 40,
+                      escalation: ["结盟", "背叛", "夺回观星权"],
+                      purpose: "扩大外部势力冲突并引出终局代价。",
+                      startChapterIndex: 21,
+                      title: "旧盟反噬",
+                    },
+                  ],
+                  climax: "主角夺回一次观星权，但失去旧盟信任。",
+                  majorConflict: "旧盟与司星阁同时争夺星潮归属。",
+                  purpose: "完成势力扩张和关系反转。",
+                  targetWordCount: 420_000,
+                  title: "第二卷 旧盟反噬",
+                  volumeIndex: 2,
+                },
+              ],
+            },
             OutlineGenerateOutput: {
               chapterOutlines: Array.from({ length: 10 }, (_, index) => {
                 const chapterNumber = index + 1;
@@ -2150,6 +2414,56 @@ async function createRpcHarness(tempDirs: string[]) {
                 title: "前 10 章章纲",
               },
               riskNotes: [],
+            },
+            RollingChapterPlanGenerateOutput: {
+              chapterPlans: Array.from({ length: 10 }, (_, index) => {
+                const chapterNumber = index + 1;
+                return {
+                  chapterGoal:
+                    chapterNumber === 1
+                      ? "主角第一次触碰星潮禁令。"
+                      : `完成第 ${chapterNumber} 章的弧线推进。`,
+                  chapterIndex: chapterNumber,
+                  conflict:
+                    chapterNumber === 1
+                      ? "求生需求与司星阁禁令冲突。"
+                      : `第 ${chapterNumber} 章的行动目标与新阻力冲突。`,
+                  emotionalTurn: chapterNumber === 1 ? "从压抑到短暂掌控。" : "从推进到更深压力。",
+                  hook:
+                    chapterNumber === 1
+                      ? "禁令背后的旧名单出现主角父亲名字。"
+                      : "新的星潮异常暴露。",
+                  informationGain:
+                    chapterNumber === 1
+                      ? "星潮不是天灾，而是被人为管控的资源。"
+                      : `新增第 ${chapterNumber} 条星潮规则信息。`,
+                  relatedCharacterIds: ["character_1"],
+                  relatedForeshadowingIds: ["foreshadowing_1"],
+                  relatedPlotlineIds: ["plotline_1"],
+                  scenes: [
+                    {
+                      conflictTurn:
+                        chapterNumber === 1
+                          ? "守卫发现主角私入禁区。"
+                          : `第 ${chapterNumber} 章场景内出现反制。`,
+                      memoryTargets: [`第 ${chapterNumber} 章产生的长期事实`],
+                      outcome:
+                        chapterNumber === 1
+                          ? "主角带走一枚碎星砂。"
+                          : `第 ${chapterNumber} 章留下后续代价。`,
+                      sceneGoal:
+                        chapterNumber === 1
+                          ? "展示禁区规则和主角动机。"
+                          : `推进第 ${chapterNumber} 章目标。`,
+                      sceneIndex: 1,
+                    },
+                  ],
+                  targetWordCount: 3200,
+                  title:
+                    chapterNumber === 1 ? "第 1 章 星潮禁令" : `第 ${chapterNumber} 章 星潮推进`,
+                };
+              }),
+              riskNotes: ["注意第一章不要解释过多设定。"],
             },
           },
         }),
@@ -2337,7 +2651,7 @@ async function expectRpcOk(responsePromise: Promise<unknown>): Promise<Record<st
 
 async function expectRpcData(responsePromise: Promise<unknown>): Promise<unknown> {
   const response = await responsePromise;
-  expect(response).toMatchObject({ ok: true });
+  expect(response, JSON.stringify(response, null, 2)).toMatchObject({ ok: true });
   return getField(response, "data");
 }
 

@@ -184,12 +184,50 @@ export interface ChapterOutlineItem {
   readonly status: string;
 }
 
+export interface BookPlanItem {
+  readonly id: string;
+  readonly title: string;
+  readonly targetWordCount: number;
+}
+
+export interface VolumePlanItem {
+  readonly id: string;
+  readonly bookPlanId: string;
+  readonly title: string;
+  readonly volumeIndex: number;
+}
+
+export interface ArcPlanItem {
+  readonly id: string;
+  readonly volumePlanId: string;
+  readonly title: string;
+}
+
+export interface ChapterPlanItem {
+  readonly id: string;
+  readonly chapterIndex: number;
+  readonly title: string;
+  readonly chapterGoal: string;
+  readonly status: string;
+}
+
+export interface ScenePlanItem {
+  readonly id: string;
+  readonly chapterPlanId: string;
+  readonly sceneIndex: number;
+}
+
 export interface CreativePathBoard {
   readonly stages: readonly CreativeStageItem[];
   readonly brief: ProjectBriefItem | null;
   readonly blueprint: StoryBlueprintItem | null;
   readonly outlines: readonly OutlineItem[];
   readonly chapterOutlines: readonly ChapterOutlineItem[];
+  readonly bookPlans: readonly BookPlanItem[];
+  readonly volumePlans: readonly VolumePlanItem[];
+  readonly arcPlans: readonly ArcPlanItem[];
+  readonly chapterPlans: readonly ChapterPlanItem[];
+  readonly scenePlans: readonly ScenePlanItem[];
   readonly reviewIssues: readonly unknown[];
 }
 
@@ -216,9 +254,20 @@ export interface CreativePathWorkbenchProps {
     readonly scope: "chapter_batch";
     readonly chapterCount: 10;
   }): Promise<void> | void;
+  onGenerateBookPlan?(input: {
+    readonly targetWordCount: number;
+    readonly volumeCount: number;
+  }): Promise<void> | void;
+  onGenerateRollingOutline?(input: {
+    readonly volumePlanId?: string;
+    readonly arcPlanId?: string;
+    readonly startChapterIndex: number;
+    readonly chapterCount: 10 | 20;
+  }): Promise<void> | void;
   onApproveChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onApplyChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onGenerateDraftFromPlan?(input: { readonly chapterPlanId: string }): Promise<void> | void;
   onEvaluateStageGate?(input: { readonly stageKey: CreativeStageKey }): Promise<void> | void;
   onAdvanceStage?(input: {
     readonly stageKey: CreativeStageKey;
@@ -247,8 +296,11 @@ export function CreativePathWorkbench({
   onAdvanceStage,
   onEvaluateStageGate,
   onGenerateBlueprint,
+  onGenerateBookPlan,
+  onGenerateDraftFromPlan,
   onGenerateDraftFromOutline,
   onGenerateOutline,
+  onGenerateRollingOutline,
   onOpenCreativeElements,
   onReopenStage,
   onSaveBrief,
@@ -471,6 +523,34 @@ export function CreativePathWorkbench({
         />
         <Space className="creative-path-actions">
           <Button
+            aria-label="生成全书规划"
+            icon={<BranchesOutlined />}
+            onClick={() =>
+              onGenerateBookPlan?.({
+                targetWordCount: 3_000_000,
+                volumeCount: 6,
+              })
+            }
+            type="primary"
+          >
+            生成全书规划
+          </Button>
+          <Button
+            aria-label="生成未来 10 章章纲"
+            disabled={!onGenerateRollingOutline || board.volumePlans.length === 0}
+            icon={<FileTextOutlined />}
+            onClick={() => {
+              const firstVolumePlanId = board.volumePlans[0]?.id;
+              onGenerateRollingOutline?.({
+                chapterCount: 10,
+                startChapterIndex: getNextChapterPlanIndex(board.chapterPlans),
+                ...(firstVolumePlanId === undefined ? {} : { volumePlanId: firstVolumePlanId }),
+              });
+            }}
+          >
+            生成未来 10 章章纲
+          </Button>
+          <Button
             aria-label="生成前 10 章章纲"
             icon={<FileTextOutlined />}
             onClick={() => onGenerateOutline({ chapterCount: 10, scope: "chapter_batch" })}
@@ -479,6 +559,11 @@ export function CreativePathWorkbench({
             生成前 10 章章纲
           </Button>
         </Space>
+        <LongformPlanSummary board={board} />
+        <StructuredChapterPlanList
+          chapterPlans={board.chapterPlans}
+          onGenerateDraftFromPlan={onGenerateDraftFromPlan}
+        />
         {board.chapterOutlines.length === 0 ? (
           <Empty description="尚无章纲" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
@@ -522,6 +607,84 @@ export function CreativePathWorkbench({
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+function StructuredChapterPlanList({
+  chapterPlans,
+  onGenerateDraftFromPlan,
+}: {
+  readonly chapterPlans: readonly ChapterPlanItem[];
+  readonly onGenerateDraftFromPlan?:
+    ((input: { readonly chapterPlanId: string }) => Promise<void> | void) | undefined;
+}) {
+  if (chapterPlans.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className="structured-chapter-plan-list">
+      {chapterPlans.slice(0, 10).map((chapterPlan) => (
+        <li className="structured-chapter-plan-list__item" key={chapterPlan.id}>
+          <div className="structured-chapter-plan-list__body">
+            <Space>
+              <strong>{chapterPlan.title}</strong>
+              <Tag>{chapterPlan.status}</Tag>
+            </Space>
+            <span>{chapterPlan.chapterGoal}</span>
+          </div>
+          <Button
+            aria-label={`基于结构章纲生成草稿 ${chapterPlan.title}`}
+            disabled={!onGenerateDraftFromPlan}
+            icon={<FileTextOutlined />}
+            onClick={() => onGenerateDraftFromPlan?.({ chapterPlanId: chapterPlan.id })}
+            type="primary"
+          >
+            基于结构章纲生成草稿
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function LongformPlanSummary({ board }: { readonly board: CreativePathBoard }) {
+  if (
+    board.bookPlans.length === 0 &&
+    board.volumePlans.length === 0 &&
+    board.chapterPlans.length === 0
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="longform-plan-summary">
+      <div className="longform-plan-summary__item">
+        <span>全书规划</span>
+        <strong>{board.bookPlans[0]?.title ?? "未生成"}</strong>
+        <Tag>{board.bookPlans.length}</Tag>
+      </div>
+      <div className="longform-plan-summary__item">
+        <span>当前分卷</span>
+        <strong>{board.volumePlans[0]?.title ?? "未生成"}</strong>
+        <Tag>{board.volumePlans.length}</Tag>
+      </div>
+      <div className="longform-plan-summary__item">
+        <span>剧情弧线</span>
+        <strong>{board.arcPlans[0]?.title ?? "未生成"}</strong>
+        <Tag>{board.arcPlans.length}</Tag>
+      </div>
+      <div className="longform-plan-summary__item">
+        <span>结构章纲</span>
+        <strong>{board.chapterPlans[0]?.title ?? "未生成"}</strong>
+        <Tag>{board.chapterPlans.length}</Tag>
+      </div>
+      <div className="longform-plan-summary__item">
+        <span>场景计划</span>
+        <strong>{board.scenePlans.length ? `${board.scenePlans.length} 个场景` : "未生成"}</strong>
+        <Tag>{board.scenePlans.length}</Tag>
+      </div>
     </div>
   );
 }
@@ -620,4 +783,10 @@ function getStageColor(stage: CreativeStageItem | undefined): string {
     default:
       return "default";
   }
+}
+
+function getNextChapterPlanIndex(chapterPlans: readonly ChapterPlanItem[]): number {
+  return chapterPlans.length === 0
+    ? 1
+    : Math.max(...chapterPlans.map((chapterPlan) => chapterPlan.chapterIndex)) + 1;
 }

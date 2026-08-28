@@ -117,6 +117,26 @@ export class StoryPilotApiClient {
     return this.send("outline.generate", input);
   }
 
+  generateBookPlan(input: CommandPayload<"plot.generateBookPlan">) {
+    return this.send("plot.generateBookPlan", input);
+  }
+
+  applyBookPlan(input: CommandPayload<"plot.applyBookPlan">) {
+    return this.send("plot.applyBookPlan", input);
+  }
+
+  generateRollingOutline(input: CommandPayload<"plot.generateRollingOutline">) {
+    return this.send("plot.generateRollingOutline", input);
+  }
+
+  applyChapterPlans(input: CommandPayload<"plot.applyChapterPlans">) {
+    return this.send("plot.applyChapterPlans", input);
+  }
+
+  analyzeOutlineImpact(input: CommandPayload<"plot.analyzeOutlineImpact">) {
+    return this.send("plot.analyzeOutlineImpact", input);
+  }
+
   approveChapterOutline(input: CommandPayload<"outline.approveChapterOutline">) {
     return this.send("outline.approveChapterOutline", input);
   }
@@ -159,6 +179,10 @@ export class StoryPilotApiClient {
 
   generateChapterDraftFromOutline(input: CommandPayload<"chapter.generateDraftFromOutline">) {
     return this.send("chapter.generateDraftFromOutline", input);
+  }
+
+  generateChapterDraftFromPlan(input: CommandPayload<"chapter.generateDraftFromPlan">) {
+    return this.send("chapter.generateDraftFromPlan", input);
   }
 
   reviewChapterContinuity(input: CommandPayload<"chapter.reviewContinuity">) {
@@ -212,6 +236,10 @@ export class StoryPilotApiClient {
 
   rebuildGraph(input: CommandPayload<"graph.rebuild">) {
     return this.send("graph.rebuild", input);
+  }
+
+  projectGraphSinceCheckpoint(input: CommandPayload<"graph.projectSinceCheckpoint">) {
+    return this.send("graph.projectSinceCheckpoint", input);
   }
 
   listWorkOrders(input: CommandPayload<"workOrder.list">) {

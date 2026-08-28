@@ -23,6 +23,8 @@ export interface GraphNeighborhoodRequest {
 export interface GraphRebuildResult {
   readonly projectId: string;
   readonly projectedEvents: number;
+  readonly lastDomainEventId?: string | null;
+  readonly projectionName?: string;
 }
 
 export interface GraphContradictionResult {
@@ -36,12 +38,17 @@ export interface GraphContradictionRequest {
 }
 
 interface DomainEventRow {
+  readonly row_id: number;
   readonly id: string;
   readonly project_id: string;
   readonly aggregate_type: string;
   readonly aggregate_id: string;
   readonly event_type: string;
   readonly payload: string;
+}
+
+interface ProjectionCheckpointRow {
+  readonly last_domain_event_id: string | null;
 }
 
 @Injectable()
@@ -68,7 +75,7 @@ export class GraphService implements OnModuleDestroy {
       const events = projectDatabase.client
         .prepare(
           `
-          select id, project_id, aggregate_type, aggregate_id, event_type, payload
+          select rowid as row_id, id, project_id, aggregate_type, aggregate_id, event_type, payload
           from domain_events
           where project_id = ?
           order by created_at asc
@@ -105,7 +112,9 @@ export class GraphService implements OnModuleDestroy {
         .run(`kuzu_main:${projectId}`, projectId, "kuzu_main", lastEventId, now, now);
 
       return {
+        lastDomainEventId: lastEventId,
         projectId,
+        projectionName: "kuzu_main",
         projectedEvents: events.length,
       };
     } finally {
@@ -116,6 +125,79 @@ export class GraphService implements OnModuleDestroy {
   async getNeighborhood(input: GraphNeighborhoodRequest): Promise<GraphNeighborhood> {
     const store = await this.getProjectStore(input.projectId);
     return getNeighborhood(store, input);
+  }
+
+  async projectSinceCheckpoint(projectId: string): Promise<GraphRebuildResult> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
+    try {
+      const checkpoint = projectDatabase.client
+        .prepare(
+          `
+          select last_domain_event_id
+          from projection_checkpoints
+          where project_id = ? and projection_name = ?
+          `,
+        )
+        .get(projectId, "kuzu_main") as ProjectionCheckpointRow | undefined;
+      if (!checkpoint) {
+        await this.closeProjectStore(projectId);
+        rmSync(this.projectStorage.getGraphPath(projectId), { force: true, recursive: true });
+      }
+      const store = await this.getProjectStore(projectId);
+      const lastRowId = checkpoint?.last_domain_event_id
+        ? ((
+            projectDatabase.client
+              .prepare("select rowid as row_id from domain_events where project_id = ? and id = ?")
+              .get(projectId, checkpoint.last_domain_event_id) as { row_id: number } | undefined
+          )?.row_id ?? 0)
+        : 0;
+      const events = projectDatabase.client
+        .prepare(
+          `
+          select rowid as row_id, id, project_id, aggregate_type, aggregate_id, event_type, payload
+          from domain_events
+          where project_id = ? and rowid > ?
+          order by rowid asc
+          `,
+        )
+        .all(projectId, lastRowId) as DomainEventRow[];
+      const projector = new GraphProjector(store);
+
+      for (const event of events) {
+        await projector.project({
+          aggregateId: event.aggregate_id,
+          aggregateType: event.aggregate_type,
+          eventType: event.event_type,
+          id: event.id,
+          payload: parsePayload(event.payload),
+          projectId: event.project_id,
+        });
+      }
+
+      const lastEventId = events.at(-1)?.id ?? checkpoint?.last_domain_event_id ?? null;
+      projectDatabase.client
+        .prepare(
+          `
+          insert into projection_checkpoints (
+            id, project_id, projection_name, last_domain_event_id, rebuilt_at, updated_at
+          )
+          values (?, ?, ?, ?, null, ?)
+          on conflict(id) do update set
+            last_domain_event_id = excluded.last_domain_event_id,
+            updated_at = excluded.updated_at
+          `,
+        )
+        .run(`kuzu_main:${projectId}`, projectId, "kuzu_main", lastEventId, Date.now());
+
+      return {
+        lastDomainEventId: lastEventId,
+        projectId,
+        projectionName: "kuzu_main",
+        projectedEvents: events.length,
+      };
+    } finally {
+      projectDatabase.close();
+    }
   }
 
   async findContradictions(input: GraphContradictionRequest): Promise<GraphContradictionResult> {

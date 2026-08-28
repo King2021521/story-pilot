@@ -103,10 +103,21 @@ export interface WorkbenchHomeProps {
   onConfirmBrief(input: { readonly briefId: string }): Promise<void> | void;
   onEvaluateStageGate(input: { readonly stageKey: CreativeStageKey }): Promise<void> | void;
   onGenerateBlueprint(): Promise<void> | void;
+  onGenerateBookPlan(input: {
+    readonly targetWordCount: number;
+    readonly volumeCount: number;
+  }): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onGenerateDraftFromPlan(input: { readonly chapterPlanId: string }): Promise<void> | void;
   onGenerateOutline(input: {
     readonly scope: "chapter_batch";
     readonly chapterCount: 10;
+  }): Promise<void> | void;
+  onGenerateRollingOutline(input: {
+    readonly volumePlanId?: string;
+    readonly arcPlanId?: string;
+    readonly startChapterIndex: number;
+    readonly chapterCount: 10 | 20;
   }): Promise<void> | void;
   onReopenStage(input: {
     readonly stageKey: CreativeStageKey;
@@ -150,9 +161,12 @@ export function WorkbenchHome({
   onCreateWorldRule,
   onGenerateDraft,
   onGenerateBlueprint,
+  onGenerateBookPlan,
   onGenerateDraftFromOutline,
+  onGenerateDraftFromPlan,
   onGenerateElementCandidates,
   onGenerateOutline,
+  onGenerateRollingOutline,
   onLoadChapterVersions,
   onRejectMemory,
   onRestoreChapterVersion,
@@ -225,8 +239,11 @@ export function WorkbenchHome({
                 onConfirmBrief={onConfirmBrief}
                 onEvaluateStageGate={onEvaluateStageGate}
                 onGenerateBlueprint={onGenerateBlueprint}
+                onGenerateBookPlan={onGenerateBookPlan}
                 onGenerateDraftFromOutline={onGenerateDraftFromOutline}
+                onGenerateDraftFromPlan={onGenerateDraftFromPlan}
                 onGenerateOutline={onGenerateOutline}
+                onGenerateRollingOutline={onGenerateRollingOutline}
                 onOpenCreativeElements={() => setActiveTabKey("creative")}
                 onReopenStage={onReopenStage}
                 onSaveBrief={onSaveBrief}
@@ -314,8 +331,12 @@ function createFallbackCreativePath(defaultGenre: string): CreativePathBoard {
       targetAudience: "男频爽文",
     },
     chapterOutlines: [],
+    arcPlans: [],
+    bookPlans: [],
+    chapterPlans: [],
     outlines: [],
     reviewIssues: [],
+    scenePlans: [],
     stages: [
       { readinessScore: 10, stageKey: "brief", status: "available" },
       { readinessScore: 0, stageKey: "blueprint", status: "locked" },
@@ -327,5 +348,6 @@ function createFallbackCreativePath(defaultGenre: string): CreativePathBoard {
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    volumePlans: [],
   };
 }

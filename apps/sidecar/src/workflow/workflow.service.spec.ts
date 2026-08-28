@@ -127,6 +127,17 @@ describe("WorkflowService", () => {
         status: "pending",
         title: "连续性审阅报告",
       });
+      expect(
+        projectDatabase.client
+          .prepare("select issue_type, severity, message, target_type, status from review_issues")
+          .get(),
+      ).toMatchObject({
+        issue_type: "world_rule",
+        message: "补充内部通行权限。",
+        severity: "error",
+        status: "open",
+        target_type: "project",
+      });
     } finally {
       projectDatabase.close();
     }

@@ -15,6 +15,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm verify:specs",
+    "verify:longform": "pnpm --filter @story-pilot/testing run longform",
+    "verify:production": "pnpm verify && pnpm verify:longform",
     "verify:specs": "node scripts/verify-production-specs.mjs",
     "test": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/presets build && pnpm -r --if-present test",
     "typecheck": "pnpm --filter @story-pilot/contracts build && pnpm --filter @story-pilot/presets build && pnpm -r --if-present typecheck"

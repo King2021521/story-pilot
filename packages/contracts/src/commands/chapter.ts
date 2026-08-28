@@ -43,6 +43,10 @@ export const chapterCommandSchemas = {
     chapterOutlineId: z.string().min(1),
     instruction: z.string().optional(),
   }),
+  "chapter.generateDraftFromPlan": projectIdPayloadSchema.extend({
+    chapterPlanId: z.string().min(1),
+    instruction: z.string().optional(),
+  }),
   "chapter.reviewContinuity": projectIdPayloadSchema.extend({
     chapterId: z.string().min(1),
     scope: z.enum(["chapter", "volume", "project"]).default("chapter"),

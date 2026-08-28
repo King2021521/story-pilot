@@ -31,6 +31,35 @@ P2 的生产级目标是把 AI 能力从“可调用模型”升级为“可审�
 - AI 输出不能直接写 canon，只能进入 artifact、candidate 或 review。
 - prompt 改动必须有 hash、version 和 eval 记录。
 
+## 生产投入补强方案
+
+P2 的目标是把 AI 能力从“散落的模型调用”变成可审计、可测试、可迭代的创作生产线。完成 P2 后，每个生成动作都能回答：用了什么上下文、什么提示词版本、哪个模型、输出是否过 schema、用户是否采纳。
+
+必须补强的闭环：
+
+| 补强项          | 生产标准                                                   | 失败处理                                            |
+| --------------- | ---------------------------------------------------------- | --------------------------------------------------- |
+| Capability 边界 | 正式 AI 能力全部注册到 capability registry                 | 未注册能力不能从 RPC 调用                           |
+| Prompt 版本     | 每个 capability 有 system prompt、method pack、schema hash | prompt 改动必须触发 eval 和版本记录                 |
+| Context Package | 生成前保存结构化上下文包，不把全文无控制塞进 prompt        | 上下文缺关键 canon 时返回 gate 或 context 错误      |
+| Schema 校验     | 输出先过 Zod/schema，失败可有限重试                        | 重试失败生成 failed artifact，不进入候选采纳        |
+| Model Call 审计 | 保存 provider、model、tokens、latency、错误码、prompt hash | 日志和诊断只保留脱敏摘要                            |
+| 产物边界        | AI 输出进入 artifact、candidate、review                    | 不允许直接写 story_blueprints、characters、chapters |
+| Prompt Eval     | 玄幻、都市、悬疑基础样本可离线跑通                         | eval 失败不能合入影响生产 capability 的 prompt      |
+
+工程落点：
+
+- `packages/ai` 维护 capability registry、prompt registry、schema、eval runner 和 mock provider。
+- `apps/sidecar` 的业务 service 只通过 `ModelGateway` 和 workflow runtime 调用模型。
+- `packages/contracts` 定义每个 AI command 的输入输出，禁止前端传自由形态 payload。
+- `artifacts`、`model_calls`、`context_packages`、`workflow_runs` 形成完整追踪链。
+
+阶段出口：
+
+- 立项蓝图、世界观候选、人物候选、剧情、大纲生成都经过统一 AI workflow。
+- 真实模型配置缺失时返回明确错误，测试环境 fake provider 需要显式开关。
+- 任一 artifact 都能追溯到 prompt version、context package 和 model call。
+
 ## 范围
 
 本阶段必须完成：

@@ -11,6 +11,7 @@ import {
   ModelCallRepository,
   PlotRepository,
   ProjectRepository,
+  ReviewIssueRepository,
   WorkflowRepository,
   WorldRepository,
   type ArtifactRecord,
@@ -193,6 +194,7 @@ export class WorkflowService {
       const contextRepository = new ContextRepository(projectDatabase);
       const domainEventRepository = new DomainEventRepository(projectDatabase);
       const modelCallRepository = new ModelCallRepository(projectDatabase);
+      const reviewIssueRepository = new ReviewIssueRepository(projectDatabase);
       let modelCallId: string | undefined;
       const workflowInput = buildWorkflowInput(input);
 
@@ -239,6 +241,35 @@ export class WorkflowService {
                 : { targetType: reviewInput.targetType }),
             });
             appendArtifactCreatedEvent(domainEventRepository, artifact, reviewInput.projectId);
+            const reviewIssues = reviewIssueRepository.createMany({
+              issues: reviewInput.issues.map((issue) => ({
+                evidence: {
+                  evidence: issue.evidence,
+                  relatedEntityIds: issue.relatedEntityIds ?? [],
+                },
+                issueId: randomUUID(),
+                issueType: issue.issueType,
+                message: issue.suggestion,
+                projectId: reviewInput.projectId,
+                severity: issue.severity,
+                suggestedFix: {
+                  suggestion: issue.suggestion,
+                },
+                targetId: reviewInput.targetId ?? reviewInput.projectId,
+                targetType: reviewInput.targetType ?? "project",
+              })),
+              projectId: reviewInput.projectId,
+            });
+            for (const issue of reviewIssues) {
+              domainEventRepository.append({
+                aggregateId: issue.id,
+                aggregateType: "review_issue",
+                eventId: randomUUID(),
+                eventType: "review_issue.created",
+                payload: issue,
+                projectId: reviewInput.projectId,
+              });
+            }
 
             return { artifactId: artifact.id };
           },

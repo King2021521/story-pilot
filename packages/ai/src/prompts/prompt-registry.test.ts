@@ -67,4 +67,18 @@ describe("PromptRegistry", () => {
     expect(prompt.content).toContain("不得写入正式 canon");
     expect(prompt.content).toContain("避免同质化命名");
   });
+
+  it("loads longform planning prompts with layered outline contracts", () => {
+    const bookPlanPrompt = PromptRegistry.getPrompt("book_plan_generate", "v1");
+    const rollingPrompt = PromptRegistry.getPrompt("rolling_chapter_plan_generate", "v1");
+
+    expect(bookPlanPrompt.content).toContain("Book Plan");
+    expect(bookPlanPrompt.content).toContain("Volume Plan");
+    expect(bookPlanPrompt.content).toContain("Arc Plan");
+    expect(bookPlanPrompt.content).toContain("JSON");
+    expect(rollingPrompt.content).toContain("Chapter Plan");
+    expect(rollingPrompt.content).toContain("Scene Plan");
+    expect(rollingPrompt.content).toContain("10-20");
+    expect(rollingPrompt.content).toContain("JSON");
+  });
 });

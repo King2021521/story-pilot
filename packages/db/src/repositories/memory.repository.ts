@@ -24,9 +24,19 @@ export interface MemoryRecord {
   readonly entityId: string | null;
   readonly kind: string;
   readonly content: string;
+  readonly scope: string;
+  readonly validFromChapterIndex: number | null;
+  readonly validToChapterIndex: number | null;
+  readonly sourceType: string | null;
+  readonly sourceId: string | null;
+  readonly sourceQuote: string | null;
+  readonly evidence: unknown;
   readonly sourceCandidateId: string | null;
   readonly confidence: number;
   readonly status: string;
+  readonly supersedesMemoryId: string | null;
+  readonly contradictionGroupId: string | null;
+  readonly embeddingRef: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
@@ -54,8 +64,18 @@ export interface CreateMemoryRecordInput {
   readonly kind: string;
   readonly content: string;
   readonly sourceCandidateId?: string;
+  readonly scope?: string;
+  readonly validFromChapterIndex?: number;
+  readonly validToChapterIndex?: number;
+  readonly sourceType?: string;
+  readonly sourceId?: string;
+  readonly sourceQuote?: string;
+  readonly evidence?: unknown;
   readonly confidence?: number;
   readonly status: "canon" | "hypothesis";
+  readonly supersedesMemoryId?: string;
+  readonly contradictionGroupId?: string;
+  readonly embeddingRef?: string;
   readonly now?: number;
 }
 
@@ -83,9 +103,19 @@ interface MemoryRow {
   readonly entity_id: string | null;
   readonly kind: string;
   readonly content: string;
+  readonly scope: string;
+  readonly valid_from_chapter_index: number | null;
+  readonly valid_to_chapter_index: number | null;
+  readonly source_type: string | null;
+  readonly source_id: string | null;
+  readonly source_quote: string | null;
+  readonly evidence_json: string;
   readonly source_candidate_id: string | null;
   readonly confidence: number;
   readonly status: string;
+  readonly supersedes_memory_id: string | null;
+  readonly contradiction_group_id: string | null;
+  readonly embedding_ref: string | null;
   readonly created_at: number;
   readonly updated_at: number;
 }
@@ -245,25 +275,42 @@ export class MemoryRepository {
         `
         insert into memories (
           id, project_id, entity_type, entity_id, kind, content,
-          source_candidate_id, confidence, status, created_at, updated_at
+          scope, valid_from_chapter_index, valid_to_chapter_index,
+          source_type, source_id, source_quote, evidence_json,
+          source_candidate_id, confidence, status, supersedes_memory_id,
+          contradiction_group_id, embedding_ref, created_at, updated_at
         )
         values (
           @memoryId, @projectId, @entityType, @entityId, @kind, @content,
-          @sourceCandidateId, @confidence, @status, @now, @now
+          @scope, @validFromChapterIndex, @validToChapterIndex,
+          @sourceType, @sourceId, @sourceQuote, @evidenceJson,
+          @sourceCandidateId, @confidence, @status, @supersedesMemoryId,
+          @contradictionGroupId, @embeddingRef, @now, @now
         )
       `,
       )
       .run({
         confidence: input.confidence ?? 1,
         content: input.content,
+        contradictionGroupId: input.contradictionGroupId ?? null,
+        embeddingRef: input.embeddingRef ?? null,
         entityId: input.entityId ?? null,
         entityType: input.entityType,
+        evidenceJson: JSON.stringify(input.evidence ?? {}),
         kind: input.kind,
         memoryId: input.memoryId,
         now,
         projectId: input.projectId,
+        scope: input.scope ?? "project",
         sourceCandidateId: input.sourceCandidateId ?? null,
+        sourceId: input.sourceId ?? input.sourceCandidateId ?? null,
+        sourceQuote: input.sourceQuote ?? null,
+        sourceType:
+          input.sourceType ?? (input.sourceCandidateId === undefined ? null : "memory_candidate"),
         status: input.status,
+        supersedesMemoryId: input.supersedesMemoryId ?? null,
+        validFromChapterIndex: input.validFromChapterIndex ?? null,
+        validToChapterIndex: input.validToChapterIndex ?? null,
       });
 
     const memory = this.getMemory(input.projectId, input.memoryId);
@@ -346,8 +393,26 @@ function mapMemoryRow(row: MemoryRow): MemoryRecord {
     id: row.id,
     kind: row.kind,
     projectId: row.project_id,
+    scope: row.scope,
+    sourceId: row.source_id,
     sourceCandidateId: row.source_candidate_id,
+    sourceQuote: row.source_quote,
+    sourceType: row.source_type,
     status: row.status,
+    supersedesMemoryId: row.supersedes_memory_id,
+    contradictionGroupId: row.contradiction_group_id,
+    embeddingRef: row.embedding_ref,
+    evidence: parseJson(row.evidence_json, {}),
+    validFromChapterIndex: row.valid_from_chapter_index,
+    validToChapterIndex: row.valid_to_chapter_index,
     updatedAt: row.updated_at,
   };
+}
+
+function parseJson(value: string, fallback: unknown): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return fallback;
+  }
 }

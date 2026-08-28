@@ -200,6 +200,63 @@ button {
   flex-wrap: wrap;
 }
 
+.longform-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.longform-plan-summary__item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid #f0efec;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.longform-plan-summary__item span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.longform-plan-summary__item strong {
+  overflow: hidden;
+  color: #111827;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.structured-chapter-plan-list {
+  display: grid;
+  margin: 12px 0 0;
+  padding: 0;
+  gap: 8px;
+  list-style: none;
+}
+
+.structured-chapter-plan-list__item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #f0efec;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.structured-chapter-plan-list__body {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.structured-chapter-plan-list__body span {
+  color: #6b7280;
+  font-size: 13px;
+}
+
 .creative-middle-stage-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

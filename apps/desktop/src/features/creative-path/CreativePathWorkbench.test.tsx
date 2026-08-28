@@ -90,6 +90,96 @@ describe("CreativePathWorkbench", () => {
     });
   });
 
+  it("submits longform book plan and rolling outline actions", async () => {
+    const onGenerateBookPlan = vi.fn().mockResolvedValue(undefined);
+    const onGenerateDraftFromPlan = vi.fn().mockResolvedValue(undefined);
+    const onGenerateRollingOutline = vi.fn().mockResolvedValue(undefined);
+    const board = createCreativePathBoard({
+      arcPlans: [
+        {
+          id: "arc_plan_1",
+          title: "星潮初醒",
+          volumePlanId: "volume_plan_1",
+        },
+      ],
+      bookPlans: [
+        {
+          id: "book_plan_1",
+          targetWordCount: 3_000_000,
+          title: "星潮纪全书规划",
+        },
+      ],
+      chapterPlans: [
+        {
+          chapterGoal: "主角第一次触碰星潮禁令。",
+          chapterIndex: 1,
+          id: "chapter_plan_1",
+          status: "draft",
+          title: "第 1 章 星潮禁令",
+        },
+      ],
+      scenePlans: [
+        {
+          chapterPlanId: "chapter_plan_1",
+          id: "scene_plan_1",
+          sceneIndex: 1,
+        },
+      ],
+      volumePlans: [
+        {
+          bookPlanId: "book_plan_1",
+          id: "volume_plan_1",
+          title: "第一卷 星潮初醒",
+          volumeIndex: 1,
+        },
+      ],
+    });
+
+    render(
+      <AppProviders>
+        <CreativePathWorkbench
+          board={board}
+          onApplyBlueprint={vi.fn()}
+          onApplyChapterOutline={vi.fn()}
+          onApproveChapterOutline={vi.fn()}
+          onCompleteStage={vi.fn()}
+          onConfirmBrief={vi.fn()}
+          onGenerateBlueprint={vi.fn()}
+          onGenerateBookPlan={onGenerateBookPlan}
+          onGenerateDraftFromOutline={vi.fn()}
+          onGenerateDraftFromPlan={onGenerateDraftFromPlan}
+          onGenerateOutline={vi.fn()}
+          onGenerateRollingOutline={onGenerateRollingOutline}
+          onOpenCreativeElements={vi.fn()}
+          onSaveBrief={vi.fn()}
+        />
+      </AppProviders>,
+    );
+
+    expect(screen.getByText("星潮纪全书规划")).toBeInTheDocument();
+    expect(screen.getByText("第一卷 星潮初醒")).toBeInTheDocument();
+    expect(screen.getAllByText("第 1 章 星潮禁令").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "生成全书规划" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成未来 10 章章纲" }));
+    fireEvent.click(screen.getByRole("button", { name: "基于结构章纲生成草稿 第 1 章 星潮禁令" }));
+
+    await waitFor(() => {
+      expect(onGenerateBookPlan).toHaveBeenCalledWith({
+        targetWordCount: 3_000_000,
+        volumeCount: 6,
+      });
+      expect(onGenerateRollingOutline).toHaveBeenCalledWith({
+        chapterCount: 10,
+        startChapterIndex: 2,
+        volumePlanId: "volume_plan_1",
+      });
+      expect(onGenerateDraftFromPlan).toHaveBeenCalledWith({
+        chapterPlanId: "chapter_plan_1",
+      });
+    });
+  });
+
   it("exposes middle-stage entries after blueprint unlocks worldbuilding", async () => {
     const onOpenCreativeElements = vi.fn();
     const onCompleteStage = vi.fn().mockResolvedValue(undefined);
@@ -178,6 +268,9 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
         title: "第 1 章：开局钩子",
       },
     ],
+    arcPlans: [],
+    bookPlans: [],
+    chapterPlans: [],
     outlines: [
       {
         id: "outline_1",
@@ -187,6 +280,7 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
       },
     ],
     reviewIssues: [],
+    scenePlans: [],
     stages: [
       { readinessScore: 10, stageKey: "brief", status: "available" },
       { readinessScore: 0, stageKey: "blueprint", status: "locked" },
@@ -198,6 +292,7 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    volumePlans: [],
     ...overrides,
   };
 }

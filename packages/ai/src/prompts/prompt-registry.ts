@@ -11,6 +11,8 @@ export type PromptCapability =
   | "relationship_generate"
   | "plot_arc_generate"
   | "outline_generate"
+  | "book_plan_generate"
+  | "rolling_chapter_plan_generate"
   | "chapter_draft"
   | "chapter_rewrite"
   | "memory_extract"
@@ -47,6 +49,8 @@ const promptFiles = {
   global_writer: "./shared/global-writer-system.v1.md",
   memory_extract: "./memory-extract/system.v1.md",
   outline_generate: "./outline-generate/system.v1.md",
+  book_plan_generate: "./book-plan-generate/system.v1.md",
+  rolling_chapter_plan_generate: "./rolling-chapter-plan-generate/system.v1.md",
   plot_arc_generate: "./plot-arc-generate/system.v1.md",
   relationship_generate: "./relationship-generate/system.v1.md",
   retrospective_generate: "./retrospective-generate/system.v1.md",

@@ -162,6 +162,32 @@ describe("StoryPilotApiClient", () => {
       projectId: "project_1",
       targetType: "project",
     });
+    await api.generateBookPlan({
+      projectId: "project_1",
+      targetWordCount: 3_000_000,
+      volumeCount: 3,
+    });
+    await api.applyBookPlan({
+      artifactId: "artifact_book_plan_1",
+      projectId: "project_1",
+    });
+    await api.generateRollingOutline({
+      chapterCount: 10,
+      projectId: "project_1",
+      startChapterIndex: 1,
+      volumePlanId: "volume_plan_1",
+    });
+    await api.applyChapterPlans({
+      artifactId: "artifact_rolling_1",
+      projectId: "project_1",
+      selectedChapterPlanIds: ["chapter_plan_1"],
+    });
+    await api.analyzeOutlineImpact({
+      patch: { hook: "新的章末钩子" },
+      projectId: "project_1",
+      targetId: "chapter_plan_1",
+      targetType: "chapter_plan",
+    });
     await api.getAiRun({ projectId: "project_1", workflowRunId: "run_1" });
     await api.cancelAiRun({ projectId: "project_1", workflowRunId: "run_1" });
     await api.listAiArtifacts({ kind: "outline_draft", projectId: "project_1" });
@@ -171,6 +197,11 @@ describe("StoryPilotApiClient", () => {
       chapterId: "chapter_1",
       projectId: "project_1",
       scope: "chapter",
+    });
+    await api.generateChapterDraftFromPlan({
+      chapterPlanId: "chapter_plan_1",
+      instruction: "强化章末钩子",
+      projectId: "project_1",
     });
     await api.getArtifact({ artifactId: "artifact_1", projectId: "project_1" });
     await api.listMemoryCandidates({ projectId: "project_1", status: "pending" });
@@ -193,6 +224,7 @@ describe("StoryPilotApiClient", () => {
     });
     await api.findGraphContradictions({ projectId: "project_1", scope: "project" });
     await api.rebuildGraph({ projectId: "project_1" });
+    await api.projectGraphSinceCheckpoint({ projectId: "project_1" });
     await api.listWorkOrders({ projectId: "project_1" });
     await api.getWorkOrder({ projectId: "project_1", workOrderId: "work_order_1" });
     await api.runWorkflow({
@@ -261,12 +293,18 @@ describe("StoryPilotApiClient", () => {
       "project.backup",
       "workbench.getSnapshot",
       "ai.generate",
+      "plot.generateBookPlan",
+      "plot.applyBookPlan",
+      "plot.generateRollingOutline",
+      "plot.applyChapterPlans",
+      "plot.analyzeOutlineImpact",
       "ai.getRun",
       "ai.cancelRun",
       "ai.listArtifacts",
       "chapter.list",
       "chapter.get",
       "chapter.reviewContinuity",
+      "chapter.generateDraftFromPlan",
       "artifact.get",
       "memory.listCandidates",
       "memory.confirm",
@@ -275,6 +313,7 @@ describe("StoryPilotApiClient", () => {
       "graph.getNeighborhood",
       "graph.findContradictions",
       "graph.rebuild",
+      "graph.projectSinceCheckpoint",
       "workOrder.list",
       "workOrder.get",
       "workflow.run",

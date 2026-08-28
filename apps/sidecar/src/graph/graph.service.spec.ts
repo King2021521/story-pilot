@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { Test, type TestingModule } from "@nestjs/testing";
 import { FakeModelProvider, ModelGateway } from "@story-pilot/ai";
+import { createProjectDatabase, PROJECT_DATABASE_FILE } from "@story-pilot/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
@@ -91,6 +92,75 @@ describe("GraphService", () => {
         }),
       ],
     });
+  });
+
+  it("projects only domain events created after the stored checkpoint", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-graph-service-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, CharacterModule, GraphModule],
+    }).compile();
+    const projectService = moduleRef.get(ProjectService);
+    const characterService = moduleRef.get(CharacterService);
+    const graphService = moduleRef.get(GraphService);
+
+    const project = await projectService.createProject({ title: "长夜序章", genre: "悬疑" });
+    const protagonist = await characterService.createCharacter({
+      projectId: project.id,
+      name: "林澈",
+      role: "protagonist",
+    });
+    const antagonist = await characterService.createCharacter({
+      projectId: project.id,
+      name: "周潜",
+      role: "antagonist",
+    });
+
+    const firstProjection = await graphService.projectSinceCheckpoint(project.id);
+    await characterService.createRelation({
+      projectId: project.id,
+      relationType: "suspects",
+      sourceEntityId: protagonist.id,
+      sourceEntityType: "character",
+      targetEntityId: antagonist.id,
+      targetEntityType: "character",
+    });
+    const secondProjection = await graphService.projectSinceCheckpoint(project.id);
+
+    expect(firstProjection.projectedEvents).toBeGreaterThanOrEqual(2);
+    expect(secondProjection.projectedEvents).toBe(1);
+    await expect(
+      graphService.getNeighborhood({
+        projectId: project.id,
+        entityId: protagonist.id,
+      }),
+    ).resolves.toMatchObject({
+      edges: [
+        expect.objectContaining({
+          label: "suspects",
+          sourceId: protagonist.id,
+          targetId: antagonist.id,
+        }),
+      ],
+    });
+
+    const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
+    try {
+      expect(
+        projectDatabase.client
+          .prepare(
+            "select projection_name, last_domain_event_id from projection_checkpoints where project_id = ?",
+          )
+          .get(project.id),
+      ).toMatchObject({
+        last_domain_event_id: secondProjection.lastDomainEventId,
+        projection_name: "kuzu_main",
+      });
+    } finally {
+      projectDatabase.close();
+    }
   });
 
   it("rebuilds foreshadowing links from story event domain events", async () => {

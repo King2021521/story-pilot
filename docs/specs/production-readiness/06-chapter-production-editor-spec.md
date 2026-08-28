@@ -31,6 +31,35 @@ P5 的生产级目标是让创作者每天都能稳定推进正文，而不是�
 - 应用正文后没有摘要和记忆候选时，下一章上下文不能标记 ready。
 - 过期 base version 的 patch 必须拒绝应用。
 
+## 生产投入补强方案
+
+P5 的目标是让创作者能日常连续生产正文。完成 P5 后，平台不只是“生成一章”，而是能从章纲进入草稿、审稿、改写、应用、记忆回流、下一章准备的闭环。
+
+必须补强的闭环：
+
+| 补强项     | 生产标准                                                    | 失败处理                                      |
+| ---------- | ----------------------------------------------------------- | --------------------------------------------- |
+| 章纲驱动   | 正文生成只能从 ready chapter plan 发起                      | chapter plan 不完整时返回 gate 错误           |
+| 草稿隔离   | AI 正文先进入 artifact 和 chapter_draft                     | 不能直接覆盖 chapter.content                  |
+| Diff 应用  | 支持整章应用、选段应用、拒绝、重试和原因记录                | base version 不一致时拒绝 patch               |
+| 局部改写   | polish、expand、compress、conflict、hook、voice、continuity | 改写结果仍以 patch artifact 形式等待确认      |
+| 版本恢复   | 每次应用草稿或 patch 都生成 chapter version                 | 保存失败时保留 artifact 和原正文              |
+| 生成后回流 | 摘要、记忆候选、连续性问题和图谱投影任务自动生成            | 回流失败时下一章 context readiness 不可 ready |
+| 批量生产   | 3/5/10 章批次排队，每章停在用户审稿节点                     | 任一章 error 不阻断已完成章，但暂停后续生产   |
+
+工程落点：
+
+- `apps/sidecar` 的 chapter production service 编排生成、审稿、diff、apply、summary、memory extraction。
+- `packages/db` 新增 draft、patch、summary、batch 表和版本一致性约束。
+- `packages/ai` 新增章节正文、局部改写、质量审稿、记忆抽取 prompt、schema、eval。
+- 前端编辑器提供章节树、正文编辑、artifact 预览、diff、版本、质量报告和批次队列。
+
+阶段出口：
+
+- 用户可以连续完成至少 10 章“章纲 -> 草稿 -> 审稿 -> 应用 -> 摘要 -> 记忆候选”的闭环。
+- 任意 AI 改写都不能覆盖用户在新版本中的手工修改。
+- 进入下一章前，系统能显示上一章摘要、已确认记忆、未处理风险和上下文 ready 状态。
+
 ## 范围
 
 本阶段必须完成：

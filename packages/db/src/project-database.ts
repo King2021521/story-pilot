@@ -58,6 +58,41 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
   ensureTableColumn(projectDatabase, "projects", "style", "style text");
   ensureTableColumn(projectDatabase, "works", "style", "style text");
   ensureTableColumn(projectDatabase, "chapter_versions", "artifact_id", "artifact_id text");
+  ensureTableColumn(projectDatabase, "memories", "scope", "scope text not null default 'project'");
+  ensureTableColumn(
+    projectDatabase,
+    "memories",
+    "valid_from_chapter_index",
+    "valid_from_chapter_index integer",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "memories",
+    "valid_to_chapter_index",
+    "valid_to_chapter_index integer",
+  );
+  ensureTableColumn(projectDatabase, "memories", "source_type", "source_type text");
+  ensureTableColumn(projectDatabase, "memories", "source_id", "source_id text");
+  ensureTableColumn(projectDatabase, "memories", "source_quote", "source_quote text");
+  ensureTableColumn(
+    projectDatabase,
+    "memories",
+    "evidence_json",
+    "evidence_json text not null default '{}'",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "memories",
+    "supersedes_memory_id",
+    "supersedes_memory_id text",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "memories",
+    "contradiction_group_id",
+    "contradiction_group_id text",
+  );
+  ensureTableColumn(projectDatabase, "memories", "embedding_ref", "embedding_ref text");
   projectDatabase.client.exec(CREATIVE_PATH_SCHEMA_SQL);
 }
 

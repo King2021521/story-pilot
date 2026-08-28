@@ -46,6 +46,9 @@ describe("MemoryService", () => {
       expect(result.memory).toMatchObject({
         content: "林鸢发现一封来历异常的旧信。",
         kind: "event",
+        scope: "project",
+        sourceId: "artifact_1",
+        sourceType: "artifact",
         status: "canon",
       });
 

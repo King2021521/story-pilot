@@ -5,7 +5,10 @@ import { characterTraits, characters, entityRelations } from "./character.js";
 import {
   characterArcs,
   characterRelations,
+  arcPlans,
+  bookPlans,
   chapterOutlines,
+  chapterPlans,
   conflicts,
   creativeStages,
   outlines,
@@ -14,7 +17,9 @@ import {
   retrospectives,
   reviewIssues,
   sceneOutlines,
+  scenePlans,
   storyBlueprints,
+  volumePlans,
   volumeOutlines,
 } from "./creative-path.js";
 import { domainEvents } from "./events.js";
@@ -79,6 +84,11 @@ export const projectSchema = {
   volumeOutlines,
   chapterOutlines,
   sceneOutlines,
+  bookPlans,
+  volumePlans,
+  arcPlans,
+  chapterPlans,
+  scenePlans,
   reviewIssues,
   retrospectives,
   worldRules,
