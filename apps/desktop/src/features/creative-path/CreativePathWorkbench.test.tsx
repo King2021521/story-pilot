@@ -13,10 +13,12 @@ describe("CreativePathWorkbench", () => {
           onApplyBlueprint={vi.fn()}
           onApplyChapterOutline={vi.fn()}
           onApproveChapterOutline={vi.fn()}
+          onCompleteStage={vi.fn()}
           onConfirmBrief={vi.fn()}
           onGenerateBlueprint={vi.fn()}
           onGenerateDraftFromOutline={vi.fn()}
           onGenerateOutline={vi.fn()}
+          onOpenCreativeElements={vi.fn()}
           onSaveBrief={vi.fn()}
         />
       </AppProviders>,
@@ -46,10 +48,12 @@ describe("CreativePathWorkbench", () => {
           onApplyBlueprint={onApplyBlueprint}
           onApplyChapterOutline={onApplyChapterOutline}
           onApproveChapterOutline={onApproveChapterOutline}
+          onCompleteStage={vi.fn()}
           onConfirmBrief={onConfirmBrief}
           onGenerateBlueprint={onGenerateBlueprint}
           onGenerateDraftFromOutline={onGenerateDraftFromOutline}
           onGenerateOutline={onGenerateOutline}
+          onOpenCreativeElements={vi.fn()}
           onSaveBrief={onSaveBrief}
         />
       </AppProviders>,
@@ -85,9 +89,57 @@ describe("CreativePathWorkbench", () => {
       });
     });
   });
+
+  it("exposes middle-stage entries after blueprint unlocks worldbuilding", async () => {
+    const onOpenCreativeElements = vi.fn();
+    const onCompleteStage = vi.fn().mockResolvedValue(undefined);
+    const board = createCreativePathBoard({
+      stages: [
+        { readinessScore: 100, stageKey: "brief", status: "completed" },
+        { readinessScore: 100, stageKey: "blueprint", status: "completed" },
+        { readinessScore: 10, stageKey: "worldbuilding", status: "available" },
+        { readinessScore: 0, stageKey: "characters", status: "locked" },
+        { readinessScore: 0, stageKey: "plot_arcs", status: "locked" },
+        { readinessScore: 0, stageKey: "outline", status: "locked" },
+        { readinessScore: 0, stageKey: "chapters", status: "locked" },
+        { readinessScore: 0, stageKey: "memory_review", status: "locked" },
+        { readinessScore: 0, stageKey: "retrospective", status: "locked" },
+      ],
+    });
+
+    render(
+      <AppProviders>
+        <CreativePathWorkbench
+          board={board}
+          onApplyBlueprint={vi.fn()}
+          onApplyChapterOutline={vi.fn()}
+          onApproveChapterOutline={vi.fn()}
+          onCompleteStage={onCompleteStage}
+          onConfirmBrief={vi.fn()}
+          onGenerateBlueprint={vi.fn()}
+          onGenerateDraftFromOutline={vi.fn()}
+          onGenerateOutline={vi.fn()}
+          onOpenCreativeElements={onOpenCreativeElements}
+          onSaveBrief={vi.fn()}
+        />
+      </AppProviders>,
+    );
+
+    expect(screen.getByRole("heading", { name: "世界观与要素" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "人物与关系网" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "剧情弧线" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "进入创作要素" }));
+    fireEvent.click(screen.getByRole("button", { name: "完成世界观与要素" }));
+
+    await waitFor(() => {
+      expect(onOpenCreativeElements).toHaveBeenCalledTimes(1);
+      expect(onCompleteStage).toHaveBeenCalledWith({ stageKey: "worldbuilding" });
+    });
+  });
 });
 
-function createCreativePathBoard(): CreativePathBoard {
+function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): CreativePathBoard {
   return {
     blueprint: {
       antagonistForce: "旧秩序",
@@ -146,5 +198,6 @@ function createCreativePathBoard(): CreativePathBoard {
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    ...overrides,
   };
 }

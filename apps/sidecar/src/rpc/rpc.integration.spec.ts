@@ -383,6 +383,120 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("advances middle creative stages after blueprint application", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_middle_stage_project",
+          payload: {
+            genre: "古代争霸",
+            title: "布衣天子",
+          },
+        }),
+      );
+      const projectId = getString(project, "id");
+      const brief = getRecord(
+        await expectRpcOk(
+          rpcService.handle({
+            command: "creativeStage.getPath",
+            id: "req_middle_stage_path",
+            payload: { projectId },
+          }),
+        ),
+        "brief",
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "brief.confirm",
+          id: "req_middle_stage_brief_confirm",
+          payload: {
+            briefId: getString(brief, "id"),
+            projectId,
+          },
+        }),
+      );
+      const generatedBlueprint = await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.generate",
+          id: "req_middle_stage_blueprint",
+          payload: { projectId },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.apply",
+          id: "req_middle_stage_apply_blueprint",
+          payload: {
+            blueprintId: getString(getRecord(generatedBlueprint, "blueprint"), "id"),
+            projectId,
+          },
+        }),
+      );
+
+      const completedWorldbuilding = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.complete",
+          id: "req_middle_stage_worldbuilding",
+          payload: {
+            projectId,
+            stageKey: "worldbuilding",
+          },
+        }),
+      );
+      const completedCharacters = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.complete",
+          id: "req_middle_stage_characters",
+          payload: {
+            projectId,
+            stageKey: "characters",
+          },
+        }),
+      );
+      const completedPlotArcs = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.complete",
+          id: "req_middle_stage_plot_arcs",
+          payload: {
+            projectId,
+            stageKey: "plot_arcs",
+          },
+        }),
+      );
+      const path = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.getPath",
+          id: "req_middle_stage_final_path",
+          payload: { projectId },
+        }),
+      );
+
+      expect(completedWorldbuilding).toMatchObject({
+        readinessScore: 100,
+        stageKey: "worldbuilding",
+        status: "completed",
+      });
+      expect(completedCharacters).toMatchObject({
+        readinessScore: 100,
+        stageKey: "characters",
+        status: "completed",
+      });
+      expect(completedPlotArcs).toMatchObject({
+        readinessScore: 100,
+        stageKey: "plot_arcs",
+        status: "completed",
+      });
+      expect(getStage(path, "outline")).toMatchObject({
+        readinessScore: 10,
+        status: "available",
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("supports project, workbench, and chapter read commands after local writes", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {

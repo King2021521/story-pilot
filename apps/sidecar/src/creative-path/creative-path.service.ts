@@ -7,6 +7,8 @@ import {
   DomainEventRepository,
   ProjectRepository,
   type ArtifactRecord,
+  type CreativeStageKey,
+  type CreativeStageRecord,
   type CreativePathRecord,
   type ProjectBriefRecord,
   type StoryBlueprintRecord,
@@ -30,6 +32,11 @@ export interface SaveBriefInput {
 export interface ConfirmBriefInput {
   readonly projectId: string;
   readonly briefId: string;
+}
+
+export interface CompleteCreativeStageInput {
+  readonly projectId: string;
+  readonly stageKey: CreativeStageKey;
 }
 
 export interface GenerateBlueprintInput {
@@ -133,6 +140,56 @@ export class CreativePathService {
     }
   }
 
+  async completeStage(input: CompleteCreativeStageInput): Promise<CreativeStageRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const now = Date.now();
+      const complete = projectDatabase.client.transaction(() => {
+        const pathRepository = new CreativePathRepository(projectDatabase);
+        if (pathRepository.listStages(input.projectId).length === 0) {
+          pathRepository.initializePath(input.projectId, now);
+        }
+        const stage = pathRepository
+          .listStages(input.projectId)
+          .find((candidate) => candidate.stageKey === input.stageKey);
+        if (!stage) {
+          throw new Error(`CREATIVE_STAGE_NOT_FOUND: ${input.stageKey}`);
+        }
+        if (stage.status === "locked") {
+          throw new Error(`CREATIVE_STAGE_LOCKED: ${input.stageKey}`);
+        }
+        if (stage.status === "completed") {
+          return stage;
+        }
+
+        const completedStage = pathRepository.markStageCompleted(
+          input.projectId,
+          input.stageKey,
+          getNextStageKey(input.stageKey),
+          now,
+        );
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: completedStage.id,
+          aggregateType: "creative_stage",
+          eventId: randomUUID(),
+          eventType: "creative_stage.completed",
+          payload: {
+            nextStageKey: getNextStageKey(input.stageKey),
+            stageKey: input.stageKey,
+          },
+          projectId: input.projectId,
+          now,
+        });
+
+        return completedStage;
+      });
+
+      return complete();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
   async generateBlueprint(input: GenerateBlueprintInput): Promise<GenerateBlueprintResult> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
@@ -220,6 +277,29 @@ function getProjectOrThrow(repository: ProjectRepository, projectId: string) {
   }
 
   return project;
+}
+
+function getNextStageKey(stageKey: CreativeStageKey): CreativeStageKey | null {
+  switch (stageKey) {
+    case "brief":
+      return "blueprint";
+    case "blueprint":
+      return "worldbuilding";
+    case "worldbuilding":
+      return "characters";
+    case "characters":
+      return "plot_arcs";
+    case "plot_arcs":
+      return "outline";
+    case "outline":
+      return "chapters";
+    case "chapters":
+      return "memory_review";
+    case "memory_review":
+      return "retrospective";
+    case "retrospective":
+      return null;
+  }
 }
 
 function buildBlueprintDraft(

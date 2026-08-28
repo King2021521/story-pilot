@@ -33,6 +33,10 @@ export class StoryPilotApiClient {
     return this.send("creativeStage.getPath", input);
   }
 
+  completeCreativeStage(input: CommandPayload<"creativeStage.complete">) {
+    return this.send("creativeStage.complete", input);
+  }
+
   saveBrief(input: CommandPayload<"brief.save">) {
     return this.send("brief.save", input);
   }

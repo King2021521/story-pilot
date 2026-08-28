@@ -168,6 +168,13 @@ button {
   font-size: 16px;
 }
 
+.creative-stage-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .creative-brief-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
@@ -176,6 +183,48 @@ button {
 
 .creative-path-actions {
   flex-wrap: wrap;
+}
+
+.creative-middle-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.creative-middle-stage {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border: 1px solid #f0efec;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.creative-middle-stage__icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: #f0efec;
+  color: #111827;
+  font-size: 18px;
+}
+
+.creative-middle-stage__body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.creative-middle-stage__body > span {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.creative-middle-stage > .ant-btn {
+  grid-column: 1 / -1;
 }
 
 .chapter-outline-list {
@@ -391,6 +440,10 @@ button {
 
   .creative-brief-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .creative-middle-stage-grid {
+    grid-template-columns: 1fr;
   }
 
   .chapter-outline-list__item {

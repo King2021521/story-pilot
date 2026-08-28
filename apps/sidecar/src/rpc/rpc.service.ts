@@ -147,6 +147,10 @@ export class RpcService {
         const parsed = payload as CommandPayload<"creativeStage.getPath">;
         return this.creativePathService.getPath(parsed.projectId);
       }
+      case "creativeStage.complete": {
+        const parsed = payload as CommandPayload<"creativeStage.complete">;
+        return this.creativePathService.completeStage(parsed);
+      }
       case "brief.save": {
         const parsed = payload as CommandPayload<"brief.save">;
         return this.creativePathService.saveBrief({

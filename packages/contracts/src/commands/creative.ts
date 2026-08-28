@@ -23,6 +23,16 @@ const elementCandidateSchema = z.object({
 
 export const creativePathCommandSchemas = {
   "creativeStage.getPath": projectIdPayloadSchema,
+  "creativeStage.complete": projectIdPayloadSchema.extend({
+    stageKey: z.enum([
+      "worldbuilding",
+      "characters",
+      "plot_arcs",
+      "chapters",
+      "memory_review",
+      "retrospective",
+    ]),
+  }),
   "brief.save": projectIdPayloadSchema.extend({
     genre: z.string().min(1),
     subgenres: z.array(z.string().min(1)).default([]),

@@ -31,7 +31,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ArtifactReviewPanel, type ArtifactReviewItem } from "../features/ai/ArtifactReviewPanel";
 import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
 import type { ChapterVersionItem } from "../features/chapter/ChapterVersionDrawer";
-import type { SaveBriefValues } from "../features/creative-path/CreativePathWorkbench";
+import type {
+  CompletableCreativeStageKey,
+  SaveBriefValues,
+} from "../features/creative-path/CreativePathWorkbench";
 import type {
   AcceptElementCandidatesValues,
   ElementCandidateItem,
@@ -603,6 +606,26 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const completeStage = useCallback(
+    async (input: { readonly stageKey: CompletableCreativeStageKey }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.completeCreativeStage({
+          projectId: activeProject.id,
+          stageKey: input.stageKey,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("阶段已完成");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const generateBlueprint = useCallback(async () => {
     if (!activeProject) {
       return;
@@ -773,6 +796,7 @@ export function ShellLayout() {
           onApplyBlueprint={applyBlueprint}
           onApplyChapterOutline={applyChapterOutline}
           onApproveChapterOutline={approveChapterOutline}
+          onCompleteStage={completeStage}
           onConfirmBrief={confirmBrief}
           onConfirmMemory={confirmMemory}
           onAcceptElementCandidates={acceptElementCandidates}

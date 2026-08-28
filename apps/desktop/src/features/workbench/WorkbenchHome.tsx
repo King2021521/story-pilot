@@ -5,6 +5,7 @@ import {
   TeamOutlined,
 } from "@ant-design/icons";
 import { Col, Empty, Row, Spin, Statistic, Tabs } from "antd";
+import { useState } from "react";
 
 import {
   ChapterEditorPage,
@@ -36,6 +37,7 @@ import { MemoryCandidateList, type MemoryCandidateItem } from "../memory/MemoryC
 import type { MemoryCandidateDecisionInput } from "../memory/MemoryConfirmDrawer";
 import {
   CreativePathWorkbench,
+  type CompletableCreativeStageKey,
   type CreativePathBoard,
   type SaveBriefValues,
 } from "../creative-path/CreativePathWorkbench";
@@ -92,6 +94,7 @@ export interface WorkbenchHomeProps {
   onApplyBlueprint(input: { readonly blueprintId: string }): Promise<void> | void;
   onApplyChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onApproveChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onCompleteStage(input: { readonly stageKey: CompletableCreativeStageKey }): Promise<void> | void;
   onConfirmBrief(input: { readonly briefId: string }): Promise<void> | void;
   onGenerateBlueprint(): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
@@ -122,6 +125,7 @@ export function WorkbenchHome({
   onApplyBlueprint,
   onApplyChapterOutline,
   onApproveChapterOutline,
+  onCompleteStage,
   onConfirmBrief,
   onCreateChapter,
   onCreateCharacter,
@@ -142,6 +146,8 @@ export function WorkbenchHome({
   savingChapter = false,
   selectedChapterId,
 }: WorkbenchHomeProps) {
+  const [activeTabKey, setActiveTabKey] = useState("creative-path");
+
   if (loading) {
     return (
       <div className="workbench-home workbench-home--centered">
@@ -185,6 +191,7 @@ export function WorkbenchHome({
       </Row>
 
       <Tabs
+        activeKey={activeTabKey}
         className="workbench-tabs"
         items={[
           {
@@ -195,10 +202,12 @@ export function WorkbenchHome({
                 onApplyBlueprint={onApplyBlueprint}
                 onApplyChapterOutline={onApplyChapterOutline}
                 onApproveChapterOutline={onApproveChapterOutline}
+                onCompleteStage={onCompleteStage}
                 onConfirmBrief={onConfirmBrief}
                 onGenerateBlueprint={onGenerateBlueprint}
                 onGenerateDraftFromOutline={onGenerateDraftFromOutline}
                 onGenerateOutline={onGenerateOutline}
+                onOpenCreativeElements={() => setActiveTabKey("creative")}
                 onSaveBrief={onSaveBrief}
               />
             ),
@@ -260,6 +269,7 @@ export function WorkbenchHome({
             label: "记忆确认",
           },
         ]}
+        onChange={setActiveTabKey}
       />
     </div>
   );

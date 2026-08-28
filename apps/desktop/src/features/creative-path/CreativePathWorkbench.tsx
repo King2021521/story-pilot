@@ -1,11 +1,15 @@
 import {
+  AppstoreOutlined,
+  BranchesOutlined,
   BulbOutlined,
   CheckCircleOutlined,
   FileTextOutlined,
   ProfileOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
 import { GENRE_PRESETS } from "@story-pilot/presets";
 import { Alert, Button, Descriptions, Empty, Form, Input, Select, Space, Steps, Tag } from "antd";
+import type { ReactNode } from "react";
 import { useMemo } from "react";
 
 const STAGE_LABELS: Record<CreativeStageKey, string> = {
@@ -51,6 +55,36 @@ const EMOTIONAL_REWARD_OPTIONS = ["爽点", "悬疑", "成长", "情绪拉扯", 
   (value) => ({ label: value, value }),
 );
 
+const MIDDLE_STAGE_ITEMS = [
+  {
+    completeLabel: "完成世界观与要素",
+    description: "规则、城市、地点、组织、道具、武器、功法",
+    icon: <AppstoreOutlined />,
+    stageKey: "worldbuilding",
+    title: "世界观与要素",
+  },
+  {
+    completeLabel: "完成人物与关系网",
+    description: "人物、动机、角色定位、人物关系",
+    icon: <TeamOutlined />,
+    stageKey: "characters",
+    title: "人物与关系网",
+  },
+  {
+    completeLabel: "完成剧情弧线",
+    description: "主线、支线、伏笔、冲突升级",
+    icon: <BranchesOutlined />,
+    stageKey: "plot_arcs",
+    title: "剧情弧线",
+  },
+] as const satisfies ReadonlyArray<{
+  readonly completeLabel: string;
+  readonly description: string;
+  readonly icon: ReactNode;
+  readonly stageKey: CompletableCreativeStageKey;
+  readonly title: string;
+}>;
+
 export type CreativeStageKey =
   | "brief"
   | "blueprint"
@@ -61,6 +95,9 @@ export type CreativeStageKey =
   | "chapters"
   | "memory_review"
   | "retrospective";
+
+export type CompletableCreativeStageKey =
+  "worldbuilding" | "characters" | "plot_arcs" | "chapters" | "memory_review" | "retrospective";
 
 export interface CreativeStageItem {
   readonly stageKey: CreativeStageKey;
@@ -148,6 +185,8 @@ export interface CreativePathWorkbenchProps {
   onApproveChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onApplyChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onCompleteStage(input: { readonly stageKey: CompletableCreativeStageKey }): Promise<void> | void;
+  onOpenCreativeElements(): void;
 }
 
 export function CreativePathWorkbench({
@@ -157,9 +196,11 @@ export function CreativePathWorkbench({
   onApplyChapterOutline,
   onApproveChapterOutline,
   onConfirmBrief,
+  onCompleteStage,
   onGenerateBlueprint,
   onGenerateDraftFromOutline,
   onGenerateOutline,
+  onOpenCreativeElements,
   onSaveBrief,
 }: CreativePathWorkbenchProps) {
   const [form] = Form.useForm<SaveBriefValues>();
@@ -292,6 +333,47 @@ export function CreativePathWorkbench({
       </section>
 
       <section className="creative-stage-section">
+        <header className="creative-stage-section__header">
+          <h3>世界观与人物剧情</h3>
+          <Button
+            aria-label="进入创作要素"
+            disabled={!isAnyMiddleStageOpen(board.stages)}
+            icon={<AppstoreOutlined />}
+            onClick={onOpenCreativeElements}
+          >
+            进入创作要素
+          </Button>
+        </header>
+        <div className="creative-middle-stage-grid">
+          {MIDDLE_STAGE_ITEMS.map((item) => {
+            const stage = getStage(board.stages, item.stageKey);
+            const disabled = !isStageActionable(stage);
+
+            return (
+              <article className="creative-middle-stage" key={item.stageKey}>
+                <div className="creative-middle-stage__icon">{item.icon}</div>
+                <div className="creative-middle-stage__body">
+                  <Space>
+                    <h3>{item.title}</h3>
+                    <Tag color={getStageColor(stage)}>{stage?.status ?? "locked"}</Tag>
+                  </Space>
+                  <span>{item.description}</span>
+                </div>
+                <Button
+                  aria-label={item.completeLabel}
+                  disabled={disabled}
+                  onClick={() => onCompleteStage({ stageKey: item.stageKey })}
+                  type={disabled ? "default" : "primary"}
+                >
+                  {item.completeLabel}
+                </Button>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="creative-stage-section">
         <h3>大纲设计</h3>
         <Alert
           title="章节正文必须基于已批准章纲生成。剧情弧线负责故事推进，大纲负责落到卷、章和场景。"
@@ -373,4 +455,31 @@ function getStageDescription(
   }
 
   return `${stage.status} · ${stage.readinessScore}%`;
+}
+
+function getStage(
+  stages: readonly CreativeStageItem[],
+  stageKey: CreativeStageKey,
+): CreativeStageItem | undefined {
+  return stages.find((stage) => stage.stageKey === stageKey);
+}
+
+function isAnyMiddleStageOpen(stages: readonly CreativeStageItem[]): boolean {
+  return MIDDLE_STAGE_ITEMS.some((item) => isStageActionable(getStage(stages, item.stageKey)));
+}
+
+function isStageActionable(stage: CreativeStageItem | undefined): boolean {
+  return stage?.status === "available" || stage?.status === "in_progress";
+}
+
+function getStageColor(stage: CreativeStageItem | undefined): string {
+  switch (stage?.status) {
+    case "completed":
+      return "green";
+    case "available":
+    case "in_progress":
+      return "blue";
+    default:
+      return "default";
+  }
 }

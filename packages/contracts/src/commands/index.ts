@@ -16,6 +16,7 @@ export const MVP_COMMAND_NAMES = [
   "workbench.getSnapshot",
   "workbench.getBoard",
   "creativeStage.getPath",
+  "creativeStage.complete",
   "brief.save",
   "brief.confirm",
   "blueprint.generate",

@@ -14,6 +14,7 @@ describe("command registry", () => {
       "workbench.getSnapshot",
       "workbench.getBoard",
       "creativeStage.getPath",
+      "creativeStage.complete",
       "brief.save",
       "brief.confirm",
       "blueprint.generate",
@@ -175,6 +176,16 @@ describe("command registry", () => {
       chapterOutlineId: "chapter_outline_1",
       instruction: "强化悬疑钩子",
       projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("creativeStage.complete", {
+        projectId: "proj_1",
+        stageKey: "worldbuilding",
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      stageKey: "worldbuilding",
     });
   });
 

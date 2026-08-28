@@ -261,6 +261,79 @@ describe("ShellLayout", () => {
     });
   });
 
+  it("opens creative elements and completes the worldbuilding stage from the creative path", async () => {
+    const project = createProject();
+    const creativePath = createCreativePathBoard({
+      stages: [
+        { readinessScore: 100, stageKey: "brief", status: "completed" },
+        { readinessScore: 100, stageKey: "blueprint", status: "completed" },
+        { readinessScore: 10, stageKey: "worldbuilding", status: "available" },
+        { readinessScore: 0, stageKey: "characters", status: "locked" },
+        { readinessScore: 0, stageKey: "plot_arcs", status: "locked" },
+        { readinessScore: 0, stageKey: "outline", status: "locked" },
+        { readinessScore: 0, stageKey: "chapters", status: "locked" },
+        { readinessScore: 0, stageKey: "memory_review", status: "locked" },
+        { readinessScore: 0, stageKey: "retrospective", status: "locked" },
+      ],
+    });
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            creativePath,
+            memoryCandidates: [],
+            project,
+            workOrders: [],
+            worldRules: [],
+          });
+        case "creativeStage.complete":
+          creativePath.stages = creativePath.stages.map((stage) => {
+            if (stage.stageKey === "worldbuilding") {
+              return { ...stage, readinessScore: 100, status: "completed" };
+            }
+            if (stage.stageKey === "characters") {
+              return { ...stage, readinessScore: 10, status: "available" };
+            }
+            return stage;
+          });
+          return rpcSuccess(request.id, {
+            readinessScore: 100,
+            stageKey: "worldbuilding",
+            status: "completed",
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("button", { name: "进入创作要素" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "完成世界观与要素" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("creativeStage.complete")).toMatchObject({
+        projectId: "project_1",
+        stageKey: "worldbuilding",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "进入创作要素" }));
+    expect(await screen.findByText("AI 候选生成")).toBeInTheDocument();
+  });
+
   it("sends chapter and memory actions through typed RPC commands", async () => {
     const project = createProject();
     const chapter = {
@@ -826,7 +899,9 @@ function createProject() {
   };
 }
 
-function createCreativePathBoard(): TestCreativePathBoard {
+function createCreativePathBoard(
+  overrides: Partial<TestCreativePathBoard> = {},
+): TestCreativePathBoard {
   return {
     blueprint: null,
     brief: {
@@ -856,5 +931,6 @@ function createCreativePathBoard(): TestCreativePathBoard {
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    ...overrides,
   };
 }
