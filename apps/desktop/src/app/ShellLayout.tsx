@@ -31,6 +31,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArtifactReviewPanel, type ArtifactReviewItem } from "../features/ai/ArtifactReviewPanel";
 import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
 import type { ChapterVersionItem } from "../features/chapter/ChapterVersionDrawer";
+import type { SaveBriefValues } from "../features/creative-path/CreativePathWorkbench";
 import type {
   AcceptElementCandidatesValues,
   ElementCandidateItem,
@@ -554,6 +555,173 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const saveBrief = useCallback(
+    async (input: SaveBriefValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveBrief({
+          emotionalRewards: [...input.emotionalRewards],
+          forbiddenDirections: [...input.forbiddenDirections],
+          genre: input.genre,
+          projectId: activeProject.id,
+          subgenres: [...input.subgenres],
+          ...optionalText("targetAudience", input.targetAudience),
+          ...optionalText("platformProfile", input.platformProfile),
+          ...optionalText("lengthProfile", input.lengthProfile),
+          ...optionalText("narrativePov", input.narrativePov),
+          ...optionalText("initialIdea", input.initialIdea),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("立项已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const confirmBrief = useCallback(
+    async (input: { readonly briefId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.confirmBrief({
+          briefId: input.briefId,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("立项已确认");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const generateBlueprint = useCallback(async () => {
+    if (!activeProject) {
+      return;
+    }
+
+    try {
+      await storyPilotApi.generateBlueprint({ projectId: activeProject.id });
+      await refreshBoard(activeProject.id);
+      message.success("创作蓝图已生成");
+    } catch (error) {
+      message.error(getErrorMessage(error));
+    }
+  }, [activeProject, message, refreshBoard, storyPilotApi]);
+
+  const applyBlueprint = useCallback(
+    async (input: { readonly blueprintId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.applyBlueprint({
+          blueprintId: input.blueprintId,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("创作蓝图已应用");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const generateOutline = useCallback(
+    async (input: { readonly scope: "chapter_batch"; readonly chapterCount: 10 }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.generateOutline({
+          chapterCount: input.chapterCount,
+          projectId: activeProject.id,
+          scope: input.scope,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("章纲已生成");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const approveChapterOutline = useCallback(
+    async (input: { readonly chapterOutlineId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.approveChapterOutline({
+          chapterOutlineId: input.chapterOutlineId,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("章纲已批准");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const applyChapterOutline = useCallback(
+    async (input: { readonly chapterOutlineId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        const result = (await storyPilotApi.applyChapterOutline({
+          chapterOutlineId: input.chapterOutlineId,
+          projectId: activeProject.id,
+        })) as { readonly chapter?: WorkbenchChapter };
+        await refreshBoard(activeProject.id);
+        if (result.chapter) {
+          setSelectedChapterId(result.chapter.id);
+        }
+        message.success("章纲已应用为章节");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const generateDraftFromOutline = useCallback(
+    async (input: { readonly chapterOutlineId: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.generateChapterDraftFromOutline({
+          chapterOutlineId: input.chapterOutlineId,
+          projectId: activeProject.id,
+        });
+        setAiOpen(true);
+        await refreshBoard(activeProject.id);
+        message.success("章纲草稿已进入产物区");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   return (
     <Layout className="story-shell">
       <Sider aria-label="作品管理区" className="story-shell__sidebar" width={292}>
@@ -602,6 +770,10 @@ export function ShellLayout() {
           chapterVersions={chapterVersions}
           loadingChapterVersions={loadingChapterVersions}
           loading={loadingWorkbench}
+          onApplyBlueprint={applyBlueprint}
+          onApplyChapterOutline={applyChapterOutline}
+          onApproveChapterOutline={approveChapterOutline}
+          onConfirmBrief={confirmBrief}
           onConfirmMemory={confirmMemory}
           onAcceptElementCandidates={acceptElementCandidates}
           onCreateChapter={createChapter}
@@ -609,12 +781,16 @@ export function ShellLayout() {
           onCreateForeshadowing={createForeshadowing}
           onCreatePlotline={createPlotline}
           onCreateWorldRule={createWorldRule}
+          onGenerateBlueprint={generateBlueprint}
           onGenerateDraft={generateDraft}
+          onGenerateDraftFromOutline={generateDraftFromOutline}
           onGenerateElementCandidates={generateElementCandidates}
+          onGenerateOutline={generateOutline}
           onLoadChapterVersions={loadChapterVersions}
           onRejectMemory={rejectMemory}
           onRestoreChapterVersion={restoreChapterVersion}
           onSaveChapter={saveChapter}
+          onSaveBrief={saveBrief}
           onSelectChapter={selectChapter}
           savingChapter={savingChapter}
           selectedChapterId={selectedChapterId}
@@ -767,6 +943,14 @@ function createProjectPayload(values: CreateProjectFormValues): CommandPayload<"
     ...(style ? { style } : {}),
     title: values.title.trim(),
   };
+}
+
+function optionalText<TKey extends string>(
+  key: TKey,
+  value: string | undefined,
+): Partial<Record<TKey, string>> {
+  const trimmed = value?.trim();
+  return trimmed ? ({ [key]: trimmed } as Record<TKey, string>) : {};
 }
 
 function upsertProject(

@@ -2,6 +2,21 @@ import { getTableName } from "drizzle-orm";
 
 import { chapterVersions, chapters, scenes } from "./chapter.js";
 import { characterTraits, characters, entityRelations } from "./character.js";
+import {
+  characterArcs,
+  characterRelations,
+  chapterOutlines,
+  conflicts,
+  creativeStages,
+  outlines,
+  powerSystems,
+  projectBriefs,
+  retrospectives,
+  reviewIssues,
+  sceneOutlines,
+  storyBlueprints,
+  volumeOutlines,
+} from "./creative-path.js";
 import { domainEvents } from "./events.js";
 import {
   contextPackageItems,
@@ -25,6 +40,7 @@ import { artifacts, modelCalls, workflowRuns, workflowSteps, workOrders } from "
 
 export * from "./chapter.js";
 export * from "./character.js";
+export * from "./creative-path.js";
 export * from "./events.js";
 export * from "./memory.js";
 export * from "./plot.js";
@@ -42,6 +58,19 @@ export const projectSchema = {
   characters,
   characterTraits,
   entityRelations,
+  creativeStages,
+  projectBriefs,
+  storyBlueprints,
+  powerSystems,
+  characterRelations,
+  characterArcs,
+  conflicts,
+  outlines,
+  volumeOutlines,
+  chapterOutlines,
+  sceneOutlines,
+  reviewIssues,
+  retrospectives,
   worldRules,
   locations,
   organizations,

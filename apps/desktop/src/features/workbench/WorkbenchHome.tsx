@@ -34,6 +34,11 @@ import {
 import type { ArtifactReviewItem } from "../ai/ArtifactReviewPanel";
 import { MemoryCandidateList, type MemoryCandidateItem } from "../memory/MemoryCandidateList";
 import type { MemoryCandidateDecisionInput } from "../memory/MemoryConfirmDrawer";
+import {
+  CreativePathWorkbench,
+  type CreativePathBoard,
+  type SaveBriefValues,
+} from "../creative-path/CreativePathWorkbench";
 
 export interface WorkbenchProject {
   readonly defaultVolumeId: string;
@@ -55,6 +60,7 @@ export interface WorkbenchBoard {
   readonly artifacts: readonly ArtifactReviewItem[];
   readonly chapters: readonly WorkbenchChapter[];
   readonly characters?: readonly CharacterElement[];
+  readonly creativePath?: CreativePathBoard;
   readonly foreshadowings?: readonly ForeshadowingElement[];
   readonly items?: readonly WorldElement[];
   readonly locations?: readonly WorldElement[];
@@ -83,6 +89,17 @@ export interface WorkbenchHomeProps {
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
   onCreateWorldRule(input: CreateWorldRuleValues): Promise<void> | void;
+  onApplyBlueprint(input: { readonly blueprintId: string }): Promise<void> | void;
+  onApplyChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onApproveChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onConfirmBrief(input: { readonly briefId: string }): Promise<void> | void;
+  onGenerateBlueprint(): Promise<void> | void;
+  onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onGenerateOutline(input: {
+    readonly scope: "chapter_batch";
+    readonly chapterCount: 10;
+  }): Promise<void> | void;
+  onSaveBrief(input: SaveBriefValues): Promise<void> | void;
   onAcceptElementCandidates(input: AcceptElementCandidatesValues): Promise<void> | void;
   onGenerateElementCandidates(
     input: GenerateElementCandidatesValues,
@@ -102,17 +119,25 @@ export function WorkbenchHome({
   loading = false,
   onConfirmMemory,
   onAcceptElementCandidates,
+  onApplyBlueprint,
+  onApplyChapterOutline,
+  onApproveChapterOutline,
+  onConfirmBrief,
   onCreateChapter,
   onCreateCharacter,
   onCreateForeshadowing,
   onCreatePlotline,
   onCreateWorldRule,
   onGenerateDraft,
+  onGenerateBlueprint,
+  onGenerateDraftFromOutline,
   onGenerateElementCandidates,
+  onGenerateOutline,
   onLoadChapterVersions,
   onRejectMemory,
   onRestoreChapterVersion,
   onSaveChapter,
+  onSaveBrief,
   onSelectChapter,
   savingChapter = false,
   selectedChapterId,
@@ -135,6 +160,10 @@ export function WorkbenchHome({
 
   const selectedChapter =
     board.chapters.find((chapter) => chapter.id === selectedChapterId) ?? board.chapters[0];
+  const creativePath = board.creativePath ?? createFallbackCreativePath(board.project.genre);
+  const chapterProductionBlocked =
+    board.chapters.length === 0 &&
+    !creativePath.chapterOutlines.some((chapterOutline) => chapterOutline.status === "applied");
   const metrics = [
     { icon: <FileProtectOutlined />, title: "章节", value: board.chapters.length },
     { icon: <TeamOutlined />, title: "人物", value: board.characters?.length ?? 0 },
@@ -160,6 +189,24 @@ export function WorkbenchHome({
         items={[
           {
             children: (
+              <CreativePathWorkbench
+                board={creativePath}
+                defaultGenre={board.project.genre}
+                onApplyBlueprint={onApplyBlueprint}
+                onApplyChapterOutline={onApplyChapterOutline}
+                onApproveChapterOutline={onApproveChapterOutline}
+                onConfirmBrief={onConfirmBrief}
+                onGenerateBlueprint={onGenerateBlueprint}
+                onGenerateDraftFromOutline={onGenerateDraftFromOutline}
+                onGenerateOutline={onGenerateOutline}
+                onSaveBrief={onSaveBrief}
+              />
+            ),
+            key: "creative-path",
+            label: "创作路径",
+          },
+          {
+            children: (
               <ChapterEditorPage
                 chapter={selectedChapter}
                 chapters={board.chapters}
@@ -174,8 +221,9 @@ export function WorkbenchHome({
                 versions={chapterVersions}
               />
             ),
+            disabled: chapterProductionBlocked,
             key: "chapter",
-            label: "章节",
+            label: "章节生产",
           },
           {
             children: (
@@ -215,4 +263,37 @@ export function WorkbenchHome({
       />
     </div>
   );
+}
+
+function createFallbackCreativePath(defaultGenre: string): CreativePathBoard {
+  return {
+    blueprint: null,
+    brief: {
+      emotionalRewards: ["爽点"],
+      forbiddenDirections: [],
+      genre: defaultGenre,
+      id: "",
+      initialIdea: null,
+      lengthProfile: "长篇连载",
+      narrativePov: "第三人称",
+      platformProfile: "男频",
+      status: "draft",
+      subgenres: [],
+      targetAudience: "男频爽文",
+    },
+    chapterOutlines: [],
+    outlines: [],
+    reviewIssues: [],
+    stages: [
+      { readinessScore: 10, stageKey: "brief", status: "available" },
+      { readinessScore: 0, stageKey: "blueprint", status: "locked" },
+      { readinessScore: 0, stageKey: "worldbuilding", status: "locked" },
+      { readinessScore: 0, stageKey: "characters", status: "locked" },
+      { readinessScore: 0, stageKey: "plot_arcs", status: "locked" },
+      { readinessScore: 0, stageKey: "outline", status: "locked" },
+      { readinessScore: 0, stageKey: "chapters", status: "locked" },
+      { readinessScore: 0, stageKey: "memory_review", status: "locked" },
+      { readinessScore: 0, stageKey: "retrospective", status: "locked" },
+    ],
+  };
 }

@@ -80,6 +80,187 @@ describe("ShellLayout", () => {
     expect(await screen.findByRole("heading", { name: "雾都案卷" })).toBeInTheDocument();
   });
 
+  it("drives the creative path from brief to outline-based draft commands", async () => {
+    const project = createProject();
+    const creativePath = createCreativePathBoard();
+    const chapters: Array<{
+      content: string;
+      id: string;
+      title: string;
+      version: number;
+    }> = [];
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters,
+            creativePath,
+            memoryCandidates: [],
+            project,
+            workOrders: [],
+          });
+        case "brief.save":
+          creativePath.brief = {
+            ...creativePath.brief,
+            genre: request.payload.genre as string,
+            initialIdea: (request.payload.initialIdea as string | undefined) ?? "",
+          };
+          return rpcSuccess(request.id, creativePath.brief);
+        case "brief.confirm":
+          creativePath.brief = { ...creativePath.brief, status: "confirmed" };
+          return rpcSuccess(request.id, creativePath.brief);
+        case "blueprint.generate":
+          creativePath.blueprint = {
+            antagonistForce: "旧城钟楼背后的既得利益者。",
+            corePromise: "每三章给出一条硬线索和一次反转。",
+            differentiators: ["旧信谜题与人物成长绑定。"],
+            id: "blueprint_1",
+            logline: "旧信把主角拖回十年前的钟楼旧案。",
+            mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+            premise: "雨夜旧信揭开旧城钟楼案。",
+            protagonistArc: "从逃避旧案到主动承担代价。",
+            risks: ["线索密度不足会削弱悬疑感。"],
+            status: "draft",
+          };
+          return rpcSuccess(request.id, {
+            artifact: { id: "artifact_blueprint_1", status: "pending" },
+            blueprint: creativePath.blueprint,
+          });
+        case "blueprint.apply":
+          creativePath.blueprint = { ...creativePath.blueprint!, status: "applied" };
+          return rpcSuccess(request.id, creativePath.blueprint);
+        case "outline.generate":
+          creativePath.outlines = [
+            {
+              id: "outline_1",
+              scope: "chapter_batch",
+              status: "draft",
+              title: "前 10 章章纲",
+            },
+          ];
+          creativePath.chapterOutlines = [
+            {
+              chapterGoal: "用雨夜旧信建立开局钩子。",
+              chapterId: null,
+              conflict: "主角想逃离旧案，旧信逼迫她回头。",
+              hook: "信纸水印指向十年前钟楼。",
+              id: "chapter_outline_1",
+              informationGain: "读者知道旧信与钟楼旧案有关。",
+              status: "draft",
+              title: "第 1 章：开局钩子",
+            },
+          ];
+          return rpcSuccess(request.id, {
+            artifact: { id: "artifact_outline_1", status: "pending" },
+            chapterOutlines: creativePath.chapterOutlines,
+            outline: creativePath.outlines[0],
+          });
+        case "outline.approveChapterOutline":
+          creativePath.chapterOutlines = creativePath.chapterOutlines.map((chapterOutline) => ({
+            ...chapterOutline,
+            status:
+              chapterOutline.id === request.payload.chapterOutlineId
+                ? "approved"
+                : chapterOutline.status,
+          }));
+          return rpcSuccess(request.id, creativePath.chapterOutlines[0]);
+        case "outline.applyChapterOutline":
+          creativePath.chapterOutlines = creativePath.chapterOutlines.map((chapterOutline) => ({
+            ...chapterOutline,
+            chapterId:
+              chapterOutline.id === request.payload.chapterOutlineId
+                ? "chapter_1"
+                : chapterOutline.chapterId,
+            status:
+              chapterOutline.id === request.payload.chapterOutlineId
+                ? "applied"
+                : chapterOutline.status,
+          }));
+          chapters.push({
+            content: "",
+            id: "chapter_1",
+            title: "第 1 章：开局钩子",
+            version: 0,
+          });
+          return rpcSuccess(request.id, {
+            chapter: chapters[0],
+            chapterOutline: creativePath.chapterOutlines[0],
+          });
+        case "chapter.generateDraftFromOutline":
+          return rpcSuccess(request.id, {
+            artifact: { id: "artifact_draft_1", status: "pending", title: "AI 章节草稿" },
+            memoryCandidates: [],
+            workflowRun: { id: "run_1", status: "completed" },
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("tab", { name: "创作路径" })).toBeInTheDocument();
+    expect(screen.getAllByText("大纲设计").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存立项" }));
+    await waitFor(() => {
+      expect(rpcPayload("brief.save")).toMatchObject({
+        genre: "悬疑",
+        projectId: "project_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "确认立项" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成创作蓝图" }));
+    await screen.findByText("雨夜旧信揭开旧城钟楼案。");
+    fireEvent.click(screen.getByRole("button", { name: "应用蓝图" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成前 10 章章纲" }));
+    await screen.findByText("第 1 章：开局钩子");
+    fireEvent.click(screen.getByRole("button", { name: /批准章纲/ }));
+    fireEvent.click(screen.getByRole("button", { name: /应用为空章节/ }));
+    fireEvent.click(screen.getByRole("button", { name: /基于章纲生成草稿/ }));
+
+    await waitFor(() => {
+      expect(rpcPayload("brief.confirm")).toMatchObject({
+        briefId: "brief_1",
+        projectId: "project_1",
+      });
+      expect(rpcPayload("blueprint.generate")).toMatchObject({ projectId: "project_1" });
+      expect(rpcPayload("blueprint.apply")).toMatchObject({
+        blueprintId: "blueprint_1",
+        projectId: "project_1",
+      });
+      expect(rpcPayload("outline.generate")).toMatchObject({
+        chapterCount: 10,
+        projectId: "project_1",
+        scope: "chapter_batch",
+      });
+      expect(rpcPayload("outline.approveChapterOutline")).toMatchObject({
+        chapterOutlineId: "chapter_outline_1",
+        projectId: "project_1",
+      });
+      expect(rpcPayload("outline.applyChapterOutline")).toMatchObject({
+        chapterOutlineId: "chapter_outline_1",
+        projectId: "project_1",
+      });
+      expect(rpcPayload("chapter.generateDraftFromOutline")).toMatchObject({
+        chapterOutlineId: "chapter_outline_1",
+        projectId: "project_1",
+      });
+    });
+  });
+
   it("sends chapter and memory actions through typed RPC commands", async () => {
     const project = createProject();
     const chapter = {
@@ -156,6 +337,7 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
+    fireEvent.click(await screen.findByRole("tab", { name: "章节生产" }));
     fireEvent.change(await screen.findByLabelText("章节正文"), {
       target: { value: "更新后的章节正文。" },
     });
@@ -431,6 +613,7 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
+    fireEvent.click(await screen.findByRole("tab", { name: "章节生产" }));
     await screen.findByLabelText("章节正文");
 
     fireEvent.click(screen.getByRole("button", { name: "新建章节" }));
@@ -537,6 +720,7 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
+    fireEvent.click(await screen.findByRole("tab", { name: "章节生产" }));
     await screen.findByLabelText("章节正文");
     fireEvent.click(screen.getByRole("button", { name: "项目看板" }));
     fireEvent.click(await screen.findByRole("tab", { name: /图谱/ }));
@@ -558,6 +742,56 @@ interface TestRpcRequest {
   readonly id: string;
   readonly command: string;
   readonly payload: Record<string, unknown>;
+}
+
+interface TestCreativePathBoard {
+  stages: Array<{
+    readinessScore: number;
+    stageKey: string;
+    status: string;
+  }>;
+  brief: {
+    emotionalRewards: string[];
+    forbiddenDirections: string[];
+    genre: string;
+    id: string;
+    initialIdea: string;
+    lengthProfile: string;
+    narrativePov: string;
+    platformProfile: string;
+    status: string;
+    subgenres: string[];
+    targetAudience: string;
+  };
+  blueprint: null | {
+    antagonistForce: string;
+    corePromise: string;
+    differentiators: string[];
+    id: string;
+    logline: string;
+    mainConflict: string;
+    premise: string;
+    protagonistArc: string;
+    risks: string[];
+    status: string;
+  };
+  outlines: Array<{
+    id: string;
+    scope: string;
+    status: string;
+    title: string;
+  }>;
+  chapterOutlines: Array<{
+    chapterGoal: string;
+    chapterId: null | string;
+    conflict: string;
+    hook: string;
+    id: string;
+    informationGain: string;
+    status: string;
+    title: string;
+  }>;
+  reviewIssues: unknown[];
 }
 
 function getRpcRequest(args: unknown): TestRpcRequest {
@@ -589,5 +823,38 @@ function createProject() {
     title: "雾都案卷",
     updatedAt: 1,
     workId: "work_1",
+  };
+}
+
+function createCreativePathBoard(): TestCreativePathBoard {
+  return {
+    blueprint: null,
+    brief: {
+      emotionalRewards: ["悬疑", "反转"],
+      forbiddenDirections: [],
+      genre: "悬疑",
+      id: "brief_1",
+      initialIdea: "雨夜旧信把主角拖回十年前的钟楼旧案。",
+      lengthProfile: "长篇连载",
+      narrativePov: "第三人称",
+      platformProfile: "男频",
+      status: "draft",
+      subgenres: ["探案单元剧"],
+      targetAudience: "悬疑强钩子",
+    },
+    chapterOutlines: [],
+    outlines: [],
+    reviewIssues: [],
+    stages: [
+      { readinessScore: 20, stageKey: "brief", status: "available" },
+      { readinessScore: 0, stageKey: "blueprint", status: "locked" },
+      { readinessScore: 0, stageKey: "worldbuilding", status: "locked" },
+      { readinessScore: 0, stageKey: "characters", status: "locked" },
+      { readinessScore: 0, stageKey: "plot_arcs", status: "locked" },
+      { readinessScore: 0, stageKey: "outline", status: "locked" },
+      { readinessScore: 0, stageKey: "chapters", status: "locked" },
+      { readinessScore: 0, stageKey: "memory_review", status: "locked" },
+      { readinessScore: 0, stageKey: "retrospective", status: "locked" },
+    ],
   };
 }

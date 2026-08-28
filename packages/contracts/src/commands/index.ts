@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
 import { chapterCommandSchemas } from "./chapter.js";
-import { creativeCommandSchemas } from "./creative.js";
+import { creativeCommandSchemas, creativePathCommandSchemas } from "./creative.js";
 import { memoryCommandSchemas } from "./memory.js";
 import { projectCommandSchemas } from "./project.js";
 import { workflowCommandSchemas } from "./workflow.js";
@@ -15,6 +15,14 @@ export const MVP_COMMAND_NAMES = [
   "project.backup",
   "workbench.getSnapshot",
   "workbench.getBoard",
+  "creativeStage.getPath",
+  "brief.save",
+  "brief.confirm",
+  "blueprint.generate",
+  "blueprint.apply",
+  "outline.generate",
+  "outline.approveChapterOutline",
+  "outline.applyChapterOutline",
   "chapter.list",
   "chapter.get",
   "chapter.create",
@@ -22,6 +30,7 @@ export const MVP_COMMAND_NAMES = [
   "chapter.listVersions",
   "chapter.restoreVersion",
   "chapter.generateDraft",
+  "chapter.generateDraftFromOutline",
   "chapter.reviewContinuity",
   "character.list",
   "character.create",
@@ -62,6 +71,7 @@ export type CommandName = (typeof MVP_COMMAND_NAMES)[number];
 
 export const commandSchemas = {
   ...projectCommandSchemas,
+  ...creativePathCommandSchemas,
   ...chapterCommandSchemas,
   ...creativeCommandSchemas,
   ...workflowCommandSchemas,

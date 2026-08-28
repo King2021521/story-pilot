@@ -8,6 +8,7 @@ import {
   DomainEventRepository,
   MemoryRepository,
   ModelCallRepository,
+  OutlineRepository,
   WorkflowRepository,
   type ArtifactRecord,
   type ChapterRecord,
@@ -68,6 +69,12 @@ export interface GenerateChapterDraftInput {
   readonly chapterId: string;
   readonly instruction?: string;
   readonly relatedEntityIds?: readonly string[];
+}
+
+export interface GenerateChapterDraftFromOutlineInput {
+  readonly projectId: string;
+  readonly chapterOutlineId: string;
+  readonly instruction?: string;
 }
 
 export interface GenerateChapterDraftResult {
@@ -471,4 +478,106 @@ export class ChapterService {
       projectDatabase.close();
     }
   }
+
+  async generateDraftFromOutline(
+    input: GenerateChapterDraftFromOutlineInput,
+  ): Promise<GenerateChapterDraftResult> {
+    let chapterId: string;
+    let outlineInstruction: string;
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const outlineRepository = new OutlineRepository(projectDatabase);
+      const chapterOutline = outlineRepository.getChapterOutline(
+        input.projectId,
+        input.chapterOutlineId,
+      );
+      if (!chapterOutline) {
+        throw new Error(`CHAPTER_OUTLINE_REQUIRED: ${input.chapterOutlineId}`);
+      }
+      if (chapterOutline.status !== "approved" && chapterOutline.status !== "applied") {
+        throw new Error(`CHAPTER_OUTLINE_REQUIRED: ${input.chapterOutlineId}`);
+      }
+
+      if (chapterOutline.chapterId) {
+        chapterId = chapterOutline.chapterId;
+      } else {
+        chapterId = outlineRepository.applyChapterOutline({
+          chapterId: randomUUID(),
+          chapterOutlineId: input.chapterOutlineId,
+          projectId: input.projectId,
+        }).chapter.id;
+      }
+
+      outlineInstruction = [
+        `基于章纲生成正文：${chapterOutline.title}`,
+        `本章目标：${chapterOutline.chapterGoal}`,
+        chapterOutline.conflict ? `本章冲突：${chapterOutline.conflict}` : "",
+        chapterOutline.informationGain ? `信息增量：${chapterOutline.informationGain}` : "",
+        chapterOutline.hook ? `章节钩子：${chapterOutline.hook}` : "",
+        input.instruction ?? "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    } finally {
+      projectDatabase.close();
+    }
+
+    const result = await this.generateDraft({
+      chapterId,
+      instruction: outlineInstruction,
+      projectId: input.projectId,
+    });
+
+    const metadataDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const existingMetadata = parseJsonRecord(result.artifact.metadata);
+      metadataDatabase.client
+        .prepare(
+          "update artifacts set metadata = ?, updated_at = ? where project_id = ? and id = ?",
+        )
+        .run(
+          JSON.stringify({
+            ...existingMetadata,
+            chapterOutlineId: input.chapterOutlineId,
+          }),
+          Date.now(),
+          input.projectId,
+          result.artifact.id,
+        );
+      new DomainEventRepository(metadataDatabase).append({
+        aggregateId: result.artifact.id,
+        aggregateType: "artifact",
+        eventId: randomUUID(),
+        eventType: "chapter_draft.generated_from_outline",
+        payload: {
+          chapterId,
+          chapterOutlineId: input.chapterOutlineId,
+        },
+        projectId: input.projectId,
+      });
+    } finally {
+      metadataDatabase.close();
+    }
+
+    return {
+      ...result,
+      artifact: {
+        ...result.artifact,
+        metadata: JSON.stringify({
+          ...parseJsonRecord(result.artifact.metadata),
+          chapterOutlineId: input.chapterOutlineId,
+        }),
+      },
+    };
+  }
+}
+
+function parseJsonRecord(value: string | null): Record<string, unknown> {
+  if (!value) {
+    return {};
+  }
+  const parsed: unknown = JSON.parse(value);
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
 }

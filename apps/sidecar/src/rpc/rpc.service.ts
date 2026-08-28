@@ -19,9 +19,11 @@ import {
   type GenerateChapterDraftInput,
 } from "../chapter/chapter.service.js";
 import { ElementCandidateService } from "../creative/element-candidate.service.js";
+import { CreativePathService } from "../creative-path/creative-path.service.js";
 import { GraphService } from "../graph/graph.service.js";
 import { HealthService } from "../health/health.service.js";
 import { MemoryService } from "../memory/memory.service.js";
+import { OutlineService } from "../outline/outline.service.js";
 import {
   ForeshadowingService,
   type CreateForeshadowingInput,
@@ -39,11 +41,13 @@ export class RpcService {
     private readonly artifactService: ArtifactService,
     private readonly characterService: CharacterService,
     private readonly chapterService: ChapterService,
+    private readonly creativePathService: CreativePathService,
     private readonly elementCandidateService: ElementCandidateService,
     private readonly foreshadowingService: ForeshadowingService,
     private readonly graphService: GraphService,
     private readonly healthService: HealthService,
     private readonly memoryService: MemoryService,
+    private readonly outlineService: OutlineService,
     private readonly plotlineService: PlotlineService,
     private readonly projectService: ProjectService,
     private readonly storyEventService: StoryEventService,
@@ -139,6 +143,51 @@ export class RpcService {
         const parsed = payload as CommandPayload<"workbench.getBoard">;
         return this.workbenchService.getBoard(parsed.projectId);
       }
+      case "creativeStage.getPath": {
+        const parsed = payload as CommandPayload<"creativeStage.getPath">;
+        return this.creativePathService.getPath(parsed.projectId);
+      }
+      case "brief.save": {
+        const parsed = payload as CommandPayload<"brief.save">;
+        return this.creativePathService.saveBrief({
+          emotionalRewards: parsed.emotionalRewards,
+          forbiddenDirections: parsed.forbiddenDirections,
+          genre: parsed.genre,
+          projectId: parsed.projectId,
+          subgenres: parsed.subgenres,
+          ...(parsed.initialIdea === undefined ? {} : { initialIdea: parsed.initialIdea }),
+          ...(parsed.lengthProfile === undefined ? {} : { lengthProfile: parsed.lengthProfile }),
+          ...(parsed.narrativePov === undefined ? {} : { narrativePov: parsed.narrativePov }),
+          ...(parsed.platformProfile === undefined
+            ? {}
+            : { platformProfile: parsed.platformProfile }),
+          ...(parsed.targetAudience === undefined ? {} : { targetAudience: parsed.targetAudience }),
+        });
+      }
+      case "brief.confirm": {
+        const parsed = payload as CommandPayload<"brief.confirm">;
+        return this.creativePathService.confirmBrief(parsed);
+      }
+      case "blueprint.generate": {
+        const parsed = payload as CommandPayload<"blueprint.generate">;
+        return this.creativePathService.generateBlueprint(parsed);
+      }
+      case "blueprint.apply": {
+        const parsed = payload as CommandPayload<"blueprint.apply">;
+        return this.creativePathService.applyBlueprint(parsed);
+      }
+      case "outline.generate": {
+        const parsed = payload as CommandPayload<"outline.generate">;
+        return this.outlineService.generate(parsed);
+      }
+      case "outline.approveChapterOutline": {
+        const parsed = payload as CommandPayload<"outline.approveChapterOutline">;
+        return this.outlineService.approveChapterOutline(parsed);
+      }
+      case "outline.applyChapterOutline": {
+        const parsed = payload as CommandPayload<"outline.applyChapterOutline">;
+        return this.outlineService.applyChapterOutline(parsed);
+      }
       case "chapter.list": {
         const parsed = payload as CommandPayload<"chapter.list">;
         return {
@@ -191,6 +240,14 @@ export class RpcService {
           ...(parsed.instruction === undefined ? {} : { instruction: parsed.instruction }),
         };
         return this.chapterService.generateDraft(input);
+      }
+      case "chapter.generateDraftFromOutline": {
+        const parsed = payload as CommandPayload<"chapter.generateDraftFromOutline">;
+        return this.chapterService.generateDraftFromOutline({
+          chapterOutlineId: parsed.chapterOutlineId,
+          projectId: parsed.projectId,
+          ...(parsed.instruction === undefined ? {} : { instruction: parsed.instruction }),
+        });
       }
       case "artifact.apply": {
         const parsed = payload as CommandPayload<"artifact.apply">;

@@ -39,9 +39,12 @@ export const chapterCommandSchemas = {
       })
       .optional(),
   }),
+  "chapter.generateDraftFromOutline": projectIdPayloadSchema.extend({
+    chapterOutlineId: z.string().min(1),
+    instruction: z.string().optional(),
+  }),
   "chapter.reviewContinuity": projectIdPayloadSchema.extend({
     chapterId: z.string().min(1),
     scope: z.enum(["chapter", "volume", "project"]).default("chapter"),
   }),
 };
-

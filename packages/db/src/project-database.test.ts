@@ -32,6 +32,16 @@ describe("project database", () => {
 
       expect(tables).toEqual(expect.arrayContaining(schemaTableNames));
       expect(tables).toContain("__story_pilot_migrations");
+      expect(tables).toEqual(
+        expect.arrayContaining([
+          "creative_stages",
+          "project_briefs",
+          "story_blueprints",
+          "outlines",
+          "chapter_outlines",
+          "review_issues",
+        ]),
+      );
     } finally {
       projectDatabase.close();
     }

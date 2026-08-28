@@ -3,11 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Test } from "@nestjs/testing";
-import {
-  createProjectDatabase,
-  MemoryRepository,
-  PROJECT_DATABASE_FILE,
-} from "@story-pilot/db";
+import { createProjectDatabase, MemoryRepository, PROJECT_DATABASE_FILE } from "@story-pilot/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ProjectModule } from "../project/project.module.js";
@@ -59,12 +55,14 @@ describe("MemoryService", () => {
           projectDatabase.client
             .prepare("select event_type, aggregate_id from domain_events where project_id = ?")
             .all(project.id),
-        ).toEqual([
-          expect.objectContaining({
-            aggregate_id: result.memory?.id,
-            event_type: "memory.confirmed",
-          }),
-        ]);
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              aggregate_id: result.memory?.id,
+              event_type: "memory.confirmed",
+            }),
+          ]),
+        );
       } finally {
         projectDatabase.close();
       }

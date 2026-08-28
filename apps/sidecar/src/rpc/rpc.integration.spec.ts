@@ -74,6 +74,315 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("initializes the nine-step creative path for new projects", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_path",
+          payload: {
+            genre: "玄幻",
+            style: "热血",
+            title: "万象夜行",
+          },
+        }),
+      );
+
+      const path = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.getPath",
+          id: "req_creative_path",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const stages = getRecordArray(path, "stages");
+
+      expect(stages.map((stage) => getString(stage, "stageKey"))).toEqual([
+        "brief",
+        "blueprint",
+        "worldbuilding",
+        "characters",
+        "plot_arcs",
+        "outline",
+        "chapters",
+        "memory_review",
+        "retrospective",
+      ]);
+      expect(stages[0]).toMatchObject({
+        readinessScore: 10,
+        stageKey: "brief",
+        status: "available",
+      });
+      expect(stages[5]).toMatchObject({
+        stageKey: "outline",
+        status: "locked",
+      });
+      expect(path).toMatchObject({
+        brief: expect.objectContaining({
+          genre: "玄幻",
+          status: "draft",
+        }),
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("backfills creative path stages on workbench board for existing project databases", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_backfill_path",
+          payload: { genre: "悬疑", title: "旧库迁移样例" },
+        }),
+      );
+      const projectId = getString(project, "id");
+      const projectDatabase = createProjectDatabase(
+        join(getString(project, "rootPath"), PROJECT_DATABASE_FILE),
+      );
+      try {
+        projectDatabase.client
+          .prepare("delete from creative_stages where project_id = ?")
+          .run(projectId);
+      } finally {
+        projectDatabase.close();
+      }
+
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_board_backfill_path",
+          payload: { projectId },
+        }),
+      );
+      const creativePath = getRecord(board, "creativePath");
+      const stages = getRecordArray(creativePath, "stages");
+
+      expect(stages.map((stage) => getString(stage, "stageKey"))).toEqual([
+        "brief",
+        "blueprint",
+        "worldbuilding",
+        "characters",
+        "plot_arcs",
+        "outline",
+        "chapters",
+        "memory_review",
+        "retrospective",
+      ]);
+      expect(getStage(creativePath, "brief")).toMatchObject({ status: "available" });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("runs the main creative path through chapter outline before drafting", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_path_project",
+          payload: {
+            genre: "悬疑",
+            style: "悬疑推理",
+            title: "雾都案卷",
+          },
+        }),
+      );
+      const projectId = getString(project, "id");
+
+      const initialPath = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.getPath",
+          id: "req_path_initial",
+          payload: { projectId },
+        }),
+      );
+      expect(getStage(initialPath, "brief")).toMatchObject({
+        readinessScore: 10,
+        status: "available",
+      });
+      expect(getStage(initialPath, "outline")).toMatchObject({ status: "locked" });
+
+      const savedBrief = await expectRpcOk(
+        rpcService.handle({
+          command: "brief.save",
+          id: "req_path_brief_save",
+          payload: {
+            emotionalRewards: ["悬疑", "反转"],
+            genre: "悬疑",
+            initialIdea: "雨夜旧信把主角拖回十年前的钟楼旧案。",
+            lengthProfile: "长篇连载",
+            narrativePov: "第三人称",
+            platformProfile: "男频",
+            projectId,
+            subgenres: ["探案单元剧"],
+            targetAudience: "悬疑强钩子",
+          },
+        }),
+      );
+      const confirmedBrief = await expectRpcOk(
+        rpcService.handle({
+          command: "brief.confirm",
+          id: "req_path_brief_confirm",
+          payload: {
+            briefId: getString(savedBrief, "id"),
+            projectId,
+          },
+        }),
+      );
+      const generatedBlueprint = await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.generate",
+          id: "req_path_blueprint_generate",
+          payload: { projectId },
+        }),
+      );
+      const blueprint = getRecord(generatedBlueprint, "blueprint");
+      const appliedBlueprint = await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.apply",
+          id: "req_path_blueprint_apply",
+          payload: {
+            blueprintId: getString(blueprint, "id"),
+            projectId,
+          },
+        }),
+      );
+      const generatedOutline = await expectRpcOk(
+        rpcService.handle({
+          command: "outline.generate",
+          id: "req_path_outline_generate",
+          payload: {
+            chapterCount: 10,
+            projectId,
+            scope: "chapter_batch",
+          },
+        }),
+      );
+      const firstChapterOutline = getRecordArray(generatedOutline, "chapterOutlines")[0];
+      const approvedOutline = await expectRpcOk(
+        rpcService.handle({
+          command: "outline.approveChapterOutline",
+          id: "req_path_outline_approve",
+          payload: {
+            chapterOutlineId: getString(firstChapterOutline, "id"),
+            projectId,
+          },
+        }),
+      );
+      const appliedOutline = await expectRpcOk(
+        rpcService.handle({
+          command: "outline.applyChapterOutline",
+          id: "req_path_outline_apply",
+          payload: {
+            chapterOutlineId: getString(firstChapterOutline, "id"),
+            projectId,
+          },
+        }),
+      );
+      const chapter = getRecord(appliedOutline, "chapter");
+      const draftResult = await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.generateDraftFromOutline",
+          id: "req_path_draft_from_outline",
+          payload: {
+            chapterOutlineId: getString(firstChapterOutline, "id"),
+            projectId,
+          },
+        }),
+      );
+      const draftArtifact = getRecord(draftResult, "artifact");
+      const appliedArtifact = await expectRpcOk(
+        rpcService.handle({
+          command: "artifact.apply",
+          id: "req_path_artifact_apply",
+          payload: {
+            applyMode: "replace",
+            artifactId: getString(draftArtifact, "id"),
+            projectId,
+            targetVersion: getNumber(chapter, "version"),
+          },
+        }),
+      );
+      const memoryCandidate = getRecordArray(draftResult, "memoryCandidates")[0];
+      const confirmedMemory = await expectRpcOk(
+        rpcService.handle({
+          command: "memory.confirm",
+          id: "req_path_memory_confirm",
+          payload: {
+            candidateId: getString(memoryCandidate, "id"),
+            decision: "canon",
+            projectId,
+          },
+        }),
+      );
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_path_final_board",
+          payload: { projectId },
+        }),
+      );
+      const creativePath = getRecord(board, "creativePath");
+
+      expect(confirmedBrief).toMatchObject({ status: "confirmed" });
+      expect(appliedBlueprint).toMatchObject({ status: "confirmed" });
+      expect(getRecordArray(generatedOutline, "chapterOutlines")).toHaveLength(10);
+      expect(approvedOutline).toMatchObject({ status: "approved" });
+      expect(appliedOutline).toMatchObject({
+        chapter: {
+          title: getString(firstChapterOutline, "title"),
+          version: 0,
+        },
+        chapterOutline: {
+          chapterId: getString(chapter, "id"),
+          status: "applied",
+        },
+      });
+      expect(draftArtifact).toMatchObject({
+        kind: "chapter_draft",
+        status: "pending",
+        targetId: getString(chapter, "id"),
+        targetType: "chapter",
+      });
+      expect(getString(draftArtifact, "metadata")).toContain(getString(firstChapterOutline, "id"));
+      expect(appliedArtifact).toMatchObject({
+        artifact: { status: "applied" },
+        chapter: {
+          content: expect.stringContaining("旧信"),
+          version: 1,
+        },
+      });
+      expect(confirmedMemory).toMatchObject({
+        memory: { status: "canon" },
+      });
+      expect(getStage(creativePath, "brief")).toMatchObject({ status: "completed" });
+      expect(getStage(creativePath, "blueprint")).toMatchObject({ status: "completed" });
+      expect(getStage(creativePath, "outline")).toMatchObject({ status: "completed" });
+      expect(getStage(creativePath, "chapters")).toMatchObject({ status: "available" });
+      expect(getRecordArray(creativePath, "chapterOutlines")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            chapterId: getString(chapter, "id"),
+            status: "applied",
+          }),
+        ]),
+      );
+      expect(getRecordArray(board, "chapters")).toEqual([
+        expect.objectContaining({
+          id: getString(chapter, "id"),
+          version: 1,
+        }),
+      ]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("supports project, workbench, and chapter read commands after local writes", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
@@ -1117,6 +1426,17 @@ function getRecordArray(value: unknown, field: string): Record<string, unknown>[
   return child.filter(
     (item): item is Record<string, unknown> => typeof item === "object" && item !== null,
   );
+}
+
+function getStage(value: unknown, stageKey: string): Record<string, unknown> {
+  const stage = getRecordArray(value, "stages").find(
+    (candidate) => candidate.stageKey === stageKey,
+  );
+  if (!stage) {
+    throw new Error(`Expected stage ${stageKey}`);
+  }
+
+  return stage;
 }
 
 function getString(value: unknown, field: string): string {

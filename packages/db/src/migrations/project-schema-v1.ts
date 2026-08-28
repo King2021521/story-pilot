@@ -1,5 +1,245 @@
 export const INITIAL_PROJECT_SCHEMA_MIGRATION_ID = "0001_project_schema_v1";
 
+export const CREATIVE_PATH_SCHEMA_SQL = `
+create table if not exists creative_stages (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  stage_key text not null,
+  status text not null default 'locked',
+  readiness_score integer not null default 0,
+  gate_report_json text not null default '{}',
+  current_work_order_id text,
+  completed_at integer,
+  created_at integer not null,
+  updated_at integer not null,
+  unique (project_id, stage_key)
+);
+
+create table if not exists project_briefs (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  genre text not null,
+  subgenres_json text not null default '[]',
+  target_audience text,
+  platform_profile text,
+  length_profile text,
+  narrative_pov text,
+  emotional_rewards_json text not null default '[]',
+  initial_idea text,
+  forbidden_directions_json text not null default '[]',
+  status text not null default 'draft',
+  version integer not null default 1,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists story_blueprints (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  premise text not null,
+  logline text not null,
+  core_promise text not null,
+  main_conflict text not null,
+  protagonist_arc text,
+  antagonist_force text,
+  differentiators_json text not null default '[]',
+  risks_json text not null default '[]',
+  status text not null default 'draft',
+  version integer not null default 1,
+  source_artifact_id text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists power_systems (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  name text not null,
+  kind text not null default 'other',
+  source text,
+  cost text,
+  levels_json text not null default '[]',
+  taboos_json text not null default '[]',
+  conflict_hooks_json text not null default '[]',
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists character_relations (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  source_character_id text not null references characters(id) on delete cascade,
+  target_character_id text not null references characters(id) on delete cascade,
+  relation_type text not null,
+  public_label text,
+  hidden_label text,
+  tension integer not null default 3,
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists character_arcs (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  character_id text not null references characters(id) on delete cascade,
+  start_state text not null,
+  false_belief text,
+  desire text,
+  need text,
+  turning_points_json text not null default '[]',
+  end_state text,
+  status text not null default 'planned',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists conflicts (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  title text not null,
+  conflict_type text not null,
+  opposing_forces_json text not null default '[]',
+  stakes text not null,
+  escalation_path_json text not null default '[]',
+  related_plotline_id text,
+  status text not null default 'planned',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists outlines (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  title text not null,
+  scope text not null default 'chapter_batch',
+  basis_json text not null default '{}',
+  status text not null default 'draft',
+  version integer not null default 1,
+  source_artifact_id text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists volume_outlines (
+  id text primary key,
+  outline_id text not null references outlines(id) on delete cascade,
+  volume_id text references volumes(id) on delete set null,
+  title text not null,
+  purpose text not null,
+  major_conflict text,
+  climax text,
+  word_count_goal integer,
+  sort_order integer not null,
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists chapter_outlines (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  outline_id text not null references outlines(id) on delete cascade,
+  volume_outline_id text references volume_outlines(id) on delete set null,
+  chapter_id text references chapters(id) on delete set null,
+  title text not null,
+  chapter_goal text not null,
+  conflict text,
+  information_gain text,
+  emotional_turn text,
+  hook text,
+  required_character_ids_json text not null default '[]',
+  required_location_ids_json text not null default '[]',
+  related_plotline_node_ids_json text not null default '[]',
+  related_foreshadowing_ids_json text not null default '[]',
+  target_word_count integer,
+  sort_order integer not null,
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists scene_outlines (
+  id text primary key,
+  chapter_outline_id text not null references chapter_outlines(id) on delete cascade,
+  scene_id text references scenes(id) on delete set null,
+  title text not null,
+  purpose text not null,
+  beat_type text not null,
+  pov_character_id text,
+  location_id text,
+  conflict text,
+  entry_state text,
+  exit_state text,
+  sort_order integer not null,
+  status text not null default 'draft',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists review_issues (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  target_type text not null,
+  target_id text not null,
+  issue_type text not null,
+  severity text not null default 'info',
+  message text not null,
+  evidence_json text not null default '{}',
+  suggested_fix_json text,
+  status text not null default 'open',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists retrospectives (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  scope text not null,
+  scope_ref_json text not null default '{}',
+  progress_summary text not null,
+  deviation_report_json text not null default '{}',
+  unresolved_items_json text not null default '[]',
+  next_actions_json text not null default '[]',
+  status text not null default 'draft',
+  source_artifact_id text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create index if not exists creative_stages_project_id_idx on creative_stages(project_id);
+create index if not exists creative_stages_stage_key_idx on creative_stages(project_id, stage_key);
+create index if not exists project_briefs_project_id_idx on project_briefs(project_id);
+create index if not exists project_briefs_status_idx on project_briefs(project_id, status);
+create index if not exists story_blueprints_project_id_idx on story_blueprints(project_id);
+create index if not exists story_blueprints_status_idx on story_blueprints(project_id, status);
+create index if not exists power_systems_project_id_idx on power_systems(project_id);
+create index if not exists power_systems_kind_idx on power_systems(project_id, kind);
+create index if not exists character_relations_project_id_idx on character_relations(project_id);
+create index if not exists character_relations_source_idx on character_relations(source_character_id);
+create index if not exists character_relations_target_idx on character_relations(target_character_id);
+create index if not exists character_arcs_project_id_idx on character_arcs(project_id);
+create index if not exists character_arcs_character_id_idx on character_arcs(character_id);
+create index if not exists conflicts_project_id_idx on conflicts(project_id);
+create index if not exists conflicts_status_idx on conflicts(project_id, status);
+create index if not exists outlines_project_id_idx on outlines(project_id);
+create index if not exists outlines_status_idx on outlines(project_id, status);
+create index if not exists volume_outlines_outline_id_idx on volume_outlines(outline_id);
+create index if not exists volume_outlines_sort_order_idx on volume_outlines(outline_id, sort_order);
+create index if not exists chapter_outlines_project_id_idx on chapter_outlines(project_id);
+create index if not exists chapter_outlines_outline_order_idx on chapter_outlines(outline_id, sort_order);
+create index if not exists chapter_outlines_status_idx on chapter_outlines(project_id, status);
+create index if not exists chapter_outlines_chapter_id_idx on chapter_outlines(chapter_id);
+create index if not exists scene_outlines_chapter_outline_id_idx on scene_outlines(chapter_outline_id);
+create index if not exists scene_outlines_sort_order_idx on scene_outlines(chapter_outline_id, sort_order);
+create index if not exists review_issues_project_id_idx on review_issues(project_id);
+create index if not exists review_issues_target_idx on review_issues(target_type, target_id);
+create index if not exists review_issues_status_idx on review_issues(project_id, status);
+create index if not exists retrospectives_project_id_idx on retrospectives(project_id);
+create index if not exists retrospectives_status_idx on retrospectives(project_id, status);
+`;
+
 export const INITIAL_PROJECT_SCHEMA_SQL = `
 create table if not exists projects (
   id text primary key,
@@ -412,6 +652,8 @@ create table if not exists projection_checkpoints (
   rebuilt_at integer,
   updated_at integer not null
 );
+
+${CREATIVE_PATH_SCHEMA_SQL}
 
 create index if not exists projects_status_idx on projects(status);
 create index if not exists projects_opened_at_idx on projects(opened_at);

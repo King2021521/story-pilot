@@ -5,6 +5,8 @@ import { basename, join } from "node:path";
 import { Injectable } from "@nestjs/common";
 import {
   createProjectDatabase,
+  CreativePathRepository,
+  DomainEventRepository,
   PROJECT_DATABASE_FILE,
   ProjectRepository,
   runProjectMigrations,
@@ -66,6 +68,36 @@ export class ProjectService {
         ...(style === undefined || style.length === 0 ? {} : { style }),
         ...(input.logline === undefined ? {} : { logline: input.logline }),
         ...(input.wordCountGoal === undefined ? {} : { wordCountGoal: input.wordCountGoal }),
+      });
+      const now = Date.now();
+      const creativePathRepository = new CreativePathRepository(projectDatabase);
+      const stages = creativePathRepository.initializePath(project.id, now);
+      const brief = creativePathRepository.saveBrief({
+        briefId: randomUUID(),
+        genre,
+        projectId: project.id,
+        subgenres: [],
+        now,
+        ...(input.logline === undefined ? {} : { initialIdea: input.logline }),
+      });
+      const domainEventRepository = new DomainEventRepository(projectDatabase);
+      domainEventRepository.append({
+        aggregateId: project.id,
+        aggregateType: "creative_path",
+        eventId: randomUUID(),
+        eventType: "creative_stage.initialized",
+        payload: { stageKeys: stages.map((stage) => stage.stageKey) },
+        projectId: project.id,
+        now,
+      });
+      domainEventRepository.append({
+        aggregateId: brief.id,
+        aggregateType: "project_brief",
+        eventId: randomUUID(),
+        eventType: "project_brief.saved",
+        payload: { genre: brief.genre, status: brief.status, version: brief.version },
+        projectId: project.id,
+        now,
       });
       await this.projectStorage.upsertProjectIndex(project);
 

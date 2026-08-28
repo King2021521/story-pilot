@@ -3,7 +3,9 @@ import {
   ArtifactRepository,
   ChapterRepository,
   CharacterRepository,
+  CreativePathRepository,
   MemoryRepository,
+  OutlineRepository,
   PlotRepository,
   ProjectRepository,
   WorkflowRepository,
@@ -31,6 +33,7 @@ export interface WorkbenchBoard {
   readonly project: unknown;
   readonly chapters: readonly unknown[];
   readonly characters: readonly unknown[];
+  readonly creativePath: unknown;
   readonly artifacts: readonly unknown[];
   readonly foreshadowings: readonly unknown[];
   readonly items: readonly unknown[];
@@ -89,10 +92,22 @@ export class WorkbenchService {
     const projectDatabase = await this.projectStorage.openProjectDatabase(projectId);
     try {
       const worldRepository = new WorldRepository(projectDatabase);
+      const creativePathRepository = new CreativePathRepository(projectDatabase);
+      const outlineRepository = new OutlineRepository(projectDatabase);
+      if (creativePathRepository.listStages(projectId).length === 0) {
+        creativePathRepository.initializePath(projectId);
+      }
+      const creativePath = creativePathRepository.getPath(projectId);
       return {
         artifacts: new ArtifactRepository(projectDatabase).listByProject({ projectId }),
         chapters: new ChapterRepository(projectDatabase).listChapters({ projectId }),
         characters: new CharacterRepository(projectDatabase).listCharacters(projectId),
+        creativePath: {
+          ...creativePath,
+          chapterOutlines: outlineRepository.listChapterOutlines(projectId),
+          outlines: outlineRepository.listOutlines(projectId),
+          reviewIssues: [],
+        },
         foreshadowings: new PlotRepository(projectDatabase).listForeshadowings(projectId),
         items: worldRepository.listItems(projectId),
         locations: worldRepository.listLocations(projectId),

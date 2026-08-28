@@ -13,6 +13,14 @@ describe("command registry", () => {
       "project.backup",
       "workbench.getSnapshot",
       "workbench.getBoard",
+      "creativeStage.getPath",
+      "brief.save",
+      "brief.confirm",
+      "blueprint.generate",
+      "blueprint.apply",
+      "outline.generate",
+      "outline.approveChapterOutline",
+      "outline.applyChapterOutline",
       "chapter.list",
       "chapter.get",
       "chapter.create",
@@ -20,6 +28,7 @@ describe("command registry", () => {
       "chapter.listVersions",
       "chapter.restoreVersion",
       "chapter.generateDraft",
+      "chapter.generateDraftFromOutline",
       "chapter.reviewContinuity",
       "character.list",
       "character.create",
@@ -119,6 +128,52 @@ describe("command registry", () => {
           type: "weapon",
         },
       ],
+      projectId: "proj_1",
+    });
+  });
+
+  it("parses creative path and outline payloads", () => {
+    expect(
+      parseCommandPayload("brief.save", {
+        emotionalRewards: ["爽点", "悬疑"],
+        forbiddenDirections: ["不要系统流"],
+        genre: "玄幻",
+        initialIdea: "少年发现旧都遗物。",
+        lengthProfile: "长篇连载",
+        narrativePov: "第三人称",
+        platformProfile: "男频",
+        projectId: "proj_1",
+        subgenres: ["废柴逆袭"],
+        targetAudience: "男频爽文",
+      }),
+    ).toMatchObject({
+      genre: "玄幻",
+      initialIdea: "少年发现旧都遗物。",
+      subgenres: ["废柴逆袭"],
+      targetAudience: "男频爽文",
+    });
+
+    expect(
+      parseCommandPayload("outline.generate", {
+        chapterCount: 10,
+        projectId: "proj_1",
+        scope: "chapter_batch",
+      }),
+    ).toEqual({
+      chapterCount: 10,
+      projectId: "proj_1",
+      scope: "chapter_batch",
+    });
+
+    expect(
+      parseCommandPayload("chapter.generateDraftFromOutline", {
+        chapterOutlineId: "chapter_outline_1",
+        instruction: "强化悬疑钩子",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      chapterOutlineId: "chapter_outline_1",
+      instruction: "强化悬疑钩子",
       projectId: "proj_1",
     });
   });

@@ -21,6 +21,38 @@ const elementCandidateSchema = z.object({
   tags: z.array(z.string().min(1)).default([]),
 });
 
+export const creativePathCommandSchemas = {
+  "creativeStage.getPath": projectIdPayloadSchema,
+  "brief.save": projectIdPayloadSchema.extend({
+    genre: z.string().min(1),
+    subgenres: z.array(z.string().min(1)).default([]),
+    targetAudience: z.string().min(1).optional(),
+    platformProfile: z.string().min(1).optional(),
+    lengthProfile: z.string().min(1).optional(),
+    narrativePov: z.string().min(1).optional(),
+    emotionalRewards: z.array(z.string().min(1)).default([]),
+    initialIdea: z.string().optional(),
+    forbiddenDirections: z.array(z.string().min(1)).default([]),
+  }),
+  "brief.confirm": projectIdPayloadSchema.extend({
+    briefId: z.string().min(1),
+  }),
+  "blueprint.generate": projectIdPayloadSchema,
+  "blueprint.apply": projectIdPayloadSchema.extend({
+    blueprintId: z.string().min(1),
+  }),
+  "outline.generate": projectIdPayloadSchema.extend({
+    scope: z.enum(["full_book", "volume", "arc", "chapter_batch"]).default("chapter_batch"),
+    chapterCount: z.union([z.literal(3), z.literal(5), z.literal(10)]).default(10),
+  }),
+  "outline.approveChapterOutline": projectIdPayloadSchema.extend({
+    chapterOutlineId: z.string().min(1),
+  }),
+  "outline.applyChapterOutline": projectIdPayloadSchema.extend({
+    chapterOutlineId: z.string().min(1),
+  }),
+};
+
 export const creativeCommandSchemas = {
   "character.list": projectIdPayloadSchema,
   "character.create": projectIdPayloadSchema.extend({

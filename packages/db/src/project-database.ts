@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 import {
+  CREATIVE_PATH_SCHEMA_SQL,
   INITIAL_PROJECT_SCHEMA_MIGRATION_ID,
   INITIAL_PROJECT_SCHEMA_SQL,
 } from "./migrations/project-schema-v1.js";
@@ -57,6 +58,7 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
   ensureTableColumn(projectDatabase, "projects", "style", "style text");
   ensureTableColumn(projectDatabase, "works", "style", "style text");
   ensureTableColumn(projectDatabase, "chapter_versions", "artifact_id", "artifact_id text");
+  projectDatabase.client.exec(CREATIVE_PATH_SCHEMA_SQL);
 }
 
 function ensureTableColumn(

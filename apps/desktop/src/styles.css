@@ -129,6 +129,79 @@ button {
   min-width: 0;
 }
 
+.creative-path-workbench {
+  display: grid;
+  gap: 16px;
+}
+
+.creative-path-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.creative-path-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.creative-path-steps,
+.creative-stage-section {
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.creative-path-steps {
+  padding: 18px;
+}
+
+.creative-stage-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.creative-stage-section h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.creative-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.creative-path-actions {
+  flex-wrap: wrap;
+}
+
+.chapter-outline-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chapter-outline-list__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #f0efec;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.chapter-outline-list__body {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
 .chapter-editor-page {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
@@ -315,6 +388,14 @@ button {
   .chapter-editor-page {
     grid-template-columns: 1fr;
   }
+
+  .creative-brief-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .chapter-outline-list__item {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 640px) {
@@ -326,5 +407,14 @@ button {
   .chapter-editor-page__header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .creative-path-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .creative-brief-grid {
+    grid-template-columns: 1fr;
   }
 }

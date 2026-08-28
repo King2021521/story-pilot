@@ -29,6 +29,38 @@ export class StoryPilotApiClient {
     return this.send("workbench.getBoard", input);
   }
 
+  getCreativePath(input: CommandPayload<"creativeStage.getPath">) {
+    return this.send("creativeStage.getPath", input);
+  }
+
+  saveBrief(input: CommandPayload<"brief.save">) {
+    return this.send("brief.save", input);
+  }
+
+  confirmBrief(input: CommandPayload<"brief.confirm">) {
+    return this.send("brief.confirm", input);
+  }
+
+  generateBlueprint(input: CommandPayload<"blueprint.generate">) {
+    return this.send("blueprint.generate", input);
+  }
+
+  applyBlueprint(input: CommandPayload<"blueprint.apply">) {
+    return this.send("blueprint.apply", input);
+  }
+
+  generateOutline(input: CommandPayload<"outline.generate">) {
+    return this.send("outline.generate", input);
+  }
+
+  approveChapterOutline(input: CommandPayload<"outline.approveChapterOutline">) {
+    return this.send("outline.approveChapterOutline", input);
+  }
+
+  applyChapterOutline(input: CommandPayload<"outline.applyChapterOutline">) {
+    return this.send("outline.applyChapterOutline", input);
+  }
+
   createProject(input: CommandPayload<"project.create">) {
     return this.send("project.create", input);
   }
@@ -59,6 +91,10 @@ export class StoryPilotApiClient {
 
   generateChapterDraft(input: CommandPayload<"chapter.generateDraft">) {
     return this.send("chapter.generateDraft", input);
+  }
+
+  generateChapterDraftFromOutline(input: CommandPayload<"chapter.generateDraftFromOutline">) {
+    return this.send("chapter.generateDraftFromOutline", input);
   }
 
   reviewChapterContinuity(input: CommandPayload<"chapter.reviewContinuity">) {
