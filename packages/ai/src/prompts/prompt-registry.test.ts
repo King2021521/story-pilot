@@ -14,6 +14,7 @@ describe("PromptRegistry", () => {
     const content = messages.map((message) => message.content).join("\n");
 
     expect(prompt.version).toBe("v1");
+    expect(prompt.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(content).toContain("不得直接修改正文章节");
     expect(content).toContain("输出必须是 JSON");
     expect(content).toContain("chapter_draft");

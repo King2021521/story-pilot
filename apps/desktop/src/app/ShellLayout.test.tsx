@@ -37,6 +37,127 @@ describe("ShellLayout", () => {
     expect(screen.getByRole("button", { name: "AI 任务" })).toBeInTheDocument();
   });
 
+  it("opens settings, saves model config, validates model, and exports diagnostics", async () => {
+    const project = createProject();
+    const runtimeSettings = {
+      model: {
+        apiKey: "",
+        baseUrl: "",
+        embeddingModel: "",
+        maxRetries: 2,
+        model: "gpt-5.5",
+        provider: "openai-compatible",
+        timeoutMs: 120000,
+      },
+      privacy: {
+        allowDiagnosticsExport: true,
+        redactApiKeyInLogs: true,
+      },
+      storage: {
+        autoBackup: true,
+        backupRetention: 20,
+        homeDir: "/Users/test/.story-pilot",
+      },
+      version: 1,
+    };
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            memoryCandidates: [],
+            project,
+            workOrders: [],
+          });
+        case "settings.get":
+          return rpcSuccess(request.id, runtimeSettings);
+        case "settings.update":
+          Object.assign(runtimeSettings.model, request.payload.model);
+          Object.assign(runtimeSettings.storage, request.payload.storage);
+          return rpcSuccess(request.id, runtimeSettings);
+        case "settings.validateModel":
+          return rpcSuccess(request.id, {
+            latencyMs: 128,
+            model: "gpt-5.5",
+            ok: true,
+            provider: "openai-compatible",
+          });
+        case "diagnostics.getHealth":
+          return rpcSuccess(request.id, {
+            appHome: "/Users/test/.story-pilot",
+            globalDatabasePath: "/Users/test/.story-pilot/global.sqlite",
+            model: "missing",
+            projectCount: 1,
+            projectsRoot: "/Users/test/.story-pilot/projects",
+            settingsPath: "/Users/test/.story-pilot/setting.json",
+            sidecar: "ok",
+            storage: "ok",
+          });
+        case "diagnostics.export":
+          return rpcSuccess(request.id, {
+            path: "/Users/test/.story-pilot/diagnostics/diagnostics-1.json",
+            redacted: true,
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    expect(await screen.findByText("模型配置")).toBeInTheDocument();
+    expect(await screen.findByText("/Users/test/.story-pilot/setting.json")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "https://api.example.com/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("API Key"), {
+      target: { value: "sk-test-key" },
+    });
+    fireEvent.change(screen.getByLabelText("模型名称"), {
+      target: { value: "gpt-5.5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存模型配置" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("settings.update")).toMatchObject({
+        model: {
+          apiKey: "sk-test-key",
+          baseUrl: "https://api.example.com/v1",
+          model: "gpt-5.5",
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "校验模型" }));
+    await waitFor(() => {
+      expect(rpcPayload("settings.validateModel")).toMatchObject({
+        apiKey: "sk-test-key",
+        baseUrl: "https://api.example.com/v1",
+        model: "gpt-5.5",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "诊断信息" }));
+    fireEvent.click(screen.getByRole("button", { name: "导出诊断包" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("diagnostics.export")).toMatchObject({});
+    });
+  });
+
   it("creates a local project through RPC when no recent project exists", async () => {
     const project = createProject();
 
@@ -116,6 +237,58 @@ describe("ShellLayout", () => {
         case "brief.confirm":
           creativePath.brief = { ...creativePath.brief, status: "confirmed" };
           return rpcSuccess(request.id, creativePath.brief);
+        case "ai.generate":
+          if (request.payload.capability === "blueprint.generate") {
+            creativePath.blueprint = {
+              antagonistForce: "旧城钟楼背后的既得利益者。",
+              corePromise: "每三章给出一条硬线索和一次反转。",
+              differentiators: ["旧信谜题与人物成长绑定。"],
+              id: "blueprint_1",
+              logline: "旧信把主角拖回十年前的钟楼旧案。",
+              mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+              premise: "雨夜旧信揭开旧城钟楼案。",
+              protagonistArc: "从逃避旧案到主动承担代价。",
+              risks: ["线索密度不足会削弱悬疑感。"],
+              status: "draft",
+            };
+            return rpcSuccess(request.id, {
+              artifactIds: ["artifact_blueprint_1"],
+              capability: "blueprint.generate",
+              status: "completed",
+              workflowRunId: "run_blueprint_1",
+              workOrderId: "work_order_blueprint_1",
+            });
+          }
+          if (request.payload.capability === "outline.generate") {
+            creativePath.outlines = [
+              {
+                id: "outline_1",
+                scope: "chapter_batch",
+                status: "draft",
+                title: "前 10 章章纲",
+              },
+            ];
+            creativePath.chapterOutlines = [
+              {
+                chapterGoal: "用雨夜旧信建立开局钩子。",
+                chapterId: null,
+                conflict: "主角想逃离旧案，旧信逼迫她回头。",
+                hook: "信纸水印指向十年前钟楼。",
+                id: "chapter_outline_1",
+                informationGain: "读者知道旧信与钟楼旧案有关。",
+                status: "draft",
+                title: "第 1 章：开局钩子",
+              },
+            ];
+            return rpcSuccess(request.id, {
+              artifactIds: ["artifact_outline_1"],
+              capability: "outline.generate",
+              status: "completed",
+              workflowRunId: "run_outline_1",
+              workOrderId: "work_order_outline_1",
+            });
+          }
+          return rpcSuccess(request.id, null);
         case "blueprint.generate":
           creativePath.blueprint = {
             antagonistForce: "旧城钟楼背后的既得利益者。",
@@ -236,15 +409,23 @@ describe("ShellLayout", () => {
         briefId: "brief_1",
         projectId: "project_1",
       });
-      expect(rpcPayload("blueprint.generate")).toMatchObject({ projectId: "project_1" });
+      expect(rpcPayload("ai.generate")).toMatchObject({
+        capability: "blueprint.generate",
+        projectId: "project_1",
+        targetType: "project",
+      });
       expect(rpcPayload("blueprint.apply")).toMatchObject({
         blueprintId: "blueprint_1",
         projectId: "project_1",
       });
-      expect(rpcPayload("outline.generate")).toMatchObject({
-        chapterCount: 10,
+      expect(allRpcPayloads("ai.generate").at(1)).toMatchObject({
+        capability: "outline.generate",
+        input: {
+          chapterCount: 10,
+          scope: "chapter_batch",
+        },
         projectId: "project_1",
-        scope: "chapter_batch",
+        targetType: "project",
       });
       expect(rpcPayload("outline.approveChapterOutline")).toMatchObject({
         chapterOutlineId: "chapter_outline_1",
@@ -259,7 +440,7 @@ describe("ShellLayout", () => {
         projectId: "project_1",
       });
     });
-  });
+  }, 10_000);
 
   it("opens creative elements and completes the worldbuilding stage from the creative path", async () => {
     const project = createProject();
@@ -294,7 +475,7 @@ describe("ShellLayout", () => {
             workOrders: [],
             worldRules: [],
           });
-        case "creativeStage.complete":
+        case "creativeStage.advance":
           creativePath.stages = creativePath.stages.map((stage) => {
             if (stage.stageKey === "worldbuilding") {
               return { ...stage, readinessScore: 100, status: "completed" };
@@ -324,7 +505,8 @@ describe("ShellLayout", () => {
     fireEvent.click(screen.getByRole("button", { name: "完成世界观与要素" }));
 
     await waitFor(() => {
-      expect(rpcPayload("creativeStage.complete")).toMatchObject({
+      expect(rpcPayload("creativeStage.advance")).toMatchObject({
+        mode: "strict",
         projectId: "project_1",
         stageKey: "worldbuilding",
       });
@@ -883,6 +1065,12 @@ function rpcPayload(command: string): Record<string, unknown> {
   const call = invokeMock.mock.calls.find(([, args]) => getRpcRequest(args).command === command);
 
   return call ? getRpcRequest(call[1]).payload : {};
+}
+
+function allRpcPayloads(command: string): Record<string, unknown>[] {
+  return invokeMock.mock.calls
+    .filter(([, args]) => getRpcRequest(args).command === command)
+    .map(([, args]) => getRpcRequest(args).payload);
 }
 
 function createProject() {

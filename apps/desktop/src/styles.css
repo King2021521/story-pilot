@@ -71,7 +71,9 @@ button {
 }
 
 .project-sidebar {
-  display: grid;
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
   gap: 24px;
   padding: 24px 18px;
 }
@@ -96,6 +98,19 @@ button {
 
 .project-sidebar__actions {
   width: 100%;
+}
+
+.project-sidebar__workspace {
+  min-height: 0;
+}
+
+.project-sidebar__footer {
+  margin-top: auto;
+}
+
+.settings-drawer__panel {
+  display: grid;
+  gap: 16px;
 }
 
 .workbench-home {
@@ -223,7 +238,24 @@ button {
   font-size: 13px;
 }
 
-.creative-middle-stage > .ant-btn {
+.creative-stage-gate-list {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.creative-stage-gate-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.creative-middle-stage__actions {
   grid-column: 1 / -1;
 }
 

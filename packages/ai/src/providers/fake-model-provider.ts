@@ -20,7 +20,9 @@ export class FakeModelProvider implements ModelProvider {
   constructor(private readonly options: FakeModelProviderOptions = {}) {}
 
   async generateObject(input: ProviderGenerateObjectInput): Promise<ProviderObjectResult> {
-    const object = this.options.objectResponses?.[input.schemaName] ?? this.options.objectResponses?.[input.purpose];
+    const object =
+      this.options.objectResponses?.[input.schemaName] ??
+      this.options.objectResponses?.[input.purpose];
 
     if (object === undefined) {
       throw new Error(`FAKE_MODEL_RESPONSE_NOT_FOUND: ${input.schemaName}`);

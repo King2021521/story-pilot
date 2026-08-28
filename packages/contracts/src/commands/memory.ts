@@ -35,4 +35,3 @@ export const memoryCommandSchemas = {
   }),
   "graph.rebuild": projectIdPayloadSchema,
 };
-

@@ -57,8 +57,9 @@ describe("ProjectService", () => {
     expect(existsSync(project.rootPath)).toBe(true);
     expect(existsSync(join(project.rootPath, PROJECT_DATABASE_FILE))).toBe(true);
     expect(existsSync(join(project.rootPath, "graph.kuzu"))).toBe(true);
-    expect(existsSync(join(project.rootPath, "files"))).toBe(true);
-    expect(existsSync(join(project.rootPath, "snapshots"))).toBe(true);
+    expect(existsSync(join(project.rootPath, "exports"))).toBe(true);
+    expect(existsSync(join(project.rootPath, "artifacts"))).toBe(true);
+    expect(existsSync(join(project.rootPath, "attachments"))).toBe(true);
     expect(existsSync(join(project.rootPath, "backups"))).toBe(true);
     expect(existsSync(join(rootDir, GLOBAL_DATABASE_FILE))).toBe(true);
 

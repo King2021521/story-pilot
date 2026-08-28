@@ -119,14 +119,16 @@ export class CharacterRepository {
     const now = input.now ?? Date.now();
     const create = this.projectDatabase.client.transaction(() => {
       this.projectDatabase.client
-        .prepare(`
+        .prepare(
+          `
           insert into characters (
             id, project_id, display_name, role, archetype, profile, motivation, created_at, updated_at
           )
           values (
             @characterId, @projectId, @name, @role, @archetype, @profile, @motivation, @now, @now
           )
-        `)
+        `,
+        )
         .run({
           archetype: input.archetype ?? null,
           characterId: input.characterId,
@@ -140,14 +142,16 @@ export class CharacterRepository {
 
       for (const trait of input.traits) {
         this.projectDatabase.client
-          .prepare(`
+          .prepare(
+            `
             insert into character_traits (
               id, project_id, character_id, name, value, confidence, created_at, updated_at
             )
             values (
               @traitId, @projectId, @characterId, @name, @value, 1, @now, @now
             )
-          `)
+          `,
+          )
           .run({
             characterId: input.characterId,
             name: trait.name,
@@ -172,7 +176,8 @@ export class CharacterRepository {
   createRelation(input: CreateEntityRelationRecordInput): EntityRelationRecord {
     const now = input.now ?? Date.now();
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into entity_relations (
           id, project_id, source_entity_type, source_entity_id, relation_type,
           target_entity_type, target_entity_id, description, polarity, strength,
@@ -183,7 +188,8 @@ export class CharacterRepository {
           @targetEntityType, @targetEntityId, @description, @polarity, @strength,
           'confirmed', @now, @now
         )
-      `)
+      `,
+      )
       .run({
         description: input.description ?? null,
         now,
@@ -219,7 +225,9 @@ export class CharacterRepository {
     }
 
     const traits = this.projectDatabase.client
-      .prepare("select * from character_traits where project_id = ? and character_id = ? order by created_at asc")
+      .prepare(
+        "select * from character_traits where project_id = ? and character_id = ? order by created_at asc",
+      )
       .all(projectId, characterId)
       .map((trait) => mapTraitRow(trait as CharacterTraitRow));
 
@@ -239,7 +247,9 @@ export class CharacterRepository {
     return this.projectDatabase.client
       .prepare("select * from characters where project_id = ? order by display_name asc")
       .all(projectId)
-      .map((row) => mapCharacterRow(row as CharacterRow, this.listTraits(projectId, (row as CharacterRow).id)));
+      .map((row) =>
+        mapCharacterRow(row as CharacterRow, this.listTraits(projectId, (row as CharacterRow).id)),
+      );
   }
 
   updateCharacter(input: UpdateCharacterRecordInput): CharacterRecord {
@@ -278,7 +288,9 @@ export class CharacterRepository {
 
   private listTraits(projectId: string, characterId: string): CharacterTraitRecord[] {
     return this.projectDatabase.client
-      .prepare("select * from character_traits where project_id = ? and character_id = ? order by created_at asc")
+      .prepare(
+        "select * from character_traits where project_id = ? and character_id = ? order by created_at asc",
+      )
       .all(projectId, characterId)
       .map((trait) => mapTraitRow(trait as CharacterTraitRow));
   }

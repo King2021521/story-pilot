@@ -5,10 +5,25 @@ import {
   CheckCircleOutlined,
   FileTextOutlined,
   ProfileOutlined,
+  RollbackOutlined,
+  SearchOutlined,
+  StopOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import { GENRE_PRESETS } from "@story-pilot/presets";
-import { Alert, Button, Descriptions, Empty, Form, Input, Select, Space, Steps, Tag } from "antd";
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Select,
+  Space,
+  Steps,
+  Tag,
+} from "antd";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
@@ -103,6 +118,25 @@ export interface CreativeStageItem {
   readonly stageKey: CreativeStageKey;
   readonly status: string;
   readonly readinessScore: number;
+  readonly gateReport?: CreativeStageGateReport;
+}
+
+export interface CreativeStageGateRequirement {
+  readonly key: string;
+  readonly label: string;
+  readonly required: number;
+  readonly current: number;
+  readonly ok: boolean;
+  readonly blocking: boolean;
+}
+
+export interface CreativeStageGateReport {
+  readonly stageKey: CreativeStageKey;
+  readonly ok: boolean;
+  readonly readinessScore: number;
+  readonly summary: string;
+  readonly requirements: readonly CreativeStageGateRequirement[];
+  readonly warnings: readonly string[];
 }
 
 export interface ProjectBriefItem {
@@ -185,6 +219,19 @@ export interface CreativePathWorkbenchProps {
   onApproveChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onApplyChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onEvaluateStageGate?(input: { readonly stageKey: CreativeStageKey }): Promise<void> | void;
+  onAdvanceStage?(input: {
+    readonly stageKey: CreativeStageKey;
+    readonly mode: "strict" | "force";
+  }): Promise<void> | void;
+  onReopenStage?(input: {
+    readonly stageKey: CreativeStageKey;
+    readonly reason?: string;
+  }): Promise<void> | void;
+  onSkipStage?(input: {
+    readonly stageKey: CreativeStageKey;
+    readonly reason: string;
+  }): Promise<void> | void;
   onCompleteStage(input: { readonly stageKey: CompletableCreativeStageKey }): Promise<void> | void;
   onOpenCreativeElements(): void;
 }
@@ -197,11 +244,15 @@ export function CreativePathWorkbench({
   onApproveChapterOutline,
   onConfirmBrief,
   onCompleteStage,
+  onAdvanceStage,
+  onEvaluateStageGate,
   onGenerateBlueprint,
   onGenerateDraftFromOutline,
   onGenerateOutline,
   onOpenCreativeElements,
+  onReopenStage,
   onSaveBrief,
+  onSkipStage,
 }: CreativePathWorkbenchProps) {
   const [form] = Form.useForm<SaveBriefValues>();
   const currentStage = useMemo(() => getCurrentStageIndex(board.stages), [board.stages]);
@@ -358,15 +409,53 @@ export function CreativePathWorkbench({
                     <Tag color={getStageColor(stage)}>{stage?.status ?? "locked"}</Tag>
                   </Space>
                   <span>{item.description}</span>
+                  <GateRequirementList report={stage?.gateReport} />
                 </div>
-                <Button
-                  aria-label={item.completeLabel}
-                  disabled={disabled}
-                  onClick={() => onCompleteStage({ stageKey: item.stageKey })}
-                  type={disabled ? "default" : "primary"}
-                >
-                  {item.completeLabel}
-                </Button>
+                <Space className="creative-middle-stage__actions" wrap>
+                  <Button
+                    aria-label={`检查门禁 ${item.title}`}
+                    disabled={!stage || stage.status === "locked" || !onEvaluateStageGate}
+                    icon={<SearchOutlined />}
+                    onClick={() => onEvaluateStageGate?.({ stageKey: item.stageKey })}
+                  >
+                    检查门禁
+                  </Button>
+                  <Button
+                    aria-label={item.completeLabel}
+                    disabled={disabled}
+                    icon={<CheckCircleOutlined />}
+                    onClick={() =>
+                      onAdvanceStage
+                        ? onAdvanceStage({ mode: "strict", stageKey: item.stageKey })
+                        : onCompleteStage({ stageKey: item.stageKey })
+                    }
+                    type={disabled ? "default" : "primary"}
+                  >
+                    {item.completeLabel}
+                  </Button>
+                  <Button
+                    aria-label={`跳过阶段 ${item.title}`}
+                    disabled={!isStageActionable(stage) || !onSkipStage}
+                    icon={<StopOutlined />}
+                    onClick={() =>
+                      confirmSkipStage(item.title, item.stageKey, (reason) =>
+                        onSkipStage?.({ reason, stageKey: item.stageKey }),
+                      )
+                    }
+                  >
+                    跳过
+                  </Button>
+                  <Button
+                    aria-label={`重开阶段 ${item.title}`}
+                    disabled={!stage || stage.status === "locked" || !onReopenStage}
+                    icon={<RollbackOutlined />}
+                    onClick={() =>
+                      onReopenStage?.({ reason: "用户从创作路径重开阶段", stageKey: item.stageKey })
+                    }
+                  >
+                    重开
+                  </Button>
+                </Space>
               </article>
             );
           })}
@@ -437,6 +526,53 @@ export function CreativePathWorkbench({
   );
 }
 
+function GateRequirementList({ report }: { readonly report: CreativeStageGateReport | undefined }) {
+  if (!report?.requirements.length) {
+    return null;
+  }
+
+  return (
+    <ul className="creative-stage-gate-list">
+      {report.requirements.map((requirement) => (
+        <li className="creative-stage-gate-list__item" key={requirement.key}>
+          <span>{requirement.label}</span>
+          <Space size={6}>
+            <span>
+              {requirement.current}/{requirement.required}
+            </span>
+            <Tag color={requirement.ok ? "green" : "orange"}>
+              {requirement.ok ? "通过" : "待补齐"}
+            </Tag>
+          </Space>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function confirmSkipStage(
+  title: string,
+  stageKey: CreativeStageKey,
+  onConfirm: (reason: string) => Promise<void> | void,
+): void {
+  let reason = "";
+  Modal.confirm({
+    okText: "确认跳过",
+    onOk: () => onConfirm(reason.trim() || `用户确认跳过${STAGE_LABELS[stageKey]}`),
+    title: `跳过${title}`,
+    content: (
+      <Input.TextArea
+        aria-label={`跳过原因 ${title}`}
+        autoSize={{ minRows: 3, maxRows: 5 }}
+        onChange={(event) => {
+          reason = event.target.value;
+        }}
+        placeholder="记录跳过原因，后续校验会纳入上下文"
+      />
+    ),
+  });
+}
+
 function getCurrentStageIndex(stages: readonly CreativeStageItem[]): number {
   const firstOpenStage = stages.findIndex(
     (stage) => stage.status === "available" || stage.status === "in_progress",
@@ -476,6 +612,8 @@ function getStageColor(stage: CreativeStageItem | undefined): string {
   switch (stage?.status) {
     case "completed":
       return "green";
+    case "skipped":
+      return "orange";
     case "available":
     case "in_progress":
       return "blue";

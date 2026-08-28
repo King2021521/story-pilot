@@ -15,9 +15,13 @@ describe("TauriRpcClient", () => {
   });
 
   it("falls back to an empty project list when the Tauri bridge is unavailable in web preview", async () => {
-    invokeMock.mockRejectedValue(new TypeError("Cannot read properties of undefined (reading 'invoke')"));
+    invokeMock.mockRejectedValue(
+      new TypeError("Cannot read properties of undefined (reading 'invoke')"),
+    );
 
-    await expect(new TauriRpcClient().send("project.listRecent", { limit: 20 })).resolves.toMatchObject({
+    await expect(
+      new TauriRpcClient().send("project.listRecent", { limit: 20 }),
+    ).resolves.toMatchObject({
       data: { items: [] },
       ok: true,
     });

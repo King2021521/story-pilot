@@ -1,4 +1,9 @@
-import { BookOutlined, FolderAddOutlined, FolderOpenOutlined } from "@ant-design/icons";
+import {
+  BookOutlined,
+  FolderAddOutlined,
+  FolderOpenOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 import { Button, Empty, Space, Tree, Typography } from "antd";
 
 const { Text, Title } = Typography;
@@ -20,6 +25,7 @@ export interface ProjectSidebarProps {
   readonly selectedChapterId?: string | undefined;
   onCreateProject?(): void;
   onOpenProject?(projectId: string): void;
+  onOpenSettings?(): void;
   onSelectChapter?(chapterId: string): void;
 }
 
@@ -30,6 +36,7 @@ export function ProjectSidebar({
   selectedChapterId,
   onCreateProject,
   onOpenProject,
+  onOpenSettings,
   onSelectChapter,
 }: ProjectSidebarProps) {
   const projectTreeData = projects.map((project) => ({
@@ -69,7 +76,7 @@ export function ProjectSidebar({
         </Button>
       </Space>
 
-      <div>
+      <div className="project-sidebar__workspace">
         <Text className="story-section-title">作品空间</Text>
         {projectTreeData.length === 0 ? (
           <Empty description="暂无作品" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -98,6 +105,12 @@ export function ProjectSidebar({
             treeData={projectTreeData}
           />
         )}
+      </div>
+
+      <div className="project-sidebar__footer">
+        <Button aria-label="设置" block icon={<SettingOutlined />} onClick={onOpenSettings}>
+          设置
+        </Button>
       </div>
     </div>
   );

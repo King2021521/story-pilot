@@ -1,8 +1,4 @@
-export type MemoryCandidateDecision =
-  | "accept_as_canon"
-  | "keep_as_hypothesis"
-  | "reject"
-  | "merge";
+export type MemoryCandidateDecision = "accept_as_canon" | "keep_as_hypothesis" | "reject" | "merge";
 
 export type MemoryCandidateStatus = "accepted" | "rejected" | "merged";
 
@@ -27,4 +23,3 @@ export function resolveMemoryCandidateDecision(
       return { candidateStatus: "merged" };
   }
 }
-

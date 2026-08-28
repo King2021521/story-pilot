@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 
 import { Injectable } from "@nestjs/common";
 import {
@@ -38,6 +38,18 @@ export interface BackupProjectResult {
   readonly projectId: string;
   readonly backupPath: string;
   readonly createdAt: number;
+}
+
+export interface RestoreProjectBackupInput {
+  readonly projectId: string;
+  readonly backupPath: string;
+}
+
+export interface RestoreProjectBackupResult {
+  readonly restoredProjectId: string;
+  readonly restoredAt: number;
+  readonly backupPath: string;
+  readonly safetyBackupPath: string;
 }
 
 @Injectable()
@@ -205,6 +217,47 @@ export class ProjectService {
       backupPath,
       createdAt,
       projectId,
+    };
+  }
+
+  async restoreBackup(input: RestoreProjectBackupInput): Promise<RestoreProjectBackupResult> {
+    const project = await this.getOverview(input.projectId);
+    const restoredAt = Date.now();
+    const backupsPath = resolve(join(project.rootPath, "backups"));
+    const backupPath = resolve(input.backupPath);
+    if (!backupPath.startsWith(`${backupsPath}${sep}`)) {
+      throw new Error(`FILE_OUT_OF_SCOPE: ${input.backupPath}`);
+    }
+    if (!existsSync(backupPath)) {
+      throw new Error(`BACKUP_NOT_FOUND: ${input.backupPath}`);
+    }
+
+    mkdirSync(backupsPath, { recursive: true });
+    const databasePath = join(project.rootPath, PROJECT_DATABASE_FILE);
+    const safetyBackupPath = join(
+      backupsPath,
+      `${basename(project.rootPath)}-${restoredAt}.pre-restore.project.sqlite`,
+    );
+    copyFileSync(databasePath, safetyBackupPath);
+    copyFileSync(backupPath, databasePath);
+
+    const projectDatabase = createProjectDatabase(databasePath);
+    try {
+      await runProjectMigrations(projectDatabase);
+      const restoredProject = new ProjectRepository(projectDatabase).getFirstOverview();
+      if (!restoredProject || restoredProject.id !== input.projectId) {
+        throw new Error(`BACKUP_PROJECT_MISMATCH: ${input.projectId}`);
+      }
+      await this.projectStorage.upsertProjectIndex(restoredProject);
+    } finally {
+      projectDatabase.close();
+    }
+
+    return {
+      backupPath,
+      restoredAt,
+      restoredProjectId: input.projectId,
+      safetyBackupPath,
     };
   }
 }

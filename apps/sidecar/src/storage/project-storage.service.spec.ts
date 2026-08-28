@@ -41,13 +41,17 @@ describe("ProjectStorageService runtime home layout", () => {
     expect(service.getProjectsRootPath()).toBe(join(homePath, "projects"));
     expect(service.getGlobalDatabasePath()).toBe(join(homePath, "global.sqlite"));
     expect(layout).toMatchObject({
+      artifactsPath: join(homePath, "projects", "project_a", "artifacts"),
+      attachmentsPath: join(homePath, "projects", "project_a", "attachments"),
       backupsPath: join(homePath, "projects", "project_a", "backups"),
       databasePath: join(homePath, "projects", "project_a", "project.sqlite"),
-      filesPath: join(homePath, "projects", "project_a", "files"),
+      exportsPath: join(homePath, "projects", "project_a", "exports"),
       graphPath: join(homePath, "projects", "project_a", "graph.kuzu"),
       rootPath: join(homePath, "projects", "project_a"),
-      snapshotsPath: join(homePath, "projects", "project_a", "snapshots"),
     });
+    expect(existsSync(join(homePath, "projects", "project_a", "exports"))).toBe(true);
+    expect(existsSync(join(homePath, "projects", "project_a", "artifacts"))).toBe(true);
+    expect(existsSync(join(homePath, "projects", "project_a", "attachments"))).toBe(true);
   });
 
   it("migrates a legacy global database from projects into the app home", async () => {

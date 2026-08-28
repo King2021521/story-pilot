@@ -30,19 +30,19 @@ WorkflowRun
 
 运行时核心模块：
 
-| 模块 | 职责 |
-| --- | --- |
-| `WorkflowRegistry` | 注册工作流定义 |
-| `WorkflowEngine` | 创建、推进、恢复和取消工作流 |
-| `StepExecutor` | 执行单个步骤 |
-| `WorkOrderService` | 管理工作单生命周期 |
-| `ContextBuilder` | 构建 LLM 上下文包 |
-| `ModelGateway` | 模型调用统一入口 |
-| `StructuredOutputParser` | 解析结构化输出 |
-| `ReviewEngine` | 连续性、格式、事实冲突检查 |
-| `ArtifactService` | 写入草稿、报告和补丁 |
-| `MemoryExtractor` | 提取记忆候选 |
-| `EventPublisher` | 向前端发送进度事件 |
+| 模块                     | 职责                         |
+| ------------------------ | ---------------------------- |
+| `WorkflowRegistry`       | 注册工作流定义               |
+| `WorkflowEngine`         | 创建、推进、恢复和取消工作流 |
+| `StepExecutor`           | 执行单个步骤                 |
+| `WorkOrderService`       | 管理工作单生命周期           |
+| `ContextBuilder`         | 构建 LLM 上下文包            |
+| `ModelGateway`           | 模型调用统一入口             |
+| `StructuredOutputParser` | 解析结构化输出               |
+| `ReviewEngine`           | 连续性、格式、事实冲突检查   |
+| `ArtifactService`        | 写入草稿、报告和补丁         |
+| `MemoryExtractor`        | 提取记忆候选                 |
+| `EventPublisher`         | 向前端发送进度事件           |
 
 ## 工作单模型
 
@@ -74,14 +74,14 @@ running
 
 状态说明：
 
-| 状态 | 含义 |
-| --- | --- |
-| queued | 已创建，等待执行 |
-| running | 正在执行 |
+| 状态         | 含义                         |
+| ------------ | ---------------------------- |
+| queued       | 已创建，等待执行             |
+| running      | 正在执行                     |
 | waiting_user | 需要用户确认、选择或补充输入 |
-| completed | 已完成 |
-| failed | 执行失败，可重试 |
-| canceled | 用户取消 |
+| completed    | 已完成                       |
+| failed       | 执行失败，可重试             |
+| canceled     | 用户取消                     |
 
 ## 工作流定义
 
@@ -99,8 +99,8 @@ export const ChapterDraftWorkflow = defineWorkflow({
     reviewChapterDraft,
     persistDraftArtifact,
     extractDraftMemoryCandidates,
-    waitForUserDecision
-  ]
+    waitForUserDecision,
+  ],
 });
 ```
 
@@ -550,13 +550,13 @@ return selectable options
 
 恢复策略：
 
-| 中断点 | 恢复方式 |
-| --- | --- |
-| 创建 work_order 后中断 | 标记 queued，可重新执行 |
-| 构建上下文后中断 | 复用 context package 或重建 |
-| 模型调用中断 | 标记 failed，可重新调用 |
-| 产物已写入但未确认 | 恢复 waiting_user |
-| 用户应用中断 | 事务回滚或版本校验后重试 |
+| 中断点                 | 恢复方式                    |
+| ---------------------- | --------------------------- |
+| 创建 work_order 后中断 | 标记 queued，可重新执行     |
+| 构建上下文后中断       | 复用 context package 或重建 |
+| 模型调用中断           | 标记 failed，可重新调用     |
+| 产物已写入但未确认     | 恢复 waiting_user           |
+| 用户应用中断           | 事务回滚或版本校验后重试    |
 
 ## 并发控制
 
@@ -627,4 +627,3 @@ AI 工作流必须可以在无真实模型的环境下测试：
 - 用户应用草稿后生成章节版本。
 - 记忆候选确认后进入 canon。
 - 图谱投影失败不影响 SQLite 事务。
-

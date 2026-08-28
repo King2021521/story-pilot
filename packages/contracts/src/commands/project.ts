@@ -4,6 +4,8 @@ import { emptyPayloadSchema, projectIdPayloadSchema } from "./shared.js";
 
 export const projectCommandSchemas = {
   "app.health": emptyPayloadSchema,
+  "diagnostics.getHealth": emptyPayloadSchema,
+  "diagnostics.export": emptyPayloadSchema,
   "project.create": z.object({
     title: z.string().min(1),
     subtitle: z.string().min(1).optional(),
@@ -24,6 +26,10 @@ export const projectCommandSchemas = {
   ]),
   "project.getOverview": projectIdPayloadSchema,
   "project.backup": projectIdPayloadSchema,
+  "backup.createProject": projectIdPayloadSchema,
+  "backup.restoreProject": projectIdPayloadSchema.extend({
+    backupPath: z.string().min(1),
+  }),
   "workbench.getSnapshot": projectIdPayloadSchema,
   "workbench.getBoard": projectIdPayloadSchema,
 };

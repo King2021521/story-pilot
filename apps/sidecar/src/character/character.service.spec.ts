@@ -91,10 +91,7 @@ describe("CharacterService", () => {
         .map((row) => (row as { event_type: string }).event_type);
 
       expect(eventTypes).toEqual(
-        expect.arrayContaining([
-          "character.created",
-          "entity_relation.confirmed",
-        ]),
+        expect.arrayContaining(["character.created", "entity_relation.confirmed"]),
       );
     } finally {
       projectDatabase.close();

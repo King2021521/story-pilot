@@ -36,7 +36,17 @@ import {
 } from "./plot.js";
 import { files, projects, volumes, works } from "./project.js";
 import { items, locations, organizations, worldRules } from "./world.js";
-import { artifacts, modelCalls, workflowRuns, workflowSteps, workOrders } from "./workflow.js";
+import {
+  aiCapabilities,
+  aiEvalRuns,
+  artifacts,
+  modelCalls,
+  promptVersions,
+  qualityReports,
+  workflowRuns,
+  workflowSteps,
+  workOrders,
+} from "./workflow.js";
 
 export * from "./chapter.js";
 export * from "./character.js";
@@ -89,6 +99,10 @@ export const projectSchema = {
   memoryCandidates,
   memories,
   modelCalls,
+  aiCapabilities,
+  promptVersions,
+  qualityReports,
+  aiEvalRuns,
   contextPackages,
   contextPackageItems,
   files,

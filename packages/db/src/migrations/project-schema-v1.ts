@@ -570,6 +570,48 @@ create table if not exists model_calls (
   created_at integer not null
 );
 
+create table if not exists ai_capabilities (
+  key text primary key,
+  display_name text not null,
+  status text not null default 'active',
+  default_prompt_version text not null,
+  output_schema_name text not null,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists prompt_versions (
+  id text primary key,
+  capability_key text not null,
+  version text not null,
+  prompt_hash text not null,
+  content text not null,
+  status text not null default 'active',
+  created_at integer not null
+);
+
+create table if not exists quality_reports (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  target_type text not null,
+  target_id text not null,
+  score integer not null,
+  dimensions_json text not null,
+  issues_json text not null,
+  model_call_id text references model_calls(id) on delete set null,
+  created_at integer not null
+);
+
+create table if not exists ai_eval_runs (
+  id text primary key,
+  capability_key text not null,
+  prompt_version text not null,
+  fixture_id text not null,
+  score integer not null,
+  result_json text not null,
+  created_at integer not null
+);
+
 create table if not exists memory_candidates (
   id text primary key,
   project_id text not null references projects(id) on delete cascade,
@@ -682,6 +724,13 @@ create index if not exists workflow_runs_status_idx on workflow_runs(status);
 create index if not exists artifacts_target_idx on artifacts(target_type, target_id);
 create index if not exists artifacts_status_idx on artifacts(status);
 create index if not exists model_calls_purpose_idx on model_calls(purpose);
+create index if not exists ai_capabilities_status_idx on ai_capabilities(status);
+create index if not exists prompt_versions_capability_idx on prompt_versions(capability_key);
+create index if not exists prompt_versions_hash_idx on prompt_versions(prompt_hash);
+create index if not exists quality_reports_project_id_idx on quality_reports(project_id);
+create index if not exists quality_reports_target_idx on quality_reports(target_type, target_id);
+create index if not exists ai_eval_runs_capability_idx on ai_eval_runs(capability_key);
+create index if not exists ai_eval_runs_fixture_idx on ai_eval_runs(fixture_id);
 create index if not exists memory_candidates_status_idx on memory_candidates(status);
 create index if not exists memory_candidates_entity_idx on memory_candidates(entity_type, entity_id);
 create index if not exists memories_entity_idx on memories(entity_type, entity_id);

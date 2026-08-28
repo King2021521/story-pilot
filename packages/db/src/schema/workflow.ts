@@ -81,7 +81,9 @@ export const artifacts = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     workOrderId: text("work_order_id").references(() => workOrders.id, { onDelete: "set null" }),
-    workflowRunId: text("workflow_run_id").references(() => workflowRuns.id, { onDelete: "set null" }),
+    workflowRunId: text("workflow_run_id").references(() => workflowRuns.id, {
+      onDelete: "set null",
+    }),
     kind: text("kind").notNull(),
     targetType: text("target_type"),
     targetId: text("target_id"),
@@ -107,7 +109,9 @@ export const modelCalls = sqliteTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    workflowRunId: text("workflow_run_id").references(() => workflowRuns.id, { onDelete: "set null" }),
+    workflowRunId: text("workflow_run_id").references(() => workflowRuns.id, {
+      onDelete: "set null",
+    }),
     stepId: text("step_id").references(() => workflowSteps.id, { onDelete: "set null" }),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
@@ -125,5 +129,74 @@ export const modelCalls = sqliteTable(
     index("model_calls_project_id_idx").on(table.projectId),
     index("model_calls_workflow_run_id_idx").on(table.workflowRunId),
     index("model_calls_purpose_idx").on(table.purpose),
+  ],
+);
+
+export const aiCapabilities = sqliteTable(
+  "ai_capabilities",
+  {
+    key: text("key").primaryKey(),
+    displayName: text("display_name").notNull(),
+    status: text("status").notNull().default("active"),
+    defaultPromptVersion: text("default_prompt_version").notNull(),
+    outputSchemaName: text("output_schema_name").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [index("ai_capabilities_status_idx").on(table.status)],
+);
+
+export const promptVersions = sqliteTable(
+  "prompt_versions",
+  {
+    id: text("id").primaryKey(),
+    capabilityKey: text("capability_key").notNull(),
+    version: text("version").notNull(),
+    promptHash: text("prompt_hash").notNull(),
+    content: text("content").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("prompt_versions_capability_idx").on(table.capabilityKey),
+    index("prompt_versions_hash_idx").on(table.promptHash),
+  ],
+);
+
+export const qualityReports = sqliteTable(
+  "quality_reports",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id").notNull(),
+    score: integer("score").notNull(),
+    dimensions: text("dimensions_json").notNull(),
+    issues: text("issues_json").notNull(),
+    modelCallId: text("model_call_id").references(() => modelCalls.id, { onDelete: "set null" }),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("quality_reports_project_id_idx").on(table.projectId),
+    index("quality_reports_target_idx").on(table.targetType, table.targetId),
+  ],
+);
+
+export const aiEvalRuns = sqliteTable(
+  "ai_eval_runs",
+  {
+    id: text("id").primaryKey(),
+    capabilityKey: text("capability_key").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    fixtureId: text("fixture_id").notNull(),
+    score: integer("score").notNull(),
+    result: text("result_json").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("ai_eval_runs_capability_idx").on(table.capabilityKey),
+    index("ai_eval_runs_fixture_idx").on(table.fixtureId),
   ],
 );

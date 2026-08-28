@@ -41,12 +41,20 @@ export function ChapterVersionDrawer({
       >
         版本
       </Button>
-      <Drawer onClose={() => setOpen(false)} open={open} placement="right" size="default" title="章节版本">
+      <Drawer
+        onClose={() => setOpen(false)}
+        open={open}
+        placement="right"
+        size="default"
+        title="章节版本"
+      >
         <Flex component="ul" gap={10} vertical>
           {versions.map((version) => (
             <li className="chapter-version-item" key={version.id}>
               <Space direction="vertical" size={4}>
-                <Text strong>{version.title ? `${version.title} · v${version.version}` : `v${version.version}`}</Text>
+                <Text strong>
+                  {version.title ? `${version.title} · v${version.version}` : `v${version.version}`}
+                </Text>
                 <Tag>{version.source}</Tag>
               </Space>
               {onRestore ? (

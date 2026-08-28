@@ -69,6 +69,8 @@ export interface GenerateChapterDraftInput {
   readonly chapterId: string;
   readonly instruction?: string;
   readonly relatedEntityIds?: readonly string[];
+  readonly workflowRunId?: string;
+  readonly workOrderId?: string;
 }
 
 export interface GenerateChapterDraftFromOutlineInput {
@@ -218,13 +220,15 @@ export class ChapterService {
 
       const instruction = input.instruction?.trim() || "生成当前章节草稿";
       const workflowRepository = new WorkflowRepository(projectDatabase);
-      const workOrder = workflowRepository.createWorkOrder({
-        projectId: input.projectId,
-        title: `生成章节草稿：${chapter.title}`,
-        type: "chapter_draft",
-        workOrderId: randomUUID(),
-      });
-      const runId = randomUUID();
+      const workOrderId =
+        input.workOrderId ??
+        workflowRepository.createWorkOrder({
+          projectId: input.projectId,
+          title: `生成章节草稿：${chapter.title}`,
+          type: "chapter_draft",
+          workOrderId: randomUUID(),
+        }).id;
+      const runId = input.workflowRunId ?? randomUUID();
       const workflowInput = {
         chapterId: input.chapterId,
         instruction,
@@ -238,7 +242,7 @@ export class ChapterService {
         status: "running",
         steps: [],
         workflowName: "chapter_draft",
-        workOrderId: workOrder.id,
+        workOrderId,
       });
 
       let artifact: ArtifactRecord | undefined;
@@ -369,7 +373,7 @@ export class ChapterService {
                 targetId: draftInput.chapterId,
                 targetType: "chapter",
                 workflowRunId: draftInput.workflowRunId,
-                workOrderId: workOrder.id,
+                workOrderId,
                 title: draftInput.draft.title,
               });
               domainEventRepository.append({
@@ -457,10 +461,10 @@ export class ChapterService {
           ...(step.output === undefined ? {} : { output: step.output }),
         })),
         workflowName: run.workflowName,
-        workOrderId: workOrder.id,
+        workOrderId,
         ...(run.output === undefined ? {} : { output: run.output }),
       });
-      workflowRepository.updateWorkOrderStatus(input.projectId, workOrder.id, run.status);
+      workflowRepository.updateWorkOrderStatus(input.projectId, workOrderId, run.status);
 
       if (run.status !== "completed") {
         throw new Error(`CHAPTER_DRAFT_WORKFLOW_${run.status.toUpperCase()}`);

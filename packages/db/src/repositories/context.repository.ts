@@ -47,14 +47,16 @@ export class ContextRepository {
     const now = input.now ?? Date.now();
     const create = this.projectDatabase.client.transaction(() => {
       this.projectDatabase.client
-        .prepare(`
+        .prepare(
+          `
           insert into context_packages (
             id, project_id, purpose, target_type, target_id, input_hash, created_at
           )
           values (
             @contextPackageId, @projectId, @purpose, @targetType, @targetId, @inputHash, @now
           )
-        `)
+        `,
+        )
         .run({
           contextPackageId: input.contextPackageId,
           inputHash: input.inputHash,
@@ -67,7 +69,8 @@ export class ContextRepository {
 
       for (const item of input.items) {
         this.projectDatabase.client
-          .prepare(`
+          .prepare(
+            `
             insert into context_package_items (
               id, project_id, context_package_id, item_type, item_id, rank, content, metadata
             )
@@ -75,7 +78,8 @@ export class ContextRepository {
               @contextPackageItemId, @projectId, @contextPackageId, @itemType, @itemId,
               @rank, @content, @metadata
             )
-          `)
+          `,
+          )
           .run({
             content: item.content,
             contextPackageId: input.contextPackageId,

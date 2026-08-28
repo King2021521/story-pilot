@@ -55,15 +55,17 @@ The packaged desktop app initializes local data under `~/.story-pilot` on first 
 
 ```text
 ~/.story-pilot/
-  settings.json
+  setting.json
   global.sqlite
+  diagnostics/
   logs/
+  temp/
   projects/
 ```
 
-For the MVP, LLM provider settings are edited directly in `settings.json`, including `apiKey`.
+For the MVP, LLM provider settings are edited directly in `setting.json`, including `apiKey`.
 `.env` remains a development fallback, but the installed app should be configured through
-`~/.story-pilot/settings.json`.
+`~/.story-pilot/setting.json`.
 
 ## Architecture Direction
 

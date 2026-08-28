@@ -18,6 +18,7 @@ const requiredFiles = [
   "06-chapter-production-editor-spec.md",
   "07-production-qa-performance-ops-spec.md",
   "08-validation-traceability-matrix.md",
+  "09-production-reinforcement-plan.md",
 ];
 
 const requiredSpecSections = [

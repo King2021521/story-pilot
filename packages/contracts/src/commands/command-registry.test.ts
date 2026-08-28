@@ -6,14 +6,29 @@ describe("command registry", () => {
   it("contains the MVP command set", () => {
     expect(MVP_COMMAND_NAMES).toEqual([
       "app.health",
+      "settings.get",
+      "settings.update",
+      "settings.validateModel",
+      "diagnostics.getHealth",
+      "diagnostics.export",
       "project.create",
       "project.listRecent",
       "project.open",
       "project.getOverview",
       "project.backup",
+      "backup.createProject",
+      "backup.restoreProject",
       "workbench.getSnapshot",
       "workbench.getBoard",
+      "ai.generate",
+      "ai.getRun",
+      "ai.cancelRun",
+      "ai.listArtifacts",
       "creativeStage.getPath",
+      "creativeStage.evaluateGate",
+      "creativeStage.advance",
+      "creativeStage.reopen",
+      "creativeStage.skip",
       "creativeStage.complete",
       "brief.save",
       "brief.confirm",
@@ -82,6 +97,131 @@ describe("command registry", () => {
       title: "长夜序章",
       genre: "悬疑",
       style: "悬疑推理",
+    });
+  });
+
+  it("parses diagnostics and backup payloads", () => {
+    expect(parseCommandPayload("diagnostics.getHealth", {})).toEqual({});
+    expect(parseCommandPayload("diagnostics.export", {})).toEqual({});
+    expect(parseCommandPayload("backup.createProject", { projectId: "proj_1" })).toEqual({
+      projectId: "proj_1",
+    });
+    expect(
+      parseCommandPayload("backup.restoreProject", {
+        backupPath: "/tmp/proj_1.project.sqlite",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      backupPath: "/tmp/proj_1.project.sqlite",
+      projectId: "proj_1",
+    });
+  });
+
+  it("parses runtime settings payloads", () => {
+    expect(parseCommandPayload("settings.get", {})).toEqual({});
+    expect(
+      parseCommandPayload("settings.update", {
+        model: {
+          apiKey: "json-api-key",
+          baseUrl: "https://api.example.test/v1",
+          model: "gpt-test",
+          timeoutMs: 60000,
+        },
+        storage: {
+          autoBackup: false,
+          backupRetention: 10,
+        },
+      }),
+    ).toEqual({
+      model: {
+        apiKey: "json-api-key",
+        baseUrl: "https://api.example.test/v1",
+        model: "gpt-test",
+        timeoutMs: 60000,
+      },
+      storage: {
+        autoBackup: false,
+        backupRetention: 10,
+      },
+    });
+    expect(
+      parseCommandPayload("settings.validateModel", {
+        apiKey: "json-api-key",
+        baseUrl: "https://api.example.test/v1",
+        model: "gpt-test",
+      }),
+    ).toEqual({
+      apiKey: "json-api-key",
+      baseUrl: "https://api.example.test/v1",
+      model: "gpt-test",
+    });
+  });
+
+  it("parses AI workflow payloads", () => {
+    expect(
+      parseCommandPayload("ai.generate", {
+        capability: "outline.generate",
+        input: {
+          chapterCount: 10,
+          scope: "chapter_batch",
+        },
+        instruction: "生成未来 10 章高细节章纲",
+        options: {
+          maxOutputTokens: 8000,
+          temperature: 0.6,
+        },
+        projectId: "proj_1",
+        targetId: "outline_1",
+        targetType: "outline",
+      }),
+    ).toEqual({
+      capability: "outline.generate",
+      input: {
+        chapterCount: 10,
+        scope: "chapter_batch",
+      },
+      instruction: "生成未来 10 章高细节章纲",
+      options: {
+        maxOutputTokens: 8000,
+        temperature: 0.6,
+      },
+      projectId: "proj_1",
+      targetId: "outline_1",
+      targetType: "outline",
+    });
+
+    expect(
+      parseCommandPayload("ai.getRun", {
+        projectId: "proj_1",
+        workflowRunId: "run_1",
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      workflowRunId: "run_1",
+    });
+
+    expect(
+      parseCommandPayload("ai.cancelRun", {
+        projectId: "proj_1",
+        workflowRunId: "run_1",
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      workflowRunId: "run_1",
+    });
+
+    expect(
+      parseCommandPayload("ai.listArtifacts", {
+        kind: "chapter_draft",
+        projectId: "proj_1",
+        targetId: "chapter_1",
+        targetType: "chapter",
+      }),
+    ).toEqual({
+      kind: "chapter_draft",
+      projectId: "proj_1",
+      targetId: "chapter_1",
+      targetType: "chapter",
     });
   });
 
@@ -176,6 +316,52 @@ describe("command registry", () => {
       chapterOutlineId: "chapter_outline_1",
       instruction: "强化悬疑钩子",
       projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("creativeStage.evaluateGate", {
+        projectId: "proj_1",
+        stageKey: "worldbuilding",
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      stageKey: "worldbuilding",
+    });
+
+    expect(
+      parseCommandPayload("creativeStage.advance", {
+        mode: "strict",
+        projectId: "proj_1",
+        stageKey: "worldbuilding",
+      }),
+    ).toEqual({
+      mode: "strict",
+      projectId: "proj_1",
+      stageKey: "worldbuilding",
+    });
+
+    expect(
+      parseCommandPayload("creativeStage.reopen", {
+        projectId: "proj_1",
+        reason: "补充势力关系",
+        stageKey: "characters",
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      reason: "补充势力关系",
+      stageKey: "characters",
+    });
+
+    expect(
+      parseCommandPayload("creativeStage.skip", {
+        projectId: "proj_1",
+        reason: "已有外部设定稿",
+        stageKey: "worldbuilding",
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      reason: "已有外部设定稿",
+      stageKey: "worldbuilding",
     });
 
     expect(

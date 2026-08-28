@@ -1,4 +1,9 @@
-import { BranchesOutlined, PlusOutlined, SaveOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import {
+  BranchesOutlined,
+  PlusOutlined,
+  SaveOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons";
 import { Button, Empty, Form, Input, Modal, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 
@@ -69,7 +74,11 @@ export function ChapterEditorPage({
   const [createChapterOpen, setCreateChapterOpen] = useState(false);
   const [createChapterForm] = Form.useForm<CreateChapterRequest>();
   const createChapterAction = onCreateChapter ? (
-    <Button aria-label="新建章节" icon={<PlusOutlined />} onClick={() => setCreateChapterOpen(true)}>
+    <Button
+      aria-label="新建章节"
+      icon={<PlusOutlined />}
+      onClick={() => setCreateChapterOpen(true)}
+    >
       新建章节
     </Button>
   ) : null;
@@ -94,7 +103,11 @@ export function ChapterEditorPage({
           setCreateChapterOpen(false);
         }}
       >
-        <Form.Item label="章节标题" name="title" rules={[{ required: true, message: "请输入章节标题" }]}>
+        <Form.Item
+          label="章节标题"
+          name="title"
+          rules={[{ required: true, message: "请输入章节标题" }]}
+        >
           <Input autoFocus />
         </Form.Item>
         <Form.Item label="章节摘要" name="summary">

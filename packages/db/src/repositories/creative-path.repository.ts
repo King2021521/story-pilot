@@ -99,6 +99,16 @@ export interface SaveStoryBlueprintInput {
   readonly now?: number;
 }
 
+export interface UpdateCreativeStageStateInput {
+  readonly projectId: string;
+  readonly stageKey: CreativeStageKey;
+  readonly status: string;
+  readonly readinessScore: number;
+  readonly gateReport: unknown;
+  readonly completedAt: number | null;
+  readonly now?: number;
+}
+
 interface CreativeStageRow {
   readonly id: string;
   readonly project_id: string;
@@ -343,14 +353,70 @@ export class CreativePathRepository {
     stageKey: CreativeStageKey,
     nextStageKey: CreativeStageKey | null,
     now = Date.now(),
+    gateReport: unknown = { completed: true },
   ): CreativeStageRecord {
-    this.completeStage(projectId, stageKey, nextStageKey, now);
+    this.completeStage(projectId, stageKey, nextStageKey, now, gateReport);
     const stage = this.listStages(projectId).find((candidate) => candidate.stageKey === stageKey);
     if (!stage) {
       throw new Error(`CREATIVE_STAGE_NOT_FOUND: ${stageKey}`);
     }
 
     return stage;
+  }
+
+  updateStageGateReport(
+    projectId: string,
+    stageKey: CreativeStageKey,
+    readinessScore: number,
+    gateReport: unknown,
+    now = Date.now(),
+  ): CreativeStageRecord {
+    this.projectDatabase.client
+      .prepare(
+        `
+        update creative_stages
+        set readiness_score = @readinessScore,
+            gate_report_json = @gateReportJson,
+            updated_at = @now
+        where project_id = @projectId and stage_key = @stageKey
+      `,
+      )
+      .run({
+        gateReportJson: JSON.stringify(gateReport),
+        now,
+        projectId,
+        readinessScore,
+        stageKey,
+      });
+
+    return this.getStageOrThrow(projectId, stageKey);
+  }
+
+  updateStageState(input: UpdateCreativeStageStateInput): CreativeStageRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        `
+        update creative_stages
+        set status = @status,
+            readiness_score = @readinessScore,
+            gate_report_json = @gateReportJson,
+            completed_at = @completedAt,
+            updated_at = @now
+        where project_id = @projectId and stage_key = @stageKey
+      `,
+      )
+      .run({
+        completedAt: input.completedAt,
+        gateReportJson: JSON.stringify(input.gateReport),
+        now,
+        projectId: input.projectId,
+        readinessScore: input.readinessScore,
+        stageKey: input.stageKey,
+        status: input.status,
+      });
+
+    return this.getStageOrThrow(input.projectId, input.stageKey);
   }
 
   getLatestBrief(projectId: string): ProjectBriefRecord | null {
@@ -399,6 +465,7 @@ export class CreativePathRepository {
     stageKey: CreativeStageKey,
     nextStageKey: CreativeStageKey | null,
     now: number,
+    gateReport: unknown = { completed: true },
   ): void {
     this.projectDatabase.client
       .prepare(
@@ -413,7 +480,7 @@ export class CreativePathRepository {
       `,
       )
       .run({
-        gateReportJson: JSON.stringify({ completed: true }),
+        gateReportJson: JSON.stringify(gateReport),
         now,
         projectId,
         stageKey,
@@ -456,6 +523,15 @@ export class CreativePathRepository {
         )
         .get(projectId) as { next_version: number }
     ).next_version;
+  }
+
+  private getStageOrThrow(projectId: string, stageKey: CreativeStageKey): CreativeStageRecord {
+    const stage = this.listStages(projectId).find((candidate) => candidate.stageKey === stageKey);
+    if (!stage) {
+      throw new Error(`CREATIVE_STAGE_NOT_FOUND: ${stageKey}`);
+    }
+
+    return stage;
   }
 }
 

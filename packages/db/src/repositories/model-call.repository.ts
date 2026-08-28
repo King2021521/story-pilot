@@ -24,7 +24,8 @@ export class ModelCallRepository {
   create(input: CreateModelCallRecordInput): void {
     const now = input.now ?? Date.now();
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into model_calls (
           id, project_id, workflow_run_id, step_id, provider, model, purpose,
           prompt_version, request, response, usage, status, error, latency_ms, created_at
@@ -33,7 +34,8 @@ export class ModelCallRepository {
           @modelCallId, @projectId, @workflowRunId, @stepId, @provider, @model, @purpose,
           @promptVersion, @request, @response, @usage, @status, @error, @latencyMs, @now
         )
-      `)
+      `,
+      )
       .run({
         error: input.error ?? null,
         latencyMs: input.latencyMs ?? null,

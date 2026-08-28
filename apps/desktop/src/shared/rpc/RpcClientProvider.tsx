@@ -10,7 +10,14 @@ export interface StoryPilotApiProviderProps {
 }
 
 export function StoryPilotApiProvider({ apiClient, children }: StoryPilotApiProviderProps) {
-  const defaultApiClient = useMemo(() => apiClient ?? new StoryPilotApiClient(new TauriRpcClient()), [apiClient]);
+  const defaultApiClient = useMemo(
+    () => apiClient ?? new StoryPilotApiClient(new TauriRpcClient()),
+    [apiClient],
+  );
 
-  return <StoryPilotApiContext.Provider value={defaultApiClient}>{children}</StoryPilotApiContext.Provider>;
+  return (
+    <StoryPilotApiContext.Provider value={defaultApiClient}>
+      {children}
+    </StoryPilotApiContext.Provider>
+  );
 }

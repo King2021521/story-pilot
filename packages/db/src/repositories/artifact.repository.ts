@@ -55,7 +55,8 @@ export class ArtifactRepository {
     const now = input.now ?? Date.now();
 
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into artifacts (
           id, project_id, work_order_id, workflow_run_id, kind, target_type, target_id,
           status, title, body, metadata, created_at, updated_at
@@ -64,7 +65,8 @@ export class ArtifactRepository {
           @artifactId, @projectId, @workOrderId, @workflowRunId, @kind, @targetType, @targetId,
           'pending', @title, @body, @metadata, @now, @now
         )
-      `)
+      `,
+      )
       .run({
         artifactId: input.artifactId,
         body: input.body,
@@ -144,7 +146,9 @@ export class ArtifactRepository {
 
   markRejected(projectId: string, artifactId: string, rejectedAt: number): ArtifactRecord {
     this.projectDatabase.client
-      .prepare("update artifacts set status = 'rejected', updated_at = ? where project_id = ? and id = ?")
+      .prepare(
+        "update artifacts set status = 'rejected', updated_at = ? where project_id = ? and id = ?",
+      )
       .run(rejectedAt, projectId, artifactId);
 
     const artifact = this.getById(projectId, artifactId);

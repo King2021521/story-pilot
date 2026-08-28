@@ -21,8 +21,36 @@ const elementCandidateSchema = z.object({
   tags: z.array(z.string().min(1)).default([]),
 });
 
+const creativeStageKeySchema = z.enum([
+  "brief",
+  "blueprint",
+  "worldbuilding",
+  "characters",
+  "plot_arcs",
+  "outline",
+  "chapters",
+  "memory_review",
+  "retrospective",
+]);
+
 export const creativePathCommandSchemas = {
   "creativeStage.getPath": projectIdPayloadSchema,
+  "creativeStage.evaluateGate": projectIdPayloadSchema.extend({
+    stageKey: creativeStageKeySchema,
+  }),
+  "creativeStage.advance": projectIdPayloadSchema.extend({
+    stageKey: creativeStageKeySchema,
+    mode: z.enum(["strict", "force"]).default("strict"),
+    reason: z.string().min(1).optional(),
+  }),
+  "creativeStage.reopen": projectIdPayloadSchema.extend({
+    stageKey: creativeStageKeySchema,
+    reason: z.string().min(1).optional(),
+  }),
+  "creativeStage.skip": projectIdPayloadSchema.extend({
+    stageKey: creativeStageKeySchema,
+    reason: z.string().min(1),
+  }),
   "creativeStage.complete": projectIdPayloadSchema.extend({
     stageKey: z.enum([
       "worldbuilding",

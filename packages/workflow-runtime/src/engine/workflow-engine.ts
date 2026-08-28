@@ -149,7 +149,11 @@ export class WorkflowEngine {
 
   private async executeStep(
     stepDefinition: WorkflowStepDefinition,
-    context: { readonly input: Record<string, unknown>; readonly runId: string; readonly workflowName: string },
+    context: {
+      readonly input: Record<string, unknown>;
+      readonly runId: string;
+      readonly workflowName: string;
+    },
   ) {
     try {
       return await stepDefinition.execute(context);

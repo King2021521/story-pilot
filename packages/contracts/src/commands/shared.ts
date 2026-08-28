@@ -19,4 +19,3 @@ export const paginationSchema = z.object({
   limit: z.number().int().positive().max(200).optional(),
   cursor: z.string().min(1).optional(),
 });
-

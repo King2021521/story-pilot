@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,18 +13,23 @@ import { RpcService } from "./rpc.service.js";
 
 describe("RpcService MVP command integration", () => {
   const tempDirs: string[] = [];
+  let originalHome: string | undefined;
+  let originalGlobalDatabasePath: string | undefined;
   let originalProjectsRoot: string | undefined;
+  let originalSettingsPath: string | undefined;
 
   beforeEach(() => {
+    originalHome = process.env.STORY_PILOT_HOME;
+    originalGlobalDatabasePath = process.env.STORY_PILOT_GLOBAL_DATABASE_PATH;
     originalProjectsRoot = process.env.STORY_PILOT_PROJECTS_ROOT;
+    originalSettingsPath = process.env.STORY_PILOT_SETTINGS_PATH;
   });
 
   afterEach(() => {
-    if (originalProjectsRoot === undefined) {
-      delete process.env.STORY_PILOT_PROJECTS_ROOT;
-    } else {
-      process.env.STORY_PILOT_PROJECTS_ROOT = originalProjectsRoot;
-    }
+    restoreEnv("STORY_PILOT_HOME", originalHome);
+    restoreEnv("STORY_PILOT_GLOBAL_DATABASE_PATH", originalGlobalDatabasePath);
+    restoreEnv("STORY_PILOT_PROJECTS_ROOT", originalProjectsRoot);
+    restoreEnv("STORY_PILOT_SETTINGS_PATH", originalSettingsPath);
 
     for (const tempDir of tempDirs.splice(0)) {
       rmSync(tempDir, { force: true, recursive: true });
@@ -68,6 +73,345 @@ describe("RpcService MVP command integration", () => {
       expect(saved).toMatchObject({
         content: "用户写下第一版正文。",
         version: 1,
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("exposes runtime settings through RPC and validates missing model configuration", async () => {
+    const { moduleRef, rpcService, rootDir } = await createRpcHarness(tempDirs);
+    try {
+      const settings = await expectRpcOk(
+        rpcService.handle({
+          command: "settings.get",
+          id: "req_settings_get",
+          payload: {},
+        }),
+      );
+      expect(settings).toMatchObject({
+        model: {
+          apiKey: "",
+          baseUrl: "",
+          model: "gpt-5.5",
+          provider: "openai-compatible",
+        },
+        storage: {
+          homeDir: rootDir,
+        },
+        version: 1,
+      });
+
+      const updated = await expectRpcOk(
+        rpcService.handle({
+          command: "settings.update",
+          id: "req_settings_update",
+          payload: {
+            model: {
+              apiKey: "json-api-key",
+              baseUrl: "https://api.example.test/v1",
+              model: "gpt-test",
+            },
+            storage: {
+              autoBackup: false,
+              backupRetention: 10,
+            },
+          },
+        }),
+      );
+      expect(updated).toMatchObject({
+        model: {
+          apiKey: "json-api-key",
+          baseUrl: "https://api.example.test/v1",
+          model: "gpt-test",
+        },
+        storage: {
+          autoBackup: false,
+          backupRetention: 10,
+        },
+      });
+
+      const validation = await expectRpcOk(
+        rpcService.handle({
+          command: "settings.validateModel",
+          id: "req_settings_validate",
+          payload: {
+            apiKey: "",
+            baseUrl: "",
+            model: "",
+          },
+        }),
+      );
+      expect(validation).toMatchObject({
+        errorCode: "AI_MODEL_NOT_CONFIGURED",
+        ok: false,
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("exports redacted diagnostics and restores project backups", async () => {
+    const { moduleRef, rpcService, rootDir } = await createRpcHarness(tempDirs);
+    try {
+      await expectRpcOk(
+        rpcService.handle({
+          command: "settings.update",
+          id: "req_diag_settings",
+          payload: {
+            model: {
+              apiKey: "secret-diagnostic-key",
+              baseUrl: "https://api.example.test/v1",
+              model: "gpt-test",
+            },
+          },
+        }),
+      );
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_diag_project",
+          payload: { genre: "悬疑", title: "诊断备份样例" },
+        }),
+      );
+      const backup = await expectRpcOk(
+        rpcService.handle({
+          command: "backup.createProject",
+          id: "req_diag_backup",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "chapter.create",
+          id: "req_diag_chapter",
+          payload: {
+            projectId: getString(project, "id"),
+            title: "备份后的新章节",
+            volumeId: getString(project, "defaultVolumeId"),
+          },
+        }),
+      );
+      expect(
+        getRecordArray(
+          await expectRpcOk(
+            rpcService.handle({
+              command: "chapter.list",
+              id: "req_diag_chapters_before_restore",
+              payload: { projectId: getString(project, "id") },
+            }),
+          ),
+          "items",
+        ),
+      ).toHaveLength(1);
+
+      const restored = await expectRpcOk(
+        rpcService.handle({
+          command: "backup.restoreProject",
+          id: "req_diag_restore",
+          payload: {
+            backupPath: getString(backup, "backupPath"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const health = await expectRpcOk(
+        rpcService.handle({
+          command: "diagnostics.getHealth",
+          id: "req_diag_health",
+          payload: {},
+        }),
+      );
+      const diagnosticBundle = await expectRpcOk(
+        rpcService.handle({
+          command: "diagnostics.export",
+          id: "req_diag_export",
+          payload: {},
+        }),
+      );
+      const diagnosticText = readFileSync(getString(diagnosticBundle, "path"), "utf8");
+
+      expect(restored).toMatchObject({
+        restoredProjectId: getString(project, "id"),
+      });
+      expect(
+        getRecordArray(
+          await expectRpcOk(
+            rpcService.handle({
+              command: "chapter.list",
+              id: "req_diag_chapters_after_restore",
+              payload: { projectId: getString(project, "id") },
+            }),
+          ),
+          "items",
+        ),
+      ).toHaveLength(0);
+      expect(health).toMatchObject({
+        appHome: rootDir,
+        model: "configured",
+        projectCount: 1,
+        sidecar: "ok",
+        storage: "ok",
+      });
+      expect(diagnosticBundle).toMatchObject({ redacted: true });
+      expect(diagnosticText).not.toContain("secret-diagnostic-key");
+      expect(diagnosticText).toContain("[redacted]");
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("runs blueprint generation through the unified AI command boundary", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_ai_project",
+          payload: { genre: "玄幻", title: "统一 AI 入口" },
+        }),
+      );
+      const projectId = getString(project, "id");
+
+      const generated = await expectRpcOk(
+        rpcService.handle({
+          command: "ai.generate",
+          id: "req_ai_generate_blueprint",
+          payload: {
+            capability: "blueprint.generate",
+            instruction: "生成可支撑长篇连载的创作蓝图",
+            projectId,
+          },
+        }),
+      );
+      const workflowRun = await expectRpcOk(
+        rpcService.handle({
+          command: "ai.getRun",
+          id: "req_ai_get_run",
+          payload: {
+            projectId,
+            workflowRunId: getString(generated, "workflowRunId"),
+          },
+        }),
+      );
+      const artifacts = await expectRpcOk(
+        rpcService.handle({
+          command: "ai.listArtifacts",
+          id: "req_ai_artifacts",
+          payload: {
+            kind: "story_blueprint_draft",
+            projectId,
+            targetType: "project",
+          },
+        }),
+      );
+
+      expect(generated).toMatchObject({
+        capability: "blueprint.generate",
+        workOrderId: expect.any(String),
+        workflowRunId: expect.any(String),
+      });
+      expect(workflowRun).toMatchObject({
+        id: getString(generated, "workflowRunId"),
+        status: "completed",
+        workflowName: "blueprint.generate",
+        workOrderId: getString(generated, "workOrderId"),
+      });
+      expect(getRecordArray(artifacts, "items")).toEqual([
+        expect.objectContaining({
+          kind: "story_blueprint_draft",
+          targetType: "project",
+          workflowRunId: getString(generated, "workflowRunId"),
+          workOrderId: getString(generated, "workOrderId"),
+        }),
+      ]);
+      expect(
+        parseJsonRecord(getString(getRecordArray(artifacts, "items")[0], "metadata")),
+      ).toMatchObject({
+        contextPackageId: expect.any(String),
+        modelCallId: expect.any(String),
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("runs outline generation through the unified AI command boundary", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_ai_outline_project",
+          payload: { genre: "玄幻", title: "统一章纲入口" },
+        }),
+      );
+      const projectId = getString(project, "id");
+
+      const generated = await expectRpcOk(
+        rpcService.handle({
+          command: "ai.generate",
+          id: "req_ai_generate_outline",
+          payload: {
+            capability: "outline.generate",
+            input: {
+              chapterCount: 10,
+              scope: "chapter_batch",
+            },
+            instruction: "生成十章高细节章纲，先给章纲不写正文",
+            projectId,
+            targetType: "project",
+          },
+        }),
+      );
+      const workflowRun = await expectRpcOk(
+        rpcService.handle({
+          command: "ai.getRun",
+          id: "req_ai_get_outline_run",
+          payload: {
+            projectId,
+            workflowRunId: getString(generated, "workflowRunId"),
+          },
+        }),
+      );
+      const artifacts = await expectRpcOk(
+        rpcService.handle({
+          command: "ai.listArtifacts",
+          id: "req_ai_outline_artifacts",
+          payload: {
+            kind: "outline_draft",
+            projectId,
+            targetType: "project",
+          },
+        }),
+      );
+
+      expect(generated).toMatchObject({
+        artifactIds: [expect.any(String)],
+        capability: "outline.generate",
+        status: "completed",
+        workOrderId: expect.any(String),
+        workflowRunId: expect.any(String),
+      });
+      expect(workflowRun).toMatchObject({
+        id: getString(generated, "workflowRunId"),
+        status: "completed",
+        workflowName: "outline.generate",
+        workOrderId: getString(generated, "workOrderId"),
+      });
+      expect(getRecordArray(artifacts, "items")).toEqual([
+        expect.objectContaining({
+          kind: "outline_draft",
+          targetType: "project",
+          workflowRunId: getString(generated, "workflowRunId"),
+          workOrderId: getString(generated, "workOrderId"),
+        }),
+      ]);
+      expect(
+        parseJsonRecord(getString(getRecordArray(artifacts, "items")[0], "metadata")),
+      ).toMatchObject({
+        contextPackageId: expect.any(String),
+        modelCallId: expect.any(String),
       });
     } finally {
       await moduleRef.close();
@@ -491,6 +835,323 @@ describe("RpcService MVP command integration", () => {
       expect(getStage(path, "outline")).toMatchObject({
         readinessScore: 10,
         status: "available",
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("evaluates creative stage gates and supports strict advance, skip, and reopen", async () => {
+    const { moduleRef, rootDir, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_gate_project",
+          payload: {
+            genre: "玄幻",
+            title: "星潮门徒",
+          },
+        }),
+      );
+      const projectId = getString(project, "id");
+      const brief = getRecord(
+        await expectRpcOk(
+          rpcService.handle({
+            command: "creativeStage.getPath",
+            id: "req_gate_path",
+            payload: { projectId },
+          }),
+        ),
+        "brief",
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "brief.confirm",
+          id: "req_gate_brief_confirm",
+          payload: {
+            briefId: getString(brief, "id"),
+            projectId,
+          },
+        }),
+      );
+      const blueprintResult = await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.generate",
+          id: "req_gate_blueprint_generate",
+          payload: { projectId },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.apply",
+          id: "req_gate_blueprint_apply",
+          payload: {
+            blueprintId: getString(getRecord(blueprintResult, "blueprint"), "id"),
+            projectId,
+          },
+        }),
+      );
+
+      const missingWorldGate = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.evaluateGate",
+          id: "req_gate_world_missing",
+          payload: {
+            projectId,
+            stageKey: "worldbuilding",
+          },
+        }),
+      );
+      const blockedAdvance = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.advance",
+          id: "req_gate_world_blocked",
+          payload: {
+            mode: "strict",
+            projectId,
+            stageKey: "worldbuilding",
+          },
+        }),
+      );
+
+      expect(missingWorldGate).toMatchObject({
+        gateReport: {
+          ok: false,
+          requirements: expect.arrayContaining([
+            expect.objectContaining({
+              current: 0,
+              key: "world_rules",
+              ok: false,
+              required: 3,
+            }),
+          ]),
+          stageKey: "worldbuilding",
+        },
+        stage: {
+          status: "available",
+        },
+      });
+      expect(blockedAdvance).toMatchObject({
+        advanced: false,
+        gateReport: {
+          ok: false,
+          stageKey: "worldbuilding",
+        },
+        stage: {
+          status: "available",
+        },
+      });
+
+      await expectRpcOk(
+        rpcService.handle({
+          command: "worldRule.create",
+          id: "req_gate_world_rule",
+          payload: {
+            category: "magic",
+            constraintLevel: "hard",
+            projectId,
+            statement: "星潮只在双月同天时增强。",
+            title: "星潮规则",
+          },
+        }),
+      );
+      await createWorldbuildingAssets({ projectId, rootDir, rpcService });
+      const advancedWorldbuilding = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.advance",
+          id: "req_gate_world_advance",
+          payload: {
+            mode: "strict",
+            projectId,
+            stageKey: "worldbuilding",
+          },
+        }),
+      );
+      const skippedCharacters = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.skip",
+          id: "req_gate_characters_skip",
+          payload: {
+            projectId,
+            reason: "角色设定已在外部文档完成",
+            stageKey: "characters",
+          },
+        }),
+      );
+      const reopenedCharacters = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.reopen",
+          id: "req_gate_characters_reopen",
+          payload: {
+            projectId,
+            reason: "补充人物关系网",
+            stageKey: "characters",
+          },
+        }),
+      );
+
+      expect(advancedWorldbuilding).toMatchObject({
+        advanced: true,
+        gateReport: {
+          ok: true,
+          stageKey: "worldbuilding",
+        },
+        stage: {
+          readinessScore: 100,
+          status: "completed",
+        },
+      });
+      expect(getStage(getRecord(advancedWorldbuilding, "path"), "characters")).toMatchObject({
+        status: "available",
+      });
+      expect(skippedCharacters).toMatchObject({
+        path: {
+          stages: expect.arrayContaining([
+            expect.objectContaining({ stageKey: "plot_arcs", status: "available" }),
+          ]),
+        },
+        skipped: true,
+        stage: {
+          status: "skipped",
+        },
+      });
+      expect(reopenedCharacters).toMatchObject({
+        path: {
+          stages: expect.arrayContaining([
+            expect.objectContaining({ stageKey: "characters", status: "available" }),
+          ]),
+        },
+        reopened: true,
+        stage: {
+          status: "available",
+        },
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("requires complete worldbuilding assets before advancing a xuanhuan project", async () => {
+    const { moduleRef, rootDir, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await createConfirmedBriefAndBlueprint(rpcService, {
+        genre: "玄幻",
+        title: "星潮纪元",
+      });
+      const projectId = getString(project, "id");
+
+      await expectRpcOk(
+        rpcService.handle({
+          command: "worldRule.create",
+          id: "req_gate_world_only_rule",
+          payload: {
+            category: "magic",
+            constraintLevel: "hard",
+            projectId,
+            statement: "星潮只在双月同天时增强。",
+            title: "星潮核心规则",
+          },
+        }),
+      );
+
+      const incompleteGate = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.evaluateGate",
+          id: "req_gate_world_incomplete_assets",
+          payload: {
+            projectId,
+            stageKey: "worldbuilding",
+          },
+        }),
+      );
+      const blockedAdvance = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.advance",
+          id: "req_gate_world_incomplete_advance",
+          payload: {
+            mode: "strict",
+            projectId,
+            stageKey: "worldbuilding",
+          },
+        }),
+      );
+
+      expect(incompleteGate).toMatchObject({
+        gateReport: {
+          ok: false,
+          requirements: expect.arrayContaining([
+            expect.objectContaining({
+              current: 1,
+              key: "world_rules",
+              ok: false,
+              required: 3,
+            }),
+            expect.objectContaining({
+              current: 0,
+              key: "locations",
+              ok: false,
+              required: 2,
+            }),
+            expect.objectContaining({
+              current: 0,
+              key: "organizations",
+              ok: false,
+              required: 1,
+            }),
+            expect.objectContaining({
+              current: 0,
+              key: "power_systems",
+              ok: false,
+              required: 1,
+            }),
+            expect.objectContaining({
+              current: 0,
+              key: "items",
+              ok: false,
+              required: 1,
+            }),
+          ]),
+          stageKey: "worldbuilding",
+        },
+      });
+      expect(blockedAdvance).toMatchObject({
+        advanced: false,
+        gateReport: {
+          ok: false,
+          stageKey: "worldbuilding",
+        },
+      });
+
+      await createWorldbuildingAssets({ projectId, rootDir, rpcService });
+
+      const advanced = await expectRpcOk(
+        rpcService.handle({
+          command: "creativeStage.advance",
+          id: "req_gate_world_complete_advance",
+          payload: {
+            mode: "strict",
+            projectId,
+            stageKey: "worldbuilding",
+          },
+        }),
+      );
+
+      expect(advanced).toMatchObject({
+        advanced: true,
+        gateReport: {
+          ok: true,
+          requirements: expect.arrayContaining([
+            expect.objectContaining({ key: "world_rules", ok: true, required: 3 }),
+            expect.objectContaining({ key: "locations", ok: true, required: 2 }),
+            expect.objectContaining({ key: "organizations", ok: true, required: 1 }),
+            expect.objectContaining({ key: "power_systems", ok: true, required: 1 }),
+            expect.objectContaining({ key: "items", ok: true, required: 1 }),
+          ]),
+        },
+        stage: {
+          status: "completed",
+        },
       });
     } finally {
       await moduleRef.close();
@@ -1376,7 +2037,10 @@ describe("RpcService MVP command integration", () => {
 async function createRpcHarness(tempDirs: string[]) {
   const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-rpc-"));
   tempDirs.push(rootDir);
-  process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+  process.env.STORY_PILOT_HOME = rootDir;
+  process.env.STORY_PILOT_PROJECTS_ROOT = join(rootDir, "projects");
+  delete process.env.STORY_PILOT_GLOBAL_DATABASE_PATH;
+  delete process.env.STORY_PILOT_SETTINGS_PATH;
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MODEL_GATEWAY)
@@ -1384,6 +2048,16 @@ async function createRpcHarness(tempDirs: string[]) {
       new ModelGateway(
         new FakeModelProvider({
           objectResponses: {
+            BlueprintGenerateOutput: {
+              antagonistForce: "旧城钟楼背后的既得利益者。",
+              corePromise: "每三章给出一条硬线索和一次反转。",
+              differentiators: ["旧信谜题与人物成长绑定。"],
+              logline: "旧信把主角拖回十年前的钟楼旧案。",
+              mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+              premise: "雨夜旧信揭开旧城钟楼案。",
+              protagonistArc: "从逃避旧案到主动承担代价。",
+              risks: ["线索密度不足会削弱悬疑感。"],
+            },
             ChapterDraftOutput: {
               draft: {
                 body: "雨夜里，林鸢从门缝下抽出一封旧信。",
@@ -1455,6 +2129,28 @@ async function createRpcHarness(tempDirs: string[]) {
                 },
               ],
             },
+            OutlineGenerateOutput: {
+              chapterOutlines: Array.from({ length: 10 }, (_, index) => {
+                const chapterNumber = index + 1;
+                return {
+                  chapterGoal: `完成第 ${chapterNumber} 章的线索推进。`,
+                  conflict: `主角目标与当前阻力在第 ${chapterNumber} 章正面碰撞。`,
+                  emotionalTurn:
+                    chapterNumber === 1 ? "从平静到被迫卷入。" : "从短暂掌控到新的压力。",
+                  hook: chapterNumber === 1 ? "信纸水印指向十年前钟楼。" : "留下一个具体未解问题。",
+                  informationGain: `新增第 ${chapterNumber} 条与主冲突相关的信息。`,
+                  targetWordCount: 3000,
+                  title:
+                    chapterNumber === 1 ? "第 1 章：开局钩子" : `第 ${chapterNumber} 章：推进节点`,
+                };
+              }),
+              outline: {
+                basis: {},
+                scope: "chapter_batch",
+                title: "前 10 章章纲",
+              },
+              riskNotes: [],
+            },
           },
         }),
       ),
@@ -1463,6 +2159,7 @@ async function createRpcHarness(tempDirs: string[]) {
 
   return {
     moduleRef,
+    rootDir,
     rpcService: moduleRef.get(RpcService),
   };
 }
@@ -1488,6 +2185,146 @@ async function createProjectAndChapter(rpcService: RpcService) {
   );
 
   return { chapter, project };
+}
+
+async function createConfirmedBriefAndBlueprint(
+  rpcService: RpcService,
+  input: { readonly genre: string; readonly title: string },
+): Promise<Record<string, unknown>> {
+  const project = await expectRpcOk(
+    rpcService.handle({
+      command: "project.create",
+      id: `req_project_${input.title}`,
+      payload: { genre: input.genre, title: input.title },
+    }),
+  );
+  const projectId = getString(project, "id");
+  const brief = getRecord(
+    await expectRpcOk(
+      rpcService.handle({
+        command: "creativeStage.getPath",
+        id: `req_path_${input.title}`,
+        payload: { projectId },
+      }),
+    ),
+    "brief",
+  );
+  await expectRpcOk(
+    rpcService.handle({
+      command: "brief.confirm",
+      id: `req_brief_confirm_${input.title}`,
+      payload: {
+        briefId: getString(brief, "id"),
+        projectId,
+      },
+    }),
+  );
+  const blueprintResult = await expectRpcOk(
+    rpcService.handle({
+      command: "blueprint.generate",
+      id: `req_blueprint_generate_${input.title}`,
+      payload: { projectId },
+    }),
+  );
+  await expectRpcOk(
+    rpcService.handle({
+      command: "blueprint.apply",
+      id: `req_blueprint_apply_${input.title}`,
+      payload: {
+        blueprintId: getString(getRecord(blueprintResult, "blueprint"), "id"),
+        projectId,
+      },
+    }),
+  );
+
+  return project;
+}
+
+async function createWorldbuildingAssets(input: {
+  readonly projectId: string;
+  readonly rootDir: string;
+  readonly rpcService: RpcService;
+}): Promise<void> {
+  for (const [index, rule] of [
+    ["限制代价", "借用星潮会损耗寿元，越阶越明显。"],
+    ["社会秩序", "司星阁垄断观星历法并控制修行资源。"],
+  ] as const) {
+    await expectRpcOk(
+      input.rpcService.handle({
+        command: "worldRule.create",
+        id: `req_gate_world_rule_${index}`,
+        payload: {
+          category: index === "限制代价" ? "magic" : "society",
+          constraintLevel: "hard",
+          projectId: input.projectId,
+          statement: rule,
+          title: index,
+        },
+      }),
+    );
+  }
+
+  await expectRpcOk(
+    input.rpcService.handle({
+      command: "element.acceptCandidates",
+      id: "req_gate_world_accept_assets",
+      payload: {
+        items: [
+          {
+            description: "主城，司星阁和各大世家争夺资源的中心。",
+            name: "照潮城",
+            tags: ["城市"],
+            type: "city",
+          },
+          {
+            description: "星潮最强时开启的古老试炼场。",
+            name: "落星台",
+            tags: ["地点"],
+            type: "location",
+          },
+          {
+            description: "垄断观星术与星潮资源的组织。",
+            name: "司星阁",
+            tags: ["组织"],
+            type: "organization",
+          },
+          {
+            description: "早期冲突中被争夺的关键武器。",
+            name: "潮汐断星刃",
+            tags: ["武器"],
+            type: "weapon",
+          },
+        ],
+        projectId: input.projectId,
+      },
+    }),
+  );
+
+  const projectDatabase = createProjectDatabase(
+    join(input.rootDir, "projects", input.projectId, PROJECT_DATABASE_FILE),
+  );
+  try {
+    projectDatabase.client
+      .prepare(
+        `
+        insert into power_systems (
+          id, project_id, name, kind, source, cost, levels_json, taboos_json,
+          conflict_hooks_json, status, created_at, updated_at
+        )
+        values (
+          'power_system_star_tide', @projectId, '星潮九转', 'cultivation',
+          '星潮', '寿元损耗', '["启星","凝潮","照命"]', '["无代价越阶"]',
+          '["司星阁封锁晋阶资源"]', 'canon', @now, @now
+        )
+        `,
+      )
+      .run({
+        now: Date.now(),
+        projectId: input.projectId,
+      });
+  } finally {
+    projectDatabase.close();
+  }
 }
 
 async function expectRpcOk(responsePromise: Promise<unknown>): Promise<Record<string, unknown>> {
@@ -1542,6 +2379,15 @@ function getRecordArray(value: unknown, field: string): Record<string, unknown>[
   );
 }
 
+function parseJsonRecord(value: string): Record<string, unknown> {
+  const parsed = JSON.parse(value) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Expected JSON object");
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
 function getStage(value: unknown, stageKey: string): Record<string, unknown> {
   const stage = getRecordArray(value, "stages").find(
     (candidate) => candidate.stageKey === stageKey,
@@ -1569,4 +2415,13 @@ function getNumber(value: unknown, field: string): number {
     throw new Error(`Expected number field ${field}`);
   }
   return child;
+}
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+
+  process.env[key] = value;
 }

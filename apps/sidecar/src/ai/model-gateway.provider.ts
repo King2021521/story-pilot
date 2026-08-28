@@ -1,4 +1,11 @@
-import { FakeModelProvider, ModelGateway, OpenAICompatibleProvider } from "@story-pilot/ai";
+import {
+  FakeModelProvider,
+  ModelGateway,
+  OpenAICompatibleProvider,
+  type ModelProvider,
+  type ProviderEmbedResult,
+  type ProviderObjectResult,
+} from "@story-pilot/ai";
 
 export const MODEL_GATEWAY = "MODEL_GATEWAY";
 
@@ -23,10 +30,27 @@ export function createModelGatewayFromEnv(
     );
   }
 
+  if (env.STORY_PILOT_ALLOW_FAKE_MODEL !== "true") {
+    return new ModelGateway(new UnconfiguredModelProvider());
+  }
+
   return new ModelGateway(
     new FakeModelProvider({
       embedding: [0, 0, 0],
       objectResponses: {
+        BlueprintGenerateOutput: {
+          antagonistForce: "隐藏真相或垄断关键资源的对立力量。",
+          corePromise: "持续提供冲突升级、线索推进和阶段回报。",
+          differentiators: [
+            "把核心设定绑定人物选择，而不是只做背景装饰。",
+            "每一卷至少保留一个可追踪的伏笔回收链。",
+          ],
+          logline: "主角从异常事件中发现更大的秩序裂缝。",
+          mainConflict: "主角追求真相或力量时，必须对抗既有秩序制造的阻力。",
+          premise: "主角从异常事件中发现更大的秩序裂缝。",
+          protagonistArc: "主角从被动卷入转为主动承担代价。",
+          risks: ["设定堆叠过多会拖慢开篇。"],
+        },
         ChapterDraftOutput: {
           draft: {
             body: "雨夜里，林鸢从门缝下抽出一封来历异常的旧信。",
@@ -92,9 +116,49 @@ export function createModelGatewayFromEnv(
             },
           ],
         },
+        OutlineGenerateOutput: {
+          chapterOutlines: [
+            {
+              chapterGoal: "建立异常事件和主角行动目标。",
+              conflict: "主角想回避风险，外部压力迫使其行动。",
+              emotionalTurn: "从平静到被迫卷入。",
+              hook: "以一个更大的未解问题收束。",
+              informationGain: "新增一条与主冲突相关的信息。",
+              targetWordCount: 3000,
+              title: "第 1 章：开局钩子",
+            },
+          ],
+          outline: {
+            basis: {},
+            scope: "chapter_batch",
+            title: "前 10 章章纲",
+          },
+          riskNotes: [],
+        },
       },
     }),
   );
+}
+
+class UnconfiguredModelProvider implements ModelProvider {
+  readonly model = "unconfigured";
+  readonly name = "unconfigured";
+
+  generateObject(): Promise<ProviderObjectResult> {
+    return Promise.reject(createUnconfiguredModelError());
+  }
+
+  streamText(): AsyncIterable<string> {
+    throw createUnconfiguredModelError();
+  }
+
+  embed(): Promise<ProviderEmbedResult> {
+    return Promise.reject(createUnconfiguredModelError());
+  }
+}
+
+function createUnconfiguredModelError(): Error {
+  return new Error("AI_MODEL_NOT_CONFIGURED: setting.json model.apiKey/baseUrl/model required");
 }
 
 export const modelGatewayProvider = {

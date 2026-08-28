@@ -32,8 +32,9 @@ export interface ProjectLayout {
   readonly rootPath: string;
   readonly databasePath: string;
   readonly graphPath: string;
-  readonly filesPath: string;
-  readonly snapshotsPath: string;
+  readonly exportsPath: string;
+  readonly artifactsPath: string;
+  readonly attachmentsPath: string;
   readonly backupsPath: string;
 }
 
@@ -43,22 +44,25 @@ export class ProjectStorageService {
     const rootPath = this.getProjectRootPath(input.projectId);
     const databasePath = join(rootPath, "project.sqlite");
     const graphPath = join(rootPath, "graph.kuzu");
-    const filesPath = join(rootPath, "files");
-    const snapshotsPath = join(rootPath, "snapshots");
+    const exportsPath = join(rootPath, "exports");
+    const artifactsPath = join(rootPath, "artifacts");
+    const attachmentsPath = join(rootPath, "attachments");
     const backupsPath = join(rootPath, "backups");
 
-    mkdirSync(filesPath, { recursive: true });
-    mkdirSync(snapshotsPath, { recursive: true });
+    mkdirSync(exportsPath, { recursive: true });
+    mkdirSync(artifactsPath, { recursive: true });
+    mkdirSync(attachmentsPath, { recursive: true });
     mkdirSync(backupsPath, { recursive: true });
     mkdirSync(graphPath, { recursive: true });
 
     return {
+      artifactsPath,
+      attachmentsPath,
       backupsPath,
       databasePath,
-      filesPath,
+      exportsPath,
       graphPath,
       rootPath,
-      snapshotsPath,
     };
   }
 

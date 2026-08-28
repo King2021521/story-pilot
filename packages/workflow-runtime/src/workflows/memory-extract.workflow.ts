@@ -132,7 +132,9 @@ export function createMemoryExtractWorkflow(
         execute: async ({ input }) => ({
           output: {
             conflictNotes: Array.isArray(input.conflictNotes) ? input.conflictNotes : [],
-            memoryCandidateIds: Array.isArray(input.memoryCandidateIds) ? input.memoryCandidateIds : [],
+            memoryCandidateIds: Array.isArray(input.memoryCandidateIds)
+              ? input.memoryCandidateIds
+              : [],
           },
           status: "waiting_user",
         }),

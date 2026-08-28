@@ -11,9 +11,7 @@ export interface AiTaskDrawerProps {
 export function AiTaskDrawer({ onClose, open }: AiTaskDrawerProps) {
   return (
     <Drawer onClose={onClose} open={open} placement="right" size="default" title="AI 任务">
-      <Paragraph type="secondary">
-        当前工作单集中展示，不作为常驻聊天入口。
-      </Paragraph>
+      <Paragraph type="secondary">当前工作单集中展示，不作为常驻聊天入口。</Paragraph>
       <Timeline
         items={[
           {

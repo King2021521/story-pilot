@@ -17,4 +17,3 @@ export type RpcError = {
   message: string;
   details?: unknown;
 };
-

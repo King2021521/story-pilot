@@ -156,6 +156,15 @@ describe("StoryPilotApiClient", () => {
     await api.getProjectOverview({ projectId: "project_1" });
     await api.backupProject({ projectId: "project_1" });
     await api.getWorkbenchSnapshot({ projectId: "project_1" });
+    await api.generateAi({
+      capability: "outline.generate",
+      input: { chapterCount: 10, scope: "chapter_batch" },
+      projectId: "project_1",
+      targetType: "project",
+    });
+    await api.getAiRun({ projectId: "project_1", workflowRunId: "run_1" });
+    await api.cancelAiRun({ projectId: "project_1", workflowRunId: "run_1" });
+    await api.listAiArtifacts({ kind: "outline_draft", projectId: "project_1" });
     await api.listChapters({ projectId: "project_1" });
     await api.getChapter({ chapterId: "chapter_1", projectId: "project_1" });
     await api.reviewChapterContinuity({
@@ -251,6 +260,10 @@ describe("StoryPilotApiClient", () => {
       "project.getOverview",
       "project.backup",
       "workbench.getSnapshot",
+      "ai.generate",
+      "ai.getRun",
+      "ai.cancelRun",
+      "ai.listArtifacts",
       "chapter.list",
       "chapter.get",
       "chapter.reviewContinuity",

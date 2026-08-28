@@ -39,9 +39,7 @@ describe("story-pilot sidecar runner", () => {
       );
 
       expect(result.status).toBe(0);
-      expect(readFileSync(capturePath, "utf8")).toContain(
-        `${fakeNode} apps/sidecar/dist/main.js`,
-      );
+      expect(readFileSync(capturePath, "utf8")).toContain(`${fakeNode} apps/sidecar/dist/main.js`);
     } finally {
       rmSync(workspace, { force: true, recursive: true });
     }

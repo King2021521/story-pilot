@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -9,28 +9,29 @@ export const STORY_PILOT_SETTINGS_PATH_ENV = "STORY_PILOT_SETTINGS_PATH";
 export const STORY_PILOT_PROJECTS_ROOT_ENV = "STORY_PILOT_PROJECTS_ROOT";
 export const STORY_PILOT_GLOBAL_DATABASE_PATH_ENV = "STORY_PILOT_GLOBAL_DATABASE_PATH";
 
-const DEFAULT_SETTINGS_FILE = "settings.json";
-const DEFAULT_PROVIDER_ID = "default-openai-compatible";
+const DEFAULT_SETTINGS_FILE = "setting.json";
 
-export interface RuntimeModelProviderSettings {
-  readonly id: string;
-  readonly type: "openai-compatible";
-  readonly name: string;
+export interface RuntimeModelSettings {
+  readonly provider: "openai-compatible";
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly model: string;
+  readonly embeddingModel: string;
+  readonly timeoutMs: number;
+  readonly maxRetries: number;
 }
 
 export interface RuntimeSettings {
   readonly version: 1;
+  readonly model: RuntimeModelSettings;
   readonly storage: {
-    readonly homePath: string;
-    readonly projectsRoot: string;
-    readonly globalDatabasePath: string;
+    readonly homeDir: string;
+    readonly autoBackup: boolean;
+    readonly backupRetention: number;
   };
-  readonly llm: {
-    readonly defaultProviderId: string;
-    readonly providers: readonly RuntimeModelProviderSettings[];
+  readonly privacy: {
+    readonly redactApiKeyInLogs: boolean;
+    readonly allowDiagnosticsExport: boolean;
   };
 }
 
@@ -39,7 +40,20 @@ export interface RuntimeConfig {
   readonly settingsPath: string;
   readonly projectsRoot: string;
   readonly globalDatabasePath: string;
+  readonly logsPath: string;
+  readonly diagnosticsPath: string;
+  readonly tempPath: string;
   readonly settings: RuntimeSettings;
+}
+
+type RuntimeSettingsFieldPatch<TSettings extends object> = {
+  readonly [TKey in keyof TSettings]?: TSettings[TKey] | undefined;
+};
+
+export interface RuntimeSettingsPatch {
+  readonly model?: RuntimeSettingsFieldPatch<RuntimeModelSettings> | undefined;
+  readonly storage?: RuntimeSettingsFieldPatch<RuntimeSettings["storage"]> | undefined;
+  readonly privacy?: RuntimeSettingsFieldPatch<RuntimeSettings["privacy"]> | undefined;
 }
 
 export interface InitializeRuntimeConfigOptions {
@@ -56,29 +70,72 @@ export function initializeRuntimeConfig(
   mkdirSync(homePath, { recursive: true });
   mkdirSync(dirname(settingsPath), { recursive: true });
 
-  const rawSettings = existsSync(settingsPath)
-    ? JSON.parse(readFileSync(settingsPath, "utf8"))
-    : undefined;
+  const rawSettings = readSettingsFile(settingsPath);
   const settings = normalizeRuntimeSettings(rawSettings, homePath);
 
   writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
-  mkdirSync(settings.storage.projectsRoot, { recursive: true });
-  mkdirSync(join(homePath, "logs"), { recursive: true });
-  mkdirSync(dirname(settings.storage.globalDatabasePath), { recursive: true });
+  const projectsRoot = resolveRuntimeProjectsRoot(env);
+  const globalDatabasePath = resolveRuntimeGlobalDatabasePath(env);
+  const logsPath = join(homePath, "logs");
+  const diagnosticsPath = join(homePath, "diagnostics");
+  const tempPath = join(homePath, "temp");
+
+  mkdirSync(projectsRoot, { recursive: true });
+  mkdirSync(logsPath, { recursive: true });
+  mkdirSync(diagnosticsPath, { recursive: true });
+  mkdirSync(tempPath, { recursive: true });
+  mkdirSync(dirname(globalDatabasePath), { recursive: true });
 
   env[STORY_PILOT_HOME_ENV] = env[STORY_PILOT_HOME_ENV] ?? homePath;
-  env[STORY_PILOT_PROJECTS_ROOT_ENV] =
-    env[STORY_PILOT_PROJECTS_ROOT_ENV] ?? settings.storage.projectsRoot;
+  env[STORY_PILOT_SETTINGS_PATH_ENV] = env[STORY_PILOT_SETTINGS_PATH_ENV] ?? settingsPath;
+  env[STORY_PILOT_PROJECTS_ROOT_ENV] = env[STORY_PILOT_PROJECTS_ROOT_ENV] ?? projectsRoot;
   env[STORY_PILOT_GLOBAL_DATABASE_PATH_ENV] =
-    env[STORY_PILOT_GLOBAL_DATABASE_PATH_ENV] ?? settings.storage.globalDatabasePath;
+    env[STORY_PILOT_GLOBAL_DATABASE_PATH_ENV] ?? globalDatabasePath;
   applyDefaultModelProvider(settings, env);
 
   return {
-    globalDatabasePath: settings.storage.globalDatabasePath,
+    diagnosticsPath,
+    globalDatabasePath,
     homePath,
-    projectsRoot: settings.storage.projectsRoot,
+    logsPath,
+    projectsRoot,
     settings,
     settingsPath,
+    tempPath,
+  };
+}
+
+export function updateRuntimeSettings(
+  patch: RuntimeSettingsPatch,
+  options: InitializeRuntimeConfigOptions = {},
+): RuntimeConfig {
+  const env = options.env ?? process.env;
+  const current = initializeRuntimeConfig({ env });
+  const settings = normalizeRuntimeSettings(
+    {
+      model: {
+        ...current.settings.model,
+        ...(patch.model ?? {}),
+      },
+      privacy: {
+        ...current.settings.privacy,
+        ...(patch.privacy ?? {}),
+      },
+      storage: {
+        ...current.settings.storage,
+        ...(patch.storage ?? {}),
+      },
+      version: 1,
+    },
+    current.homePath,
+  );
+
+  writeFileSync(current.settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  applyDefaultModelProvider(settings, env);
+
+  return {
+    ...current,
+    settings,
   };
 }
 
@@ -109,84 +166,68 @@ function resolveSettingsPath(homePath: string, env: NodeJS.ProcessEnv): string {
 function normalizeRuntimeSettings(input: unknown, homePath: string): RuntimeSettings {
   const inputRecord = isRecord(input) ? input : {};
   const storageRecord = isRecord(inputRecord.storage) ? inputRecord.storage : {};
-  const projectsRoot = resolvePath(
-    readString(storageRecord.projectsRoot) ?? join(homePath, "projects"),
-    homePath,
-  );
-  const globalDatabasePath = resolvePath(
-    readString(storageRecord.globalDatabasePath) ?? join(homePath, GLOBAL_DATABASE_FILE),
-    homePath,
-  );
-  const llmRecord = isRecord(inputRecord.llm) ? inputRecord.llm : {};
-  const providers = readProviders(llmRecord.providers);
-  const defaultProviderId =
-    readString(llmRecord.defaultProviderId) ?? providers[0]?.id ?? DEFAULT_PROVIDER_ID;
+  const modelRecord = isRecord(inputRecord.model)
+    ? inputRecord.model
+    : readLegacyModel(inputRecord);
+  const privacyRecord = isRecord(inputRecord.privacy) ? inputRecord.privacy : {};
 
   return {
-    llm: {
-      defaultProviderId,
-      providers,
+    model: {
+      apiKey: readString(modelRecord.apiKey) ?? "",
+      baseUrl: readString(modelRecord.baseUrl) ?? "",
+      embeddingModel: readString(modelRecord.embeddingModel) ?? "",
+      maxRetries: readNumber(modelRecord.maxRetries) ?? 2,
+      model: readString(modelRecord.model) ?? "gpt-5.5",
+      provider: "openai-compatible",
+      timeoutMs: readNumber(modelRecord.timeoutMs) ?? 120_000,
+    },
+    privacy: {
+      allowDiagnosticsExport: readBoolean(privacyRecord.allowDiagnosticsExport) ?? true,
+      redactApiKeyInLogs: readBoolean(privacyRecord.redactApiKeyInLogs) ?? true,
     },
     storage: {
-      globalDatabasePath,
-      homePath,
-      projectsRoot,
+      autoBackup: readBoolean(storageRecord.autoBackup) ?? true,
+      backupRetention: readNumber(storageRecord.backupRetention) ?? 20,
+      homeDir: resolvePath(readString(storageRecord.homeDir) ?? homePath, homePath),
     },
     version: 1,
   };
 }
 
-function readProviders(input: unknown): RuntimeModelProviderSettings[] {
-  if (!Array.isArray(input) || input.length === 0) {
-    return [createDefaultProvider()];
-  }
-
-  const providers = input.map(readProvider).filter((provider) => provider !== undefined);
-  return providers.length > 0 ? providers : [createDefaultProvider()];
-}
-
-function readProvider(input: unknown): RuntimeModelProviderSettings | undefined {
-  if (!isRecord(input)) {
+function readSettingsFile(settingsPath: string): unknown {
+  if (!existsSync(settingsPath)) {
     return undefined;
   }
 
-  const id = readString(input.id);
-  if (!id) {
+  try {
+    return JSON.parse(readFileSync(settingsPath, "utf8"));
+  } catch {
+    const invalidPath = settingsPath.replace(/\.json$/u, `.invalid.${Date.now()}.json`);
+    renameSync(settingsPath, invalidPath);
     return undefined;
   }
-
-  return {
-    apiKey: readString(input.apiKey) ?? "",
-    baseUrl: readString(input.baseUrl) ?? "",
-    id,
-    model: readString(input.model) ?? "gpt-5.5",
-    name: readString(input.name) ?? id,
-    type: "openai-compatible",
-  };
 }
 
-function createDefaultProvider(): RuntimeModelProviderSettings {
-  return {
-    apiKey: "",
-    baseUrl: "",
-    id: DEFAULT_PROVIDER_ID,
-    model: "gpt-5.5",
-    name: "Default OpenAI Compatible",
-    type: "openai-compatible",
-  };
+function readLegacyModel(inputRecord: Record<string, unknown>): Record<string, unknown> {
+  const llmRecord = isRecord(inputRecord.llm) ? inputRecord.llm : {};
+  const providers = Array.isArray(llmRecord.providers) ? llmRecord.providers : [];
+  const defaultProviderId = readString(llmRecord.defaultProviderId);
+  const defaultProvider = providers
+    .filter(isRecord)
+    .find((provider) => provider.id === defaultProviderId);
+  const firstProvider = providers.find(isRecord);
+
+  return defaultProvider ?? firstProvider ?? {};
 }
 
 function applyDefaultModelProvider(settings: RuntimeSettings, env: NodeJS.ProcessEnv): void {
-  const defaultProvider =
-    settings.llm.providers.find((provider) => provider.id === settings.llm.defaultProviderId) ??
-    settings.llm.providers[0];
-  if (!defaultProvider || !defaultProvider.apiKey || !defaultProvider.baseUrl) {
+  if (!settings.model.apiKey || !settings.model.baseUrl) {
     return;
   }
 
-  env.STORY_PILOT_LLM_API_KEY = defaultProvider.apiKey;
-  env.STORY_PILOT_LLM_BASE_URL = defaultProvider.baseUrl;
-  env.STORY_PILOT_LLM_MODEL = defaultProvider.model;
+  env.STORY_PILOT_LLM_API_KEY = settings.model.apiKey;
+  env.STORY_PILOT_LLM_BASE_URL = settings.model.baseUrl;
+  env.STORY_PILOT_LLM_MODEL = settings.model.model;
 }
 
 function resolvePath(path: string, basePath: string): string {
@@ -207,6 +248,14 @@ function resolvePath(path: string, basePath: string): string {
 
 function readString(input: unknown): string | undefined {
   return typeof input === "string" ? input : undefined;
+}
+
+function readNumber(input: unknown): number | undefined {
+  return typeof input === "number" && Number.isFinite(input) ? input : undefined;
+}
+
+function readBoolean(input: unknown): boolean | undefined {
+  return typeof input === "boolean" ? input : undefined;
 }
 
 function isRecord(input: unknown): input is Record<string, unknown> {

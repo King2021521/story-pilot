@@ -23,4 +23,3 @@ export type StoryPilotEvent<TPayload = unknown> = {
   timestamp: number;
   payload: TPayload;
 };
-

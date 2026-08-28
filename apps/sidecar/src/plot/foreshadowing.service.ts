@@ -26,7 +26,9 @@ export class ForeshadowingService {
         foreshadowingId: randomUUID(),
         projectId: input.projectId,
         title: input.title,
-        ...(input.payoffExpectation === undefined ? {} : { payoffExpectation: input.payoffExpectation }),
+        ...(input.payoffExpectation === undefined
+          ? {}
+          : { payoffExpectation: input.payoffExpectation }),
         ...(input.seedEventId === undefined
           ? {}
           : { seedEventId: input.seedEventId, seedEventLinkId: randomUUID() }),

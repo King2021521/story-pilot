@@ -81,7 +81,9 @@ export interface ContextBuilderReadModel {
 export class ContextBuilder {
   constructor(private readonly readModel: ContextBuilderReadModel) {}
 
-  async buildChapterDraftContext(input: BuildChapterDraftContextInput): Promise<BuiltChapterDraftContext> {
+  async buildChapterDraftContext(
+    input: BuildChapterDraftContextInput,
+  ): Promise<BuiltChapterDraftContext> {
     const chapter = await this.readModel.getChapter(input.projectId, input.chapterId);
     const memories = await this.readModel.listMemories({
       limit: 80,
@@ -106,7 +108,9 @@ export class ContextBuilder {
       ...memories
         .filter((memory) => memory.status === "hypothesis")
         .map((memory, index) => buildMemoryItem(memory, index + 200)),
-      ...neighborhoods.map((neighborhood, index) => buildGraphItem(neighborhood, `graph_${index}`, index + 400)),
+      ...neighborhoods.map((neighborhood, index) =>
+        buildGraphItem(neighborhood, `graph_${index}`, index + 400),
+      ),
       {
         itemId: input.chapterId,
         itemType: "instruction",
@@ -199,7 +203,10 @@ function hashContextInput(input: Record<string, unknown>): string {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
-function trimItems(items: readonly ContextPackageItem[], tokenBudget: number): ContextPackageItem[] {
+function trimItems(
+  items: readonly ContextPackageItem[],
+  tokenBudget: number,
+): ContextPackageItem[] {
   const approximateCharBudget = Math.max(1_000, tokenBudget * 4);
   const kept: ContextPackageItem[] = [];
   let used = 0;

@@ -18,10 +18,13 @@ export const MemoryExtractCandidateSchema = z
     sourceSummary: z.string().min(1).optional(),
     status: z.literal("pending").default("pending"),
   })
-  .refine((candidate) => candidate.sourceQuote !== undefined || candidate.sourceSummary !== undefined, {
-    message: "Memory candidates require sourceQuote or sourceSummary",
-    path: ["sourceQuote"],
-  });
+  .refine(
+    (candidate) => candidate.sourceQuote !== undefined || candidate.sourceSummary !== undefined,
+    {
+      message: "Memory candidates require sourceQuote or sourceSummary",
+      path: ["sourceQuote"],
+    },
+  );
 
 export const MemoryExtractOutputSchema = z.object({
   conflictNotes: z.array(z.string().min(1)).default([]),

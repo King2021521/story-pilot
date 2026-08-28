@@ -1,10 +1,5 @@
 export type WorkflowRunStatus =
-  | "queued"
-  | "running"
-  | "waiting_user"
-  | "completed"
-  | "failed"
-  | "canceled";
+  "queued" | "running" | "waiting_user" | "completed" | "failed" | "canceled";
 
 export type WorkflowStepStatus = WorkflowRunStatus;
 

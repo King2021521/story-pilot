@@ -12,6 +12,7 @@ import {
 import { ZodError } from "zod";
 
 import { ArtifactService, type ApplyArtifactInput } from "../artifact/artifact.service.js";
+import { AiCommandService } from "../ai-command/ai-command.service.js";
 import { CharacterService, type CreateCharacterInput } from "../character/character.service.js";
 import {
   ChapterService,
@@ -20,6 +21,7 @@ import {
 } from "../chapter/chapter.service.js";
 import { ElementCandidateService } from "../creative/element-candidate.service.js";
 import { CreativePathService } from "../creative-path/creative-path.service.js";
+import { DiagnosticsService } from "../diagnostics/diagnostics.service.js";
 import { GraphService } from "../graph/graph.service.js";
 import { HealthService } from "../health/health.service.js";
 import { MemoryService } from "../memory/memory.service.js";
@@ -31,6 +33,7 @@ import {
 import { PlotlineService, type CreatePlotlineInput } from "../plot/plotline.service.js";
 import { StoryEventService, type CreateStoryEventInput } from "../plot/story-event.service.js";
 import { ProjectService, type CreateProjectInput } from "../project/project.service.js";
+import { SettingsService } from "../settings/settings.service.js";
 import { WorkflowService, type RunWorkflowInput } from "../workflow/workflow.service.js";
 import { WorkbenchService } from "../workbench/workbench.service.js";
 import { WorldRuleService } from "../world/world-rule.service.js";
@@ -39,9 +42,11 @@ import { WorldRuleService } from "../world/world-rule.service.js";
 export class RpcService {
   constructor(
     private readonly artifactService: ArtifactService,
+    private readonly aiCommandService: AiCommandService,
     private readonly characterService: CharacterService,
     private readonly chapterService: ChapterService,
     private readonly creativePathService: CreativePathService,
+    private readonly diagnosticsService: DiagnosticsService,
     private readonly elementCandidateService: ElementCandidateService,
     private readonly foreshadowingService: ForeshadowingService,
     private readonly graphService: GraphService,
@@ -50,6 +55,7 @@ export class RpcService {
     private readonly outlineService: OutlineService,
     private readonly plotlineService: PlotlineService,
     private readonly projectService: ProjectService,
+    private readonly settingsService: SettingsService,
     private readonly storyEventService: StoryEventService,
     private readonly workflowService: WorkflowService,
     private readonly workbenchService: WorkbenchService,
@@ -102,6 +108,23 @@ export class RpcService {
 
   private async dispatch(command: string, payload: unknown): Promise<unknown> {
     switch (command) {
+      case "settings.get": {
+        return this.settingsService.getSettings();
+      }
+      case "settings.update": {
+        return this.settingsService.updateSettings(payload as CommandPayload<"settings.update">);
+      }
+      case "settings.validateModel": {
+        return this.settingsService.validateModel(
+          payload as CommandPayload<"settings.validateModel">,
+        );
+      }
+      case "diagnostics.getHealth": {
+        return this.diagnosticsService.getHealthReport();
+      }
+      case "diagnostics.export": {
+        return this.diagnosticsService.exportBundle();
+      }
       case "project.create": {
         const parsed = payload as CommandPayload<"project.create">;
         const input: CreateProjectInput = {
@@ -135,6 +158,15 @@ export class RpcService {
         const parsed = payload as CommandPayload<"project.backup">;
         return this.projectService.backup(parsed.projectId);
       }
+      case "backup.createProject": {
+        const parsed = payload as CommandPayload<"backup.createProject">;
+        return this.projectService.backup(parsed.projectId);
+      }
+      case "backup.restoreProject": {
+        return this.projectService.restoreBackup(
+          payload as CommandPayload<"backup.restoreProject">,
+        );
+      }
       case "workbench.getSnapshot": {
         const parsed = payload as CommandPayload<"workbench.getSnapshot">;
         return this.workbenchService.getSnapshot(parsed.projectId);
@@ -143,9 +175,39 @@ export class RpcService {
         const parsed = payload as CommandPayload<"workbench.getBoard">;
         return this.workbenchService.getBoard(parsed.projectId);
       }
+      case "ai.generate": {
+        return this.aiCommandService.generate(payload as CommandPayload<"ai.generate">);
+      }
+      case "ai.getRun": {
+        return this.aiCommandService.getRun(payload as CommandPayload<"ai.getRun">);
+      }
+      case "ai.cancelRun": {
+        return this.aiCommandService.cancelRun(payload as CommandPayload<"ai.cancelRun">);
+      }
+      case "ai.listArtifacts": {
+        return this.aiCommandService.listArtifacts(payload as CommandPayload<"ai.listArtifacts">);
+      }
       case "creativeStage.getPath": {
         const parsed = payload as CommandPayload<"creativeStage.getPath">;
         return this.creativePathService.getPath(parsed.projectId);
+      }
+      case "creativeStage.evaluateGate": {
+        return this.creativePathService.evaluateStageGate(
+          payload as CommandPayload<"creativeStage.evaluateGate">,
+        );
+      }
+      case "creativeStage.advance": {
+        return this.creativePathService.advanceStage(
+          payload as CommandPayload<"creativeStage.advance">,
+        );
+      }
+      case "creativeStage.reopen": {
+        return this.creativePathService.reopenStage(
+          payload as CommandPayload<"creativeStage.reopen">,
+        );
+      }
+      case "creativeStage.skip": {
+        return this.creativePathService.skipStage(payload as CommandPayload<"creativeStage.skip">);
       }
       case "creativeStage.complete": {
         const parsed = payload as CommandPayload<"creativeStage.complete">;
@@ -549,6 +611,9 @@ function mapServiceErrorCode(error: unknown): StoryPilotErrorCode {
   }
   if (error.message.startsWith("CHAPTER_VERSION_CONFLICT")) {
     return "CHAPTER_VERSION_CONFLICT";
+  }
+  if (error.message.startsWith("FILE_OUT_OF_SCOPE")) {
+    return "FILE_OUT_OF_SCOPE";
   }
   if (error.message.includes("GRAPH") || error.message.includes("KUZU")) {
     return "GRAPH_UNAVAILABLE";

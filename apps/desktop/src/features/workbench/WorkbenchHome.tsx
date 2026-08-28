@@ -38,6 +38,7 @@ import type { MemoryCandidateDecisionInput } from "../memory/MemoryConfirmDrawer
 import {
   CreativePathWorkbench,
   type CompletableCreativeStageKey,
+  type CreativeStageKey,
   type CreativePathBoard,
   type SaveBriefValues,
 } from "../creative-path/CreativePathWorkbench";
@@ -94,15 +95,28 @@ export interface WorkbenchHomeProps {
   onApplyBlueprint(input: { readonly blueprintId: string }): Promise<void> | void;
   onApplyChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onApproveChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onAdvanceStage(input: {
+    readonly stageKey: CreativeStageKey;
+    readonly mode: "strict" | "force";
+  }): Promise<void> | void;
   onCompleteStage(input: { readonly stageKey: CompletableCreativeStageKey }): Promise<void> | void;
   onConfirmBrief(input: { readonly briefId: string }): Promise<void> | void;
+  onEvaluateStageGate(input: { readonly stageKey: CreativeStageKey }): Promise<void> | void;
   onGenerateBlueprint(): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateOutline(input: {
     readonly scope: "chapter_batch";
     readonly chapterCount: 10;
   }): Promise<void> | void;
+  onReopenStage(input: {
+    readonly stageKey: CreativeStageKey;
+    readonly reason?: string;
+  }): Promise<void> | void;
   onSaveBrief(input: SaveBriefValues): Promise<void> | void;
+  onSkipStage(input: {
+    readonly stageKey: CreativeStageKey;
+    readonly reason: string;
+  }): Promise<void> | void;
   onAcceptElementCandidates(input: AcceptElementCandidatesValues): Promise<void> | void;
   onGenerateElementCandidates(
     input: GenerateElementCandidatesValues,
@@ -125,8 +139,10 @@ export function WorkbenchHome({
   onApplyBlueprint,
   onApplyChapterOutline,
   onApproveChapterOutline,
+  onAdvanceStage,
   onCompleteStage,
   onConfirmBrief,
+  onEvaluateStageGate,
   onCreateChapter,
   onCreateCharacter,
   onCreateForeshadowing,
@@ -140,9 +156,11 @@ export function WorkbenchHome({
   onLoadChapterVersions,
   onRejectMemory,
   onRestoreChapterVersion,
+  onReopenStage,
   onSaveChapter,
   onSaveBrief,
   onSelectChapter,
+  onSkipStage,
   savingChapter = false,
   selectedChapterId,
 }: WorkbenchHomeProps) {
@@ -202,13 +220,17 @@ export function WorkbenchHome({
                 onApplyBlueprint={onApplyBlueprint}
                 onApplyChapterOutline={onApplyChapterOutline}
                 onApproveChapterOutline={onApproveChapterOutline}
+                onAdvanceStage={onAdvanceStage}
                 onCompleteStage={onCompleteStage}
                 onConfirmBrief={onConfirmBrief}
+                onEvaluateStageGate={onEvaluateStageGate}
                 onGenerateBlueprint={onGenerateBlueprint}
                 onGenerateDraftFromOutline={onGenerateDraftFromOutline}
                 onGenerateOutline={onGenerateOutline}
                 onOpenCreativeElements={() => setActiveTabKey("creative")}
+                onReopenStage={onReopenStage}
                 onSaveBrief={onSaveBrief}
+                onSkipStage={onSkipStage}
               />
             ),
             key: "creative-path",

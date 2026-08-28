@@ -45,7 +45,9 @@ export async function executeGraphQuery(
   return collectRows(result);
 }
 
-async function collectRows(result: QueryResult | QueryResult[]): Promise<Record<string, KuzuValue>[]> {
+async function collectRows(
+  result: QueryResult | QueryResult[],
+): Promise<Record<string, KuzuValue>[]> {
   if (Array.isArray(result)) {
     const rows: Record<string, KuzuValue>[] = [];
     for (const partial of result) {

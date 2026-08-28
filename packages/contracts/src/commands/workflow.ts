@@ -11,21 +11,19 @@ export const workflowCommandSchemas = {
   "workOrder.get": projectIdPayloadSchema.extend({
     workOrderId: z.string().min(1),
   }),
-  "workflow.run": projectIdPayloadSchema
-    .merge(entityTargetSchema)
-    .extend({
-      workflowType: z.enum([
-        "story_bible",
-        "outline",
-        "chapter_draft",
-        "rewrite",
-        "review",
-        "memory_extract",
-        "foreshadowing_plan",
-        "element_generate",
-      ]),
-      input: z.record(z.string(), z.unknown()).default({}),
-    }),
+  "workflow.run": projectIdPayloadSchema.merge(entityTargetSchema).extend({
+    workflowType: z.enum([
+      "story_bible",
+      "outline",
+      "chapter_draft",
+      "rewrite",
+      "review",
+      "memory_extract",
+      "foreshadowing_plan",
+      "element_generate",
+    ]),
+    input: z.record(z.string(), z.unknown()).default({}),
+  }),
   "workflow.cancel": projectIdPayloadSchema.extend({
     workflowRunId: z.string().min(1),
   }),
@@ -44,4 +42,3 @@ export const workflowCommandSchemas = {
     artifactId: z.string().min(1),
   }),
 };
-

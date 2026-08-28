@@ -39,7 +39,9 @@ export const plotlineNodes = sqliteTable(
     kind: text("kind").notNull().default("beat"),
     status: text("status").notNull().default("planned"),
     description: text("description"),
-    targetChapterId: text("target_chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    targetChapterId: text("target_chapter_id").references(() => chapters.id, {
+      onDelete: "set null",
+    }),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },

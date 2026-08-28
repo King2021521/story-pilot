@@ -14,12 +14,12 @@ SQLite source of truth
 
 每层职责不同：
 
-| 层级 | 组件 | 职责 | 是否事实源 |
-| --- | --- | --- | --- |
-| 事务源数据 | SQLite | 项目、章节、设定、版本、工作单、事件、AI 记录 | 是 |
-| 图谱读模型 | Kuzu | 关系查询、图遍历、记忆网络、影响分析 | 否 |
-| 搜索读模型 | SQLite FTS5 / vector index | 文本召回、语义召回、上下文组装 | 否 |
-| 文件存储 | 本地文件系统 | 导入、导出、快照、大模型原文、大附件 | 部分是，需有 DB metadata |
+| 层级       | 组件                       | 职责                                          | 是否事实源               |
+| ---------- | -------------------------- | --------------------------------------------- | ------------------------ |
+| 事务源数据 | SQLite                     | 项目、章节、设定、版本、工作单、事件、AI 记录 | 是                       |
+| 图谱读模型 | Kuzu                       | 关系查询、图遍历、记忆网络、影响分析          | 否                       |
+| 搜索读模型 | SQLite FTS5 / vector index | 文本召回、语义召回、上下文组装                | 否                       |
+| 文件存储   | 本地文件系统               | 导入、导出、快照、大模型原文、大附件          | 部分是，需有 DB metadata |
 
 关键原则：
 
@@ -33,27 +33,22 @@ SQLite source of truth
 
 ```text
 ~/.story-pilot/
-  settings.json
+  setting.json
   global.sqlite
+  diagnostics/
   logs/
     app-2026-08-27.log
     sidecar-2026-08-27.log
+  temp/
   projects/
     <projectId>/
       project.sqlite
       graph.kuzu/
-      files/
-        imports/
-        exports/
-        attachments/
-        model-raw/
-        thumbnails/
-      snapshots/
-        2026-08-27T120000Z/
+      exports/
+      artifacts/
+      attachments/
       backups/
         project-2026-08-27.sqlite.gz
-      locks/
-        project.lock
 ```
 
 ### `global.sqlite`
@@ -66,7 +61,7 @@ SQLite source of truth
 - 用户自定义预设。
 - UI 工作区状态。
 
-### `settings.json`
+### `setting.json`
 
 保存本机运行时配置。MVP 阶段为了降低配置复杂度，模型 API Key 由用户直接写入该文件；日志、模型调用记录和导出包仍必须避免泄露该字段。
 
@@ -75,23 +70,23 @@ SQLite source of truth
 ```json
 {
   "version": 1,
-  "storage": {
-    "homePath": "/Users/you/.story-pilot",
-    "projectsRoot": "/Users/you/.story-pilot/projects",
-    "globalDatabasePath": "/Users/you/.story-pilot/global.sqlite"
+  "model": {
+    "provider": "openai-compatible",
+    "baseUrl": "https://api.example.com/v1",
+    "apiKey": "replace-with-your-api-key",
+    "model": "gpt-5.5",
+    "embeddingModel": "",
+    "timeoutMs": 120000,
+    "maxRetries": 2
   },
-  "llm": {
-    "defaultProviderId": "default-openai-compatible",
-    "providers": [
-      {
-        "id": "default-openai-compatible",
-        "type": "openai-compatible",
-        "name": "Default OpenAI Compatible",
-        "baseUrl": "https://api.example.com/v1",
-        "apiKey": "replace-with-your-api-key",
-        "model": "gpt-5.5"
-      }
-    ]
+  "storage": {
+    "homeDir": "/Users/you/.story-pilot",
+    "autoBackup": true,
+    "backupRetention": 20
+  },
+  "privacy": {
+    "redactApiKeyInLogs": true,
+    "allowDiagnosticsExport": true
   }
 }
 ```
@@ -117,13 +112,13 @@ SQLite source of truth
 - 世界观规则约束。
 - 记忆网络。
 
-### `files/`
+### `exports/`、`artifacts/`、`attachments/`
 
 保存非结构化和大文件：
 
-- 导入的参考资料。
 - 导出的作品文件。
-- 插图、封面、附件。
+- AI 产物附件和审阅材料。
+- 插图、封面、导入参考资料和其他附件。
 - 模型原始请求和响应。
 - OCR 或解析后的中间文件。
 
@@ -133,53 +128,53 @@ SQLite source of truth
 
 ### `app_settings`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| key | text pk | 配置键 |
-| value_json | text | JSON 值 |
+| 字段       | 类型    | 说明     |
+| ---------- | ------- | -------- |
+| key        | text pk | 配置键   |
+| value_json | text    | JSON 值  |
 | updated_at | integer | 更新时间 |
 
 ### `model_providers`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | provider id |
-| name | text | 展示名称 |
-| provider_type | text | openai, anthropic, local, custom |
-| base_url | text nullable | 自定义 endpoint |
-| api_key_ref | text nullable | 后续升级 keychain 时使用；MVP 阶段以 `settings.json` 为准 |
-| default_model | text nullable | 默认模型 |
-| enabled | integer | 是否启用 |
-| config_json | text | 非敏感配置 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段          | 类型          | 说明                                                     |
+| ------------- | ------------- | -------------------------------------------------------- |
+| id            | text pk       | provider id                                              |
+| name          | text          | 展示名称                                                 |
+| provider_type | text          | openai, anthropic, local, custom                         |
+| base_url      | text nullable | 自定义 endpoint                                          |
+| api_key_ref   | text nullable | 后续升级 keychain 时使用；MVP 阶段以 `setting.json` 为准 |
+| default_model | text nullable | 默认模型                                                 |
+| enabled       | integer       | 是否启用                                                 |
+| config_json   | text          | 非敏感配置                                               |
+| created_at    | integer       | 创建时间                                                 |
+| updated_at    | integer       | 更新时间                                                 |
 
 ### `project_index`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 项目 id |
-| title | text | 作品名 |
-| path | text | 项目目录 |
-| cover_file_id | text nullable | 封面文件 |
-| status | text | active, archived |
-| last_opened_at | integer nullable | 最近打开 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段           | 类型             | 说明             |
+| -------------- | ---------------- | ---------------- |
+| id             | text pk          | 项目 id          |
+| title          | text             | 作品名           |
+| path           | text             | 项目目录         |
+| cover_file_id  | text nullable    | 封面文件         |
+| status         | text             | active, archived |
+| last_opened_at | integer nullable | 最近打开         |
+| created_at     | integer          | 创建时间         |
+| updated_at     | integer          | 更新时间         |
 
 ### `preset_library`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 预设 id |
-| scope | text | system, user |
-| category | text | genre, character, plot, world, style |
-| title | text | 名称 |
-| payload_json | text | 预设内容 |
-| tags_json | text | 标签 |
-| version | integer | 版本 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段         | 类型    | 说明                                 |
+| ------------ | ------- | ------------------------------------ |
+| id           | text pk | 预设 id                              |
+| scope        | text    | system, user                         |
+| category     | text    | genre, character, plot, world, style |
+| title        | text    | 名称                                 |
+| payload_json | text    | 预设内容                             |
+| tags_json    | text    | 标签                                 |
+| version      | integer | 版本                                 |
+| created_at   | integer | 创建时间                             |
+| updated_at   | integer | 更新时间                             |
 
 ## 项目数据库核心表
 
@@ -189,439 +184,439 @@ SQLite source of truth
 
 ### `projects`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 项目 id |
-| title | text | 作品名 |
-| subtitle | text nullable | 副标题 |
-| genre | text nullable | 主类型 |
-| target_audience | text nullable | 目标读者 |
-| logline | text nullable | 一句话故事 |
-| status | text | planning, drafting, revising, completed, archived |
-| word_count_goal | integer nullable | 目标字数 |
-| current_word_count | integer | 当前字数 |
-| metadata_json | text | 扩展信息 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段               | 类型             | 说明                                              |
+| ------------------ | ---------------- | ------------------------------------------------- |
+| id                 | text pk          | 项目 id                                           |
+| title              | text             | 作品名                                            |
+| subtitle           | text nullable    | 副标题                                            |
+| genre              | text nullable    | 主类型                                            |
+| target_audience    | text nullable    | 目标读者                                          |
+| logline            | text nullable    | 一句话故事                                        |
+| status             | text             | planning, drafting, revising, completed, archived |
+| word_count_goal    | integer nullable | 目标字数                                          |
+| current_word_count | integer          | 当前字数                                          |
+| metadata_json      | text             | 扩展信息                                          |
+| created_at         | integer          | 创建时间                                          |
+| updated_at         | integer          | 更新时间                                          |
 
 ### `works`
 
 `works` 用于预留一个项目下多部作品或番外的能力。
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 作品 id |
-| project_id | text | 项目 id |
-| title | text | 作品标题 |
-| kind | text | main, side_story, extra |
-| status | text | active, archived |
-| sort_order | integer | 排序 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段       | 类型    | 说明                    |
+| ---------- | ------- | ----------------------- |
+| id         | text pk | 作品 id                 |
+| project_id | text    | 项目 id                 |
+| title      | text    | 作品标题                |
+| kind       | text    | main, side_story, extra |
+| status     | text    | active, archived        |
+| sort_order | integer | 排序                    |
+| created_at | integer | 创建时间                |
+| updated_at | integer | 更新时间                |
 
 ## 章节结构
 
 ### `volumes`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 卷 id |
-| work_id | text | 作品 id |
-| title | text | 卷名 |
-| summary | text nullable | 卷摘要 |
-| sort_order | integer | 排序 |
-| status | text | planned, drafting, done |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段       | 类型          | 说明                    |
+| ---------- | ------------- | ----------------------- |
+| id         | text pk       | 卷 id                   |
+| work_id    | text          | 作品 id                 |
+| title      | text          | 卷名                    |
+| summary    | text nullable | 卷摘要                  |
+| sort_order | integer       | 排序                    |
+| status     | text          | planned, drafting, done |
+| created_at | integer       | 创建时间                |
+| updated_at | integer       | 更新时间                |
 
 ### `chapters`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 章节 id |
-| volume_id | text | 卷 id |
-| title | text | 章节名 |
-| summary | text nullable | 摘要 |
-| target_word_count | integer nullable | 目标字数 |
-| current_word_count | integer | 当前字数 |
-| status | text | planned, drafting, reviewing, revised, locked |
-| content | text | 当前正文 |
-| sort_order | integer | 排序 |
-| version | integer | 乐观锁版本 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段               | 类型             | 说明                                          |
+| ------------------ | ---------------- | --------------------------------------------- |
+| id                 | text pk          | 章节 id                                       |
+| volume_id          | text             | 卷 id                                         |
+| title              | text             | 章节名                                        |
+| summary            | text nullable    | 摘要                                          |
+| target_word_count  | integer nullable | 目标字数                                      |
+| current_word_count | integer          | 当前字数                                      |
+| status             | text             | planned, drafting, reviewing, revised, locked |
+| content            | text             | 当前正文                                      |
+| sort_order         | integer          | 排序                                          |
+| version            | integer          | 乐观锁版本                                    |
+| created_at         | integer          | 创建时间                                      |
+| updated_at         | integer          | 更新时间                                      |
 
 ### `chapter_versions`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 版本 id |
-| chapter_id | text | 章节 id |
-| version_no | integer | 版本号 |
-| content | text | 正文快照 |
-| summary | text nullable | 版本摘要 |
-| source | text | user, ai, import, restore |
-| created_by | text nullable | 创建者 |
-| created_at | integer | 创建时间 |
+| 字段       | 类型          | 说明                      |
+| ---------- | ------------- | ------------------------- |
+| id         | text pk       | 版本 id                   |
+| chapter_id | text          | 章节 id                   |
+| version_no | integer       | 版本号                    |
+| content    | text          | 正文快照                  |
+| summary    | text nullable | 版本摘要                  |
+| source     | text          | user, ai, import, restore |
+| created_by | text nullable | 创建者                    |
+| created_at | integer       | 创建时间                  |
 
 ### `scenes`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 场景 id |
-| chapter_id | text | 章节 id |
-| title | text | 场景名 |
-| summary | text nullable | 场景摘要 |
-| pov_character_id | text nullable | 视角人物 |
-| location_id | text nullable | 地点 |
-| time_label | text nullable | 故事内时间 |
-| conflict_type | text nullable | 冲突类型 |
-| emotional_turn | text nullable | 情绪转折 |
-| sort_order | integer | 排序 |
-| metadata_json | text | 扩展 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段             | 类型          | 说明       |
+| ---------------- | ------------- | ---------- |
+| id               | text pk       | 场景 id    |
+| chapter_id       | text          | 章节 id    |
+| title            | text          | 场景名     |
+| summary          | text nullable | 场景摘要   |
+| pov_character_id | text nullable | 视角人物   |
+| location_id      | text nullable | 地点       |
+| time_label       | text nullable | 故事内时间 |
+| conflict_type    | text nullable | 冲突类型   |
+| emotional_turn   | text nullable | 情绪转折   |
+| sort_order       | integer       | 排序       |
+| metadata_json    | text          | 扩展       |
+| created_at       | integer       | 创建时间   |
+| updated_at       | integer       | 更新时间   |
 
 ## 创作设定表
 
 ### `characters`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 人物 id |
-| project_id | text | 项目 id |
-| name | text | 姓名 |
-| aliases_json | text | 别名 |
-| role | text | protagonist, antagonist, support, cameo |
-| archetype | text nullable | 人物原型 |
-| goal | text nullable | 外在目标 |
-| need | text nullable | 内在需求 |
-| flaw | text nullable | 缺陷 |
-| secret | text nullable | 秘密 |
-| voice_profile | text nullable | 语言风格 |
-| biography | text nullable | 小传 |
-| status | text | draft, canon, deprecated |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段          | 类型          | 说明                                    |
+| ------------- | ------------- | --------------------------------------- |
+| id            | text pk       | 人物 id                                 |
+| project_id    | text          | 项目 id                                 |
+| name          | text          | 姓名                                    |
+| aliases_json  | text          | 别名                                    |
+| role          | text          | protagonist, antagonist, support, cameo |
+| archetype     | text nullable | 人物原型                                |
+| goal          | text nullable | 外在目标                                |
+| need          | text nullable | 内在需求                                |
+| flaw          | text nullable | 缺陷                                    |
+| secret        | text nullable | 秘密                                    |
+| voice_profile | text nullable | 语言风格                                |
+| biography     | text nullable | 小传                                    |
+| status        | text          | draft, canon, deprecated                |
+| created_at    | integer       | 创建时间                                |
+| updated_at    | integer       | 更新时间                                |
 
 ### `locations`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 地点 id |
-| project_id | text | 项目 id |
-| name | text | 地点名 |
-| kind | text | city, room, realm, planet, other |
-| description | text nullable | 描述 |
-| parent_location_id | text nullable | 上级地点 |
-| status | text | draft, canon, deprecated |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段               | 类型          | 说明                             |
+| ------------------ | ------------- | -------------------------------- |
+| id                 | text pk       | 地点 id                          |
+| project_id         | text          | 项目 id                          |
+| name               | text          | 地点名                           |
+| kind               | text          | city, room, realm, planet, other |
+| description        | text nullable | 描述                             |
+| parent_location_id | text nullable | 上级地点                         |
+| status             | text          | draft, canon, deprecated         |
+| created_at         | integer       | 创建时间                         |
+| updated_at         | integer       | 更新时间                         |
 
 ### `organizations`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 组织 id |
-| project_id | text | 项目 id |
-| name | text | 组织名 |
-| kind | text | family, sect, company, kingdom, faction, other |
-| description | text nullable | 描述 |
-| status | text | draft, canon, deprecated |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段        | 类型          | 说明                                           |
+| ----------- | ------------- | ---------------------------------------------- |
+| id          | text pk       | 组织 id                                        |
+| project_id  | text          | 项目 id                                        |
+| name        | text          | 组织名                                         |
+| kind        | text          | family, sect, company, kingdom, faction, other |
+| description | text nullable | 描述                                           |
+| status      | text          | draft, canon, deprecated                       |
+| created_at  | integer       | 创建时间                                       |
+| updated_at  | integer       | 更新时间                                       |
 
 ### `items`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 物品 id |
-| project_id | text | 项目 id |
-| name | text | 物品名 |
-| kind | text | artifact, weapon, clue, resource, other |
-| description | text nullable | 描述 |
-| owner_character_id | text nullable | 当前持有者 |
-| status | text | draft, canon, deprecated |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段               | 类型          | 说明                                    |
+| ------------------ | ------------- | --------------------------------------- |
+| id                 | text pk       | 物品 id                                 |
+| project_id         | text          | 项目 id                                 |
+| name               | text          | 物品名                                  |
+| kind               | text          | artifact, weapon, clue, resource, other |
+| description        | text nullable | 描述                                    |
+| owner_character_id | text nullable | 当前持有者                              |
+| status             | text          | draft, canon, deprecated                |
+| created_at         | integer       | 创建时间                                |
+| updated_at         | integer       | 更新时间                                |
 
 ### `world_rules`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 世界规则 id |
-| project_id | text | 项目 id |
-| category | text | magic, tech, society, history, geography, economy |
-| title | text | 规则标题 |
-| statement | text | 规则正文 |
-| constraint_level | text | hard, soft, optional |
-| status | text | draft, canon, deprecated |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段             | 类型    | 说明                                              |
+| ---------------- | ------- | ------------------------------------------------- |
+| id               | text pk | 世界规则 id                                       |
+| project_id       | text    | 项目 id                                           |
+| category         | text    | magic, tech, society, history, geography, economy |
+| title            | text    | 规则标题                                          |
+| statement        | text    | 规则正文                                          |
+| constraint_level | text    | hard, soft, optional                              |
+| status           | text    | draft, canon, deprecated                          |
+| created_at       | integer | 创建时间                                          |
+| updated_at       | integer | 更新时间                                          |
 
 ### `style_guides`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 风格规范 id |
-| project_id | text | 项目 id |
-| title | text | 名称 |
-| narrative_pov | text nullable | 叙事视角 |
-| tense | text nullable | 时态 |
-| prose_style | text nullable | 文风 |
-| dialogue_style | text nullable | 对话风格 |
-| forbidden_patterns_json | text | 禁用表达 |
-| examples_json | text | 示例 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段                    | 类型          | 说明        |
+| ----------------------- | ------------- | ----------- |
+| id                      | text pk       | 风格规范 id |
+| project_id              | text          | 项目 id     |
+| title                   | text          | 名称        |
+| narrative_pov           | text nullable | 叙事视角    |
+| tense                   | text nullable | 时态        |
+| prose_style             | text nullable | 文风        |
+| dialogue_style          | text nullable | 对话风格    |
+| forbidden_patterns_json | text          | 禁用表达    |
+| examples_json           | text          | 示例        |
+| created_at              | integer       | 创建时间    |
+| updated_at              | integer       | 更新时间    |
 
 ## 剧情与伏笔表
 
 ### `plotlines`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 故事线 id |
-| project_id | text | 项目 id |
-| title | text | 故事线名称 |
-| kind | text | main, branch, romance, mystery, growth |
-| summary | text nullable | 摘要 |
-| status | text | planned, active, resolved, abandoned |
-| priority | integer | 优先级 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段       | 类型          | 说明                                   |
+| ---------- | ------------- | -------------------------------------- |
+| id         | text pk       | 故事线 id                              |
+| project_id | text          | 项目 id                                |
+| title      | text          | 故事线名称                             |
+| kind       | text          | main, branch, romance, mystery, growth |
+| summary    | text nullable | 摘要                                   |
+| status     | text          | planned, active, resolved, abandoned   |
+| priority   | integer       | 优先级                                 |
+| created_at | integer       | 创建时间                               |
+| updated_at | integer       | 更新时间                               |
 
 ### `plotline_nodes`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 节点 id |
-| plotline_id | text | 故事线 id |
-| title | text | 节点标题 |
-| description | text nullable | 描述 |
-| node_type | text | setup, turn, midpoint, climax, resolution |
-| chapter_id | text nullable | 关联章节 |
-| scene_id | text nullable | 关联场景 |
-| sort_order | integer | 排序 |
-| status | text | planned, drafted, done |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段        | 类型          | 说明                                      |
+| ----------- | ------------- | ----------------------------------------- |
+| id          | text pk       | 节点 id                                   |
+| plotline_id | text          | 故事线 id                                 |
+| title       | text          | 节点标题                                  |
+| description | text nullable | 描述                                      |
+| node_type   | text          | setup, turn, midpoint, climax, resolution |
+| chapter_id  | text nullable | 关联章节                                  |
+| scene_id    | text nullable | 关联场景                                  |
+| sort_order  | integer       | 排序                                      |
+| status      | text          | planned, drafted, done                    |
+| created_at  | integer       | 创建时间                                  |
+| updated_at  | integer       | 更新时间                                  |
 
 ### `foreshadowings`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 伏笔 id |
-| project_id | text | 项目 id |
-| title | text | 伏笔标题 |
-| description | text | 伏笔描述 |
-| payoff_expectation | text nullable | 回收预期 |
-| status | text | planned, seeded, reinforced, paid_off, abandoned |
-| importance | integer | 重要程度 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段               | 类型          | 说明                                             |
+| ------------------ | ------------- | ------------------------------------------------ |
+| id                 | text pk       | 伏笔 id                                          |
+| project_id         | text          | 项目 id                                          |
+| title              | text          | 伏笔标题                                         |
+| description        | text          | 伏笔描述                                         |
+| payoff_expectation | text nullable | 回收预期                                         |
+| status             | text          | planned, seeded, reinforced, paid_off, abandoned |
+| importance         | integer       | 重要程度                                         |
+| created_at         | integer       | 创建时间                                         |
+| updated_at         | integer       | 更新时间                                         |
 
 ### `foreshadowing_events`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 事件 id |
-| foreshadowing_id | text | 伏笔 id |
-| event_type | text | seed, reinforce, misdirect, payoff |
-| chapter_id | text nullable | 章节 |
-| scene_id | text nullable | 场景 |
-| description | text | 事件描述 |
-| quote | text nullable | 原文摘录 |
-| created_at | integer | 创建时间 |
+| 字段             | 类型          | 说明                               |
+| ---------------- | ------------- | ---------------------------------- |
+| id               | text pk       | 事件 id                            |
+| foreshadowing_id | text          | 伏笔 id                            |
+| event_type       | text          | seed, reinforce, misdirect, payoff |
+| chapter_id       | text nullable | 章节                               |
+| scene_id         | text nullable | 场景                               |
+| description      | text          | 事件描述                           |
+| quote            | text nullable | 原文摘录                           |
+| created_at       | integer       | 创建时间                           |
 
 ## AI 与工作流表
 
 ### `work_orders`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 工作单 id |
-| project_id | text | 项目 id |
-| title | text | 工作单标题 |
-| kind | text | outline, chapter_draft, rewrite, review, memory_extract |
-| target_type | text | project, chapter, character, plotline |
-| target_id | text nullable | 目标对象 id |
-| status | text | queued, running, waiting_user, completed, failed, canceled |
-| priority | integer | 优先级 |
-| created_by | text | user, system |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段        | 类型          | 说明                                                       |
+| ----------- | ------------- | ---------------------------------------------------------- |
+| id          | text pk       | 工作单 id                                                  |
+| project_id  | text          | 项目 id                                                    |
+| title       | text          | 工作单标题                                                 |
+| kind        | text          | outline, chapter_draft, rewrite, review, memory_extract    |
+| target_type | text          | project, chapter, character, plotline                      |
+| target_id   | text nullable | 目标对象 id                                                |
+| status      | text          | queued, running, waiting_user, completed, failed, canceled |
+| priority    | integer       | 优先级                                                     |
+| created_by  | text          | user, system                                               |
+| created_at  | integer       | 创建时间                                                   |
+| updated_at  | integer       | 更新时间                                                   |
 
 ### `workflow_runs`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 运行 id |
-| work_order_id | text | 工作单 id |
-| workflow_type | text | 工作流类型 |
-| status | text | running, waiting_user, completed, failed, canceled |
-| input_json | text | 输入参数 |
-| output_json | text nullable | 输出摘要 |
-| started_at | integer | 开始时间 |
-| finished_at | integer nullable | 结束时间 |
-| error_json | text nullable | 错误信息 |
+| 字段          | 类型             | 说明                                               |
+| ------------- | ---------------- | -------------------------------------------------- |
+| id            | text pk          | 运行 id                                            |
+| work_order_id | text             | 工作单 id                                          |
+| workflow_type | text             | 工作流类型                                         |
+| status        | text             | running, waiting_user, completed, failed, canceled |
+| input_json    | text             | 输入参数                                           |
+| output_json   | text nullable    | 输出摘要                                           |
+| started_at    | integer          | 开始时间                                           |
+| finished_at   | integer nullable | 结束时间                                           |
+| error_json    | text nullable    | 错误信息                                           |
 
 ### `workflow_steps`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 步骤 id |
-| run_id | text | 运行 id |
-| step_key | text | 步骤 key |
-| status | text | pending, running, completed, failed, skipped |
-| input_json | text nullable | 输入 |
-| output_json | text nullable | 输出 |
-| attempt | integer | 尝试次数 |
-| started_at | integer nullable | 开始时间 |
-| finished_at | integer nullable | 完成时间 |
-| error_json | text nullable | 错误 |
+| 字段        | 类型             | 说明                                         |
+| ----------- | ---------------- | -------------------------------------------- |
+| id          | text pk          | 步骤 id                                      |
+| run_id      | text             | 运行 id                                      |
+| step_key    | text             | 步骤 key                                     |
+| status      | text             | pending, running, completed, failed, skipped |
+| input_json  | text nullable    | 输入                                         |
+| output_json | text nullable    | 输出                                         |
+| attempt     | integer          | 尝试次数                                     |
+| started_at  | integer nullable | 开始时间                                     |
+| finished_at | integer nullable | 完成时间                                     |
+| error_json  | text nullable    | 错误                                         |
 
 ### `model_calls`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 调用 id |
-| run_id | text nullable | 关联 workflow run |
-| step_id | text nullable | 关联 workflow step |
-| provider | text | provider |
-| model | text | 模型 |
-| purpose | text | draft, review, extract, rewrite |
-| request_file_id | text nullable | 原始请求文件 |
-| response_file_id | text nullable | 原始响应文件 |
-| prompt_hash | text | prompt hash |
-| input_tokens | integer nullable | 输入 token |
-| output_tokens | integer nullable | 输出 token |
-| latency_ms | integer nullable | 耗时 |
-| status | text | success, failed, canceled |
-| error_json | text nullable | 错误 |
-| created_at | integer | 创建时间 |
+| 字段             | 类型             | 说明                            |
+| ---------------- | ---------------- | ------------------------------- |
+| id               | text pk          | 调用 id                         |
+| run_id           | text nullable    | 关联 workflow run               |
+| step_id          | text nullable    | 关联 workflow step              |
+| provider         | text             | provider                        |
+| model            | text             | 模型                            |
+| purpose          | text             | draft, review, extract, rewrite |
+| request_file_id  | text nullable    | 原始请求文件                    |
+| response_file_id | text nullable    | 原始响应文件                    |
+| prompt_hash      | text             | prompt hash                     |
+| input_tokens     | integer nullable | 输入 token                      |
+| output_tokens    | integer nullable | 输出 token                      |
+| latency_ms       | integer nullable | 耗时                            |
+| status           | text             | success, failed, canceled       |
+| error_json       | text nullable    | 错误                            |
+| created_at       | integer          | 创建时间                        |
 
 ## 产物和版本表
 
 ### `artifacts`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 产物 id |
-| project_id | text | 项目 id |
-| work_order_id | text nullable | 来源工作单 |
-| target_type | text nullable | 目标对象类型 |
-| target_id | text nullable | 目标对象 id |
-| kind | text | outline, draft, review_report, patch, export |
-| title | text | 标题 |
-| content | text nullable | 文本内容 |
-| file_id | text nullable | 文件产物 |
-| status | text | draft, applied, rejected, archived |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段          | 类型          | 说明                                         |
+| ------------- | ------------- | -------------------------------------------- |
+| id            | text pk       | 产物 id                                      |
+| project_id    | text          | 项目 id                                      |
+| work_order_id | text nullable | 来源工作单                                   |
+| target_type   | text nullable | 目标对象类型                                 |
+| target_id     | text nullable | 目标对象 id                                  |
+| kind          | text          | outline, draft, review_report, patch, export |
+| title         | text          | 标题                                         |
+| content       | text nullable | 文本内容                                     |
+| file_id       | text nullable | 文件产物                                     |
+| status        | text          | draft, applied, rejected, archived           |
+| created_at    | integer       | 创建时间                                     |
+| updated_at    | integer       | 更新时间                                     |
 
 ### `artifact_versions`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 版本 id |
-| artifact_id | text | 产物 id |
-| version_no | integer | 版本号 |
-| content | text nullable | 内容 |
-| file_id | text nullable | 文件 |
-| created_at | integer | 创建时间 |
+| 字段        | 类型          | 说明     |
+| ----------- | ------------- | -------- |
+| id          | text pk       | 版本 id  |
+| artifact_id | text          | 产物 id  |
+| version_no  | integer       | 版本号   |
+| content     | text nullable | 内容     |
+| file_id     | text nullable | 文件     |
+| created_at  | integer       | 创建时间 |
 
 ## 记忆与上下文表
 
 ### `memories`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 记忆 id |
-| project_id | text | 项目 id |
-| memory_type | text | character_fact, world_rule, event, relation, style, foreshadowing |
-| subject_type | text nullable | 主体类型 |
-| subject_id | text nullable | 主体 id |
-| predicate | text nullable | 关系或属性 |
-| object_type | text nullable | 客体类型 |
-| object_id | text nullable | 客体 id |
-| statement | text | 可读事实陈述 |
-| status | text | candidate, canon, hypothesis, deprecated, rejected |
-| confidence | real | 置信度 |
-| source_ref_json | text | 来源引用 |
-| created_at | integer | 创建时间 |
-| updated_at | integer | 更新时间 |
+| 字段            | 类型          | 说明                                                              |
+| --------------- | ------------- | ----------------------------------------------------------------- |
+| id              | text pk       | 记忆 id                                                           |
+| project_id      | text          | 项目 id                                                           |
+| memory_type     | text          | character_fact, world_rule, event, relation, style, foreshadowing |
+| subject_type    | text nullable | 主体类型                                                          |
+| subject_id      | text nullable | 主体 id                                                           |
+| predicate       | text nullable | 关系或属性                                                        |
+| object_type     | text nullable | 客体类型                                                          |
+| object_id       | text nullable | 客体 id                                                           |
+| statement       | text          | 可读事实陈述                                                      |
+| status          | text          | candidate, canon, hypothesis, deprecated, rejected                |
+| confidence      | real          | 置信度                                                            |
+| source_ref_json | text          | 来源引用                                                          |
+| created_at      | integer       | 创建时间                                                          |
+| updated_at      | integer       | 更新时间                                                          |
 
 ### `memory_candidates`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 候选 id |
-| project_id | text | 项目 id |
-| work_order_id | text nullable | 来源工作单 |
-| candidate_json | text | 候选结构 |
-| source_text | text nullable | 来源文本 |
-| status | text | pending, accepted, merged, rejected |
-| created_at | integer | 创建时间 |
-| resolved_at | integer nullable | 处理时间 |
+| 字段           | 类型             | 说明                                |
+| -------------- | ---------------- | ----------------------------------- |
+| id             | text pk          | 候选 id                             |
+| project_id     | text             | 项目 id                             |
+| work_order_id  | text nullable    | 来源工作单                          |
+| candidate_json | text             | 候选结构                            |
+| source_text    | text nullable    | 来源文本                            |
+| status         | text             | pending, accepted, merged, rejected |
+| created_at     | integer          | 创建时间                            |
+| resolved_at    | integer nullable | 处理时间                            |
 
 ### `context_packages`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 上下文包 id |
-| project_id | text | 项目 id |
-| work_order_id | text nullable | 工作单 |
-| purpose | text | draft, rewrite, review, extract |
-| target_type | text nullable | 目标类型 |
-| target_id | text nullable | 目标 id |
-| budget_tokens | integer | token 预算 |
-| summary | text nullable | 上下文摘要 |
-| created_at | integer | 创建时间 |
+| 字段          | 类型          | 说明                            |
+| ------------- | ------------- | ------------------------------- |
+| id            | text pk       | 上下文包 id                     |
+| project_id    | text          | 项目 id                         |
+| work_order_id | text nullable | 工作单                          |
+| purpose       | text          | draft, rewrite, review, extract |
+| target_type   | text nullable | 目标类型                        |
+| target_id     | text nullable | 目标 id                         |
+| budget_tokens | integer       | token 预算                      |
+| summary       | text nullable | 上下文摘要                      |
+| created_at    | integer       | 创建时间                        |
 
 ### `context_package_items`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 条目 id |
-| package_id | text | 上下文包 |
-| source_type | text | memory, chapter, scene, graph, search, preset |
-| source_id | text | 来源 id |
-| relevance | real | 相关度 |
-| content | text | 实际注入内容 |
-| token_count | integer | token 数 |
-| sort_order | integer | 顺序 |
+| 字段        | 类型    | 说明                                          |
+| ----------- | ------- | --------------------------------------------- |
+| id          | text pk | 条目 id                                       |
+| package_id  | text    | 上下文包                                      |
+| source_type | text    | memory, chapter, scene, graph, search, preset |
+| source_id   | text    | 来源 id                                       |
+| relevance   | real    | 相关度                                        |
+| content     | text    | 实际注入内容                                  |
+| token_count | integer | token 数                                      |
+| sort_order  | integer | 顺序                                          |
 
 ## 文件表
 
 ### `files`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 文件 id |
-| project_id | text nullable | 所属项目 |
-| path | text | 相对项目目录路径 |
-| kind | text | import, export, attachment, model_raw, snapshot |
-| mime_type | text nullable | MIME |
-| byte_size | integer | 大小 |
-| sha256 | text | 内容 hash |
-| metadata_json | text | 扩展 metadata |
-| created_at | integer | 创建时间 |
+| 字段          | 类型          | 说明                                            |
+| ------------- | ------------- | ----------------------------------------------- |
+| id            | text pk       | 文件 id                                         |
+| project_id    | text nullable | 所属项目                                        |
+| path          | text          | 相对项目目录路径                                |
+| kind          | text          | import, export, attachment, model_raw, snapshot |
+| mime_type     | text nullable | MIME                                            |
+| byte_size     | integer       | 大小                                            |
+| sha256        | text          | 内容 hash                                       |
+| metadata_json | text          | 扩展 metadata                                   |
+| created_at    | integer       | 创建时间                                        |
 
 ## 事件表
 
 ### `domain_events`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | text pk | 事件 id |
-| project_id | text | 项目 id |
-| event_type | text | 事件类型 |
-| aggregate_type | text | 聚合类型 |
-| aggregate_id | text | 聚合 id |
-| payload_json | text | 事件内容 |
-| actor | text | user, ai, system |
-| created_at | integer | 创建时间 |
+| 字段           | 类型    | 说明             |
+| -------------- | ------- | ---------------- |
+| id             | text pk | 事件 id          |
+| project_id     | text    | 项目 id          |
+| event_type     | text    | 事件类型         |
+| aggregate_type | text    | 聚合类型         |
+| aggregate_id   | text    | 聚合 id          |
+| payload_json   | text    | 事件内容         |
+| actor          | text    | user, ai, system |
+| created_at     | integer | 创建时间         |
 
 事件用途：
 
@@ -719,17 +714,17 @@ SQLite source of truth
 
 - `project.sqlite`
 - `graph.kuzu` 可选，因为可重建
-- `files/` 中被引用的附件和导入文件
+- `attachments/` 中被引用的附件和导入文件
 - 当前导出配置
 
 快照目录：
 
 ```text
-snapshots/
+backups/
   2026-08-27T120000Z/
     project.sqlite
     manifest.json
-    files/
+    attachments/
 ```
 
 ## 数据迁移

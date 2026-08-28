@@ -867,4 +867,3 @@ git commit -m "chore: stabilize mvp implementation"
 - [ ] Canon memory projects into Kuzu.
 - [ ] ContextBuilder reads canon memory and graph neighborhood.
 - [ ] Tests cover contracts, DB, graph, AI workflow, prompts and core UI.
-

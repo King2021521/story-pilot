@@ -48,4 +48,3 @@ export function createRpcError(
     error: details === undefined ? { code, message } : { code, message, details },
   };
 }
-

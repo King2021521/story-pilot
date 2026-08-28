@@ -11,6 +11,26 @@
 - 模型配置由环境变量和 setting.json 混合驱动，缺少 UI 可见状态、配置校验和脱敏策略。
 - DMG 可打包，但没有形成发布门禁：安装、启动、sidecar health、模型配置、项目创建、数据库写入都需要自动化 smoke test。
 
+## 生产级补强重点
+
+P0 的生产级目标是先消除“用户安装后无法启动或无法恢复数据”的风险。它不是普通工程清理，而是后面所有创作能力的运行地基。
+
+必须补强：
+
+- sidecar 生命周期由 Tauri bridge 管理，启动失败、端口冲突、health 超时都有明确错误码和诊断记录。
+- `~/.story-pilot/setting.json` 是用户可编辑模型配置的唯一入口，环境变量只用于测试和开发覆盖。
+- 首次启动必须自动创建 home、global db、logs、projects、diagnostics、temp 目录。
+- 项目目录必须有稳定契约：SQLite、Kuzu、artifacts、exports、attachments、backups 位置固定。
+- 模型未配置时，AI 功能只显示配置缺口，不生成假数据。
+- 备份恢复要覆盖 SQLite、Kuzu 和项目 manifest，恢复前必须做安全备份。
+
+不可降级项：
+
+- 安装包不能依赖源码仓库、全局 Node 或全局 pnpm。
+- 日志、诊断包、错误消息不能包含完整 API key。
+- 数据库损坏时不能覆盖原文件。
+- 文件操作不能越过应用数据目录和用户显式授权目录。
+
 ## 范围
 
 本阶段必须完成：

@@ -12,6 +12,25 @@
 - 没有离线评测集和质量基准，无法判断 prompt 改动是变好还是变差。
 - 未配置模型时会走 fake provider；生产态必须显式阻断。
 
+## 生产级补强重点
+
+P2 的生产级目标是把 AI 能力从“可调用模型”升级为“可审计、可评估、可复用的创作能力层”。对长篇小说来说，prompt 和上下文组织是产品质量的核心资产。
+
+必须补强：
+
+- 所有正式生成入口必须走统一 AI workflow，不允许业务 service 直接拼 prompt 调模型。
+- capability registry 必须覆盖立项优化、蓝图、世界观、人物、关系、剧情弧线、大纲、正文、改写、连续性审稿、记忆抽取和复盘。
+- 每个 capability 必须有系统提示词、schema、默认 prompt version、质量评测 fixture 和产物类型。
+- 系统提示词必须体现网络小说创作方法论：题材承诺、人物欲望、升级/成长节奏、冲突递进、钩子、爽点、悬念、伏笔和读者期待。
+- 每次调用必须保存 context package、prompt version、model call、schema validation、artifact 和 review 结果。
+
+不可降级项：
+
+- 生产态模型未配置时必须返回 `AI_MODEL_NOT_CONFIGURED`。
+- schema 校验失败的响应不能进入用户采纳流程。
+- AI 输出不能直接写 canon，只能进入 artifact、candidate 或 review。
+- prompt 改动必须有 hash、version 和 eval 记录。
+
 ## 范围
 
 本阶段必须完成：

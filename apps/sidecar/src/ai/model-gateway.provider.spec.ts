@@ -11,8 +11,21 @@ import {
 import { createModelGatewayFromEnv } from "./model-gateway.provider.js";
 
 describe("createModelGatewayFromEnv", () => {
-  it("uses deterministic fake MVP responses when local LLM env is missing", async () => {
+  it("rejects production model calls when local LLM settings are missing", async () => {
     const gateway = createModelGatewayFromEnv({});
+
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "写第一章" }],
+        purpose: "chapter_draft",
+        schema: ChapterDraftOutputSchema,
+        schemaName: "ChapterDraftOutput",
+      }),
+    ).rejects.toThrow("AI_MODEL_NOT_CONFIGURED");
+  });
+
+  it("uses deterministic fake MVP responses only when explicitly enabled", async () => {
+    const gateway = createModelGatewayFromEnv({ STORY_PILOT_ALLOW_FAKE_MODEL: "true" });
 
     await expect(
       gateway.generateObject({

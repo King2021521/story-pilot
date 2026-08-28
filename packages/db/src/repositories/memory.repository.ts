@@ -96,7 +96,8 @@ export class MemoryRepository {
   createCandidate(input: CreateMemoryCandidateRecordInput): MemoryCandidateRecord {
     const now = input.now ?? Date.now();
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into memory_candidates (
           id, project_id, source_type, source_id, entity_type, entity_id, kind,
           content, confidence, status, proposed_relations, model_call_id, created_at
@@ -105,7 +106,8 @@ export class MemoryRepository {
           @candidateId, @projectId, @sourceType, @sourceId, @entityType, @entityId, @kind,
           @content, @confidence, 'pending', @proposedRelations, @modelCallId, @now
         )
-      `)
+      `,
+      )
       .run({
         candidateId: input.candidateId,
         confidence: input.confidence ?? 0.5,
@@ -239,7 +241,8 @@ export class MemoryRepository {
   createMemory(input: CreateMemoryRecordInput): MemoryRecord {
     const now = input.now ?? Date.now();
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into memories (
           id, project_id, entity_type, entity_id, kind, content,
           source_candidate_id, confidence, status, created_at, updated_at
@@ -248,7 +251,8 @@ export class MemoryRepository {
           @memoryId, @projectId, @entityType, @entityId, @kind, @content,
           @sourceCandidateId, @confidence, @status, @now, @now
         )
-      `)
+      `,
+      )
       .run({
         confidence: input.confidence ?? 1,
         content: input.content,

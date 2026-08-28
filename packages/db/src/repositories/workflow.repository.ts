@@ -82,14 +82,16 @@ export class WorkflowRepository {
   createWorkOrder(input: CreateWorkOrderRecordInput): WorkOrderRecord {
     const now = input.now ?? Date.now();
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into work_orders (
           id, project_id, type, status, title, description, created_by, created_at, updated_at
         )
         values (
           @workOrderId, @projectId, @type, 'queued', @title, @description, 'user', @now, @now
         )
-      `)
+      `,
+      )
       .run({
         description: input.description ?? null,
         now,
@@ -171,7 +173,8 @@ export class WorkflowRepository {
     const now = input.now ?? Date.now();
     const persist = this.projectDatabase.client.transaction(() => {
       this.projectDatabase.client
-        .prepare(`
+        .prepare(
+          `
           insert into workflow_runs (
             id, project_id, work_order_id, workflow_name, status, input, output,
             started_at, completed_at, created_at, updated_at
@@ -185,11 +188,13 @@ export class WorkflowRepository {
             output = excluded.output,
             completed_at = excluded.completed_at,
             updated_at = excluded.updated_at
-        `)
+        `,
+        )
         .run({
-          completedAt: input.status === "completed" || input.status === "failed" || input.status === "canceled"
-            ? now
-            : null,
+          completedAt:
+            input.status === "completed" || input.status === "failed" || input.status === "canceled"
+              ? now
+              : null,
           input: JSON.stringify(input.input),
           now,
           output: input.output === undefined ? null : JSON.stringify(input.output),
@@ -206,14 +211,16 @@ export class WorkflowRepository {
 
       for (const step of input.steps) {
         this.projectDatabase.client
-          .prepare(`
+          .prepare(
+            `
             insert into workflow_steps (
               id, project_id, workflow_run_id, name, status, input, output, error, created_at
             )
             values (
               @stepId, @projectId, @workflowRunId, @name, @status, @input, @output, @error, @now
             )
-          `)
+          `,
+          )
           .run({
             error: step.error ?? null,
             input: step.input === undefined ? null : JSON.stringify(step.input),

@@ -33,6 +33,7 @@ import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
 import type { ChapterVersionItem } from "../features/chapter/ChapterVersionDrawer";
 import type {
   CompletableCreativeStageKey,
+  CreativeStageKey,
   SaveBriefValues,
 } from "../features/creative-path/CreativePathWorkbench";
 import type {
@@ -44,6 +45,11 @@ import type {
 import { GraphPreviewPanel, type GraphPreviewData } from "../features/memory/GraphPreviewPanel";
 import type { MemoryCandidateDecisionInput } from "../features/memory/MemoryConfirmDrawer";
 import { ProjectSidebar, type ProjectSidebarProject } from "../features/project/ProjectSidebar";
+import {
+  SettingsDrawer,
+  type DiagnosticsHealthView,
+  type RuntimeSettingsView,
+} from "../features/settings/SettingsDrawer";
 import {
   WorkbenchHome,
   type WorkbenchBoard,
@@ -79,6 +85,10 @@ export function ShellLayout() {
   const [projects, setProjects] = useState<readonly ProjectSidebarProject[]>([]);
   const [savingChapter, setSavingChapter] = useState(false);
   const [selectedChapterId, setSelectedChapterId] = useState<string | undefined>();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettingsView | undefined>();
+  const [diagnosticsHealth, setDiagnosticsHealth] = useState<DiagnosticsHealthView | undefined>();
+  const [loadingSettings, setLoadingSettings] = useState(false);
   const [createProjectForm] = Form.useForm<CreateProjectFormValues>();
 
   const selectChapter = useCallback((chapterId: string) => {
@@ -86,6 +96,27 @@ export function ShellLayout() {
     setChapterVersions([]);
     setGraphPreview(undefined);
   }, []);
+
+  const loadRuntimeSettings = useCallback(async () => {
+    setLoadingSettings(true);
+    try {
+      const [settings, health] = await Promise.all([
+        storyPilotApi.getSettings(),
+        storyPilotApi.getDiagnosticsHealth(),
+      ]);
+      setRuntimeSettings(settings as RuntimeSettingsView);
+      setDiagnosticsHealth(health as DiagnosticsHealthView);
+    } catch (error) {
+      message.error(getErrorMessage(error));
+    } finally {
+      setLoadingSettings(false);
+    }
+  }, [message, storyPilotApi]);
+
+  const openSettings = useCallback(() => {
+    setSettingsOpen(true);
+    void loadRuntimeSettings();
+  }, [loadRuntimeSettings]);
 
   const refreshBoard = useCallback(
     async (projectId: string) => {
@@ -626,13 +657,108 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const evaluateStageGate = useCallback(
+    async (input: { readonly stageKey: CreativeStageKey }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        const result = (await storyPilotApi.evaluateCreativeStageGate({
+          projectId: activeProject.id,
+          stageKey: input.stageKey,
+        })) as { readonly gateReport?: { readonly ok?: boolean; readonly summary?: string } };
+        await refreshBoard(activeProject.id);
+        if (result.gateReport?.ok) {
+          message.success("阶段门禁已通过");
+        } else {
+          message.warning(result.gateReport?.summary ?? "阶段门禁仍需补齐");
+        }
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const advanceStage = useCallback(
+    async (input: { readonly stageKey: CreativeStageKey; readonly mode: "strict" | "force" }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        const result = (await storyPilotApi.advanceCreativeStage({
+          mode: input.mode,
+          projectId: activeProject.id,
+          stageKey: input.stageKey,
+        })) as { readonly advanced?: boolean; readonly gateReport?: { readonly summary?: string } };
+        await refreshBoard(activeProject.id);
+        if (result.advanced) {
+          message.success("阶段已推进");
+        } else {
+          message.warning(result.gateReport?.summary ?? "阶段门禁未通过");
+        }
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const reopenStage = useCallback(
+    async (input: { readonly stageKey: CreativeStageKey; readonly reason?: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.reopenCreativeStage({
+          projectId: activeProject.id,
+          stageKey: input.stageKey,
+          ...optionalText("reason", input.reason),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("阶段已重开");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const skipStage = useCallback(
+    async (input: { readonly stageKey: CreativeStageKey; readonly reason: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.skipCreativeStage({
+          projectId: activeProject.id,
+          reason: input.reason,
+          stageKey: input.stageKey,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("阶段已跳过");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const generateBlueprint = useCallback(async () => {
     if (!activeProject) {
       return;
     }
 
     try {
-      await storyPilotApi.generateBlueprint({ projectId: activeProject.id });
+      await storyPilotApi.generateAi({
+        capability: "blueprint.generate",
+        projectId: activeProject.id,
+        targetType: "project",
+      });
       await refreshBoard(activeProject.id);
       message.success("创作蓝图已生成");
     } catch (error) {
@@ -667,10 +793,14 @@ export function ShellLayout() {
       }
 
       try {
-        await storyPilotApi.generateOutline({
-          chapterCount: input.chapterCount,
+        await storyPilotApi.generateAi({
+          capability: "outline.generate",
+          input: {
+            chapterCount: input.chapterCount,
+            scope: input.scope,
+          },
           projectId: activeProject.id,
-          scope: input.scope,
+          targetType: "project",
         });
         await refreshBoard(activeProject.id);
         message.success("章纲已生成");
@@ -745,6 +875,69 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const saveModelSettings = useCallback(
+    async (model: NonNullable<CommandPayload<"settings.update">["model"]>) => {
+      try {
+        const settings = (await storyPilotApi.updateSettings({ model })) as RuntimeSettingsView;
+        setRuntimeSettings(settings);
+        message.success("模型配置已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [message, storyPilotApi],
+  );
+
+  const saveStorageSettings = useCallback(
+    async (storage: NonNullable<CommandPayload<"settings.update">["storage"]>) => {
+      try {
+        const settings = (await storyPilotApi.updateSettings({ storage })) as RuntimeSettingsView;
+        setRuntimeSettings(settings);
+        message.success("数据配置已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [message, storyPilotApi],
+  );
+
+  const validateModelSettings = useCallback(
+    async (input: CommandPayload<"settings.validateModel">) => {
+      try {
+        const result = (await storyPilotApi.validateModelSettings(input)) as {
+          readonly errorCode?: string;
+          readonly missingFields?: readonly string[];
+          readonly ok: boolean;
+        };
+        if (result.ok) {
+          message.success("模型校验通过");
+        } else {
+          message.warning(
+            result.missingFields?.length
+              ? `模型配置缺失：${result.missingFields.join(", ")}`
+              : (result.errorCode ?? "模型校验失败"),
+          );
+        }
+        await loadRuntimeSettings();
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [loadRuntimeSettings, message, storyPilotApi],
+  );
+
+  const exportDiagnostics = useCallback(async () => {
+    try {
+      const result = (await storyPilotApi.exportDiagnostics()) as {
+        readonly path?: string;
+        readonly redacted?: boolean;
+      };
+      message.success(result.path ? `诊断包已导出：${result.path}` : "诊断包已导出");
+    } catch (error) {
+      message.error(getErrorMessage(error));
+    }
+  }, [message, storyPilotApi]);
+
   return (
     <Layout className="story-shell">
       <Sider aria-label="作品管理区" className="story-shell__sidebar" width={292}>
@@ -757,6 +950,7 @@ export function ShellLayout() {
               message.error(getErrorMessage(error));
             });
           }}
+          onOpenSettings={openSettings}
           onSelectChapter={selectChapter}
           projects={projects}
           selectedChapterId={selectedChapterId}
@@ -796,6 +990,7 @@ export function ShellLayout() {
           onApplyBlueprint={applyBlueprint}
           onApplyChapterOutline={applyChapterOutline}
           onApproveChapterOutline={approveChapterOutline}
+          onAdvanceStage={advanceStage}
           onCompleteStage={completeStage}
           onConfirmBrief={confirmBrief}
           onConfirmMemory={confirmMemory}
@@ -805,6 +1000,7 @@ export function ShellLayout() {
           onCreateForeshadowing={createForeshadowing}
           onCreatePlotline={createPlotline}
           onCreateWorldRule={createWorldRule}
+          onEvaluateStageGate={evaluateStageGate}
           onGenerateBlueprint={generateBlueprint}
           onGenerateDraft={generateDraft}
           onGenerateDraftFromOutline={generateDraftFromOutline}
@@ -812,10 +1008,12 @@ export function ShellLayout() {
           onGenerateOutline={generateOutline}
           onLoadChapterVersions={loadChapterVersions}
           onRejectMemory={rejectMemory}
+          onReopenStage={reopenStage}
           onRestoreChapterVersion={restoreChapterVersion}
           onSaveChapter={saveChapter}
           onSaveBrief={saveBrief}
           onSelectChapter={selectChapter}
+          onSkipStage={skipStage}
           savingChapter={savingChapter}
           selectedChapterId={selectedChapterId}
         />
@@ -915,6 +1113,18 @@ export function ShellLayout() {
       </Drawer>
 
       <AiTaskDrawer onClose={() => setAiOpen(false)} open={aiOpen} />
+
+      <SettingsDrawer
+        health={diagnosticsHealth}
+        loading={loadingSettings}
+        onClose={() => setSettingsOpen(false)}
+        onExportDiagnostics={exportDiagnostics}
+        onSaveModel={saveModelSettings}
+        onSaveStorage={saveStorageSettings}
+        onValidateModel={validateModelSettings}
+        open={settingsOpen}
+        settings={runtimeSettings}
+      />
 
       <Modal
         footer={null}

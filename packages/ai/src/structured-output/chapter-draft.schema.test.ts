@@ -17,7 +17,9 @@ describe("ChapterDraftOutputSchema", () => {
             content: "林鸢收到了一封来自十年前的信。",
             entityType: "story_event",
             kind: "event",
-            proposedRelations: [{ predicate: "involves", targetId: "char_a", targetType: "character" }],
+            proposedRelations: [
+              { predicate: "involves", targetId: "char_a", targetType: "character" },
+            ],
           },
         ],
         reviewNotes: ["未直接写入 canon，等待用户确认。"],

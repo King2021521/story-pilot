@@ -179,14 +179,16 @@ export class PlotRepository {
   createPlotline(input: CreatePlotlineRecordInput): PlotlineRecord {
     const now = input.now ?? Date.now();
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into plotlines (
           id, project_id, name, type, status, summary, priority, created_at, updated_at
         )
         values (
           @plotlineId, @projectId, @title, @kind, 'planning', @summary, @priority, @now, @now
         )
-      `)
+      `,
+      )
       .run({
         kind: input.kind,
         now,
@@ -210,20 +212,27 @@ export class PlotRepository {
 
   listPlotlines(projectId: string): PlotlineRecord[] {
     return this.projectDatabase.client
-      .prepare("select * from plotlines where project_id = ? order by priority desc, created_at asc")
+      .prepare(
+        "select * from plotlines where project_id = ? order by priority desc, created_at asc",
+      )
       .all(projectId)
       .map((row) => mapPlotlineRow(row as PlotlineRow));
   }
 
   createStoryEvent(input: CreateStoryEventRecordInput): StoryEventRecord {
     const now = input.now ?? Date.now();
-    const position = (this.projectDatabase.client
-      .prepare("select coalesce(max(position), 0) + 1 as next_position from story_events where project_id = ?")
-      .get(input.projectId) as { next_position: number }).next_position;
+    const position = (
+      this.projectDatabase.client
+        .prepare(
+          "select coalesce(max(position), 0) + 1 as next_position from story_events where project_id = ?",
+        )
+        .get(input.projectId) as { next_position: number }
+    ).next_position;
 
     const create = this.projectDatabase.client.transaction(() => {
       this.projectDatabase.client
-        .prepare(`
+        .prepare(
+          `
           insert into story_events (
             id, project_id, title, event_type, event_time, position, summary,
             chapter_id, scene_id, status, created_at, updated_at
@@ -232,7 +241,8 @@ export class PlotRepository {
             @eventId, @projectId, @title, @eventType, @storyTime, @position, @description,
             @chapterId, @sceneId, 'canon', @now, @now
           )
-        `)
+        `,
+        )
         .run({
           chapterId: input.chapterId ?? null,
           description: input.description,
@@ -248,14 +258,16 @@ export class PlotRepository {
 
       for (const participant of input.participants) {
         this.projectDatabase.client
-          .prepare(`
+          .prepare(
+            `
             insert into event_participants (
               id, project_id, event_id, entity_type, entity_id, role, created_at
             )
             values (
               @participantId, @projectId, @eventId, @entityType, @entityId, @role, @now
             )
-          `)
+          `,
+          )
           .run({
             entityId: participant.entityId,
             entityType: participant.entityType,
@@ -280,7 +292,9 @@ export class PlotRepository {
 
   listStoryEvents(projectId: string): StoryEventRecord[] {
     const rows = this.projectDatabase.client
-      .prepare("select * from story_events where project_id = ? order by position asc, created_at asc")
+      .prepare(
+        "select * from story_events where project_id = ? order by position asc, created_at asc",
+      )
       .all(projectId) as StoryEventRow[];
 
     return rows.map((row) => this.getStoryEvent(projectId, row.id)).filter(isDefined);
@@ -290,14 +304,16 @@ export class PlotRepository {
     const now = input.now ?? Date.now();
     const create = this.projectDatabase.client.transaction(() => {
       this.projectDatabase.client
-        .prepare(`
+        .prepare(
+          `
           insert into foreshadowings (
             id, project_id, title, status, seed_text, payoff_text, created_at, updated_at
           )
           values (
             @foreshadowingId, @projectId, @title, 'seeded', @description, @payoffExpectation, @now, @now
           )
-        `)
+        `,
+        )
         .run({
           description: input.description,
           foreshadowingId: input.foreshadowingId,
@@ -396,14 +412,16 @@ export class PlotRepository {
     readonly now: number;
   }): void {
     this.projectDatabase.client
-      .prepare(`
+      .prepare(
+        `
         insert into foreshadowing_events (
           id, project_id, foreshadowing_id, event_id, role, created_at
         )
         values (
           @linkId, @projectId, @foreshadowingId, @eventId, @role, @now
         )
-      `)
+      `,
+      )
       .run(input);
   }
 
@@ -417,7 +435,9 @@ export class PlotRepository {
     }
 
     const participants = this.projectDatabase.client
-      .prepare("select * from event_participants where project_id = ? and event_id = ? order by created_at asc")
+      .prepare(
+        "select * from event_participants where project_id = ? and event_id = ? order by created_at asc",
+      )
       .all(projectId, eventId)
       .map((participant) => mapParticipantRow(participant as StoryEventParticipantRow));
 
@@ -432,7 +452,10 @@ export class PlotRepository {
     };
   }
 
-  private getForeshadowing(projectId: string, foreshadowingId: string): ForeshadowingRecord | undefined {
+  private getForeshadowing(
+    projectId: string,
+    foreshadowingId: string,
+  ): ForeshadowingRecord | undefined {
     const row = this.projectDatabase.client
       .prepare("select * from foreshadowings where project_id = ? and id = ?")
       .get(projectId, foreshadowingId) as ForeshadowingRow | undefined;
@@ -442,7 +465,9 @@ export class PlotRepository {
     }
 
     const links = this.projectDatabase.client
-      .prepare("select * from foreshadowing_events where project_id = ? and foreshadowing_id = ? order by created_at asc")
+      .prepare(
+        "select * from foreshadowing_events where project_id = ? and foreshadowing_id = ? order by created_at asc",
+      )
       .all(projectId, foreshadowingId)
       .map((link) => mapForeshadowingEventRow(link as ForeshadowingEventRow));
 

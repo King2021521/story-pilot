@@ -38,4 +38,3 @@ describe("rpc contract helpers", () => {
     });
   });
 });
-

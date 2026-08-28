@@ -110,7 +110,9 @@ describe("ChapterService.generateDraft", () => {
     const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
     try {
       expect(
-        projectDatabase.client.prepare("select content, version from chapters where id = ?").get(chapter.id),
+        projectDatabase.client
+          .prepare("select content, version from chapters where id = ?")
+          .get(chapter.id),
       ).toEqual({
         content: "用户正文保持不变。",
         version: saved.version,

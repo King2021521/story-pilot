@@ -21,6 +21,34 @@ export class StoryPilotApiClient {
     return this.send("project.backup", input);
   }
 
+  createProjectBackup(input: CommandPayload<"backup.createProject">) {
+    return this.send("backup.createProject", input);
+  }
+
+  restoreProjectBackup(input: CommandPayload<"backup.restoreProject">) {
+    return this.send("backup.restoreProject", input);
+  }
+
+  getSettings() {
+    return this.send("settings.get", {});
+  }
+
+  updateSettings(input: CommandPayload<"settings.update">) {
+    return this.send("settings.update", input);
+  }
+
+  validateModelSettings(input: CommandPayload<"settings.validateModel"> = {}) {
+    return this.send("settings.validateModel", input);
+  }
+
+  getDiagnosticsHealth() {
+    return this.send("diagnostics.getHealth", {});
+  }
+
+  exportDiagnostics() {
+    return this.send("diagnostics.export", {});
+  }
+
   getWorkbenchSnapshot(input: CommandPayload<"workbench.getSnapshot">) {
     return this.send("workbench.getSnapshot", input);
   }
@@ -29,8 +57,40 @@ export class StoryPilotApiClient {
     return this.send("workbench.getBoard", input);
   }
 
+  generateAi(input: CommandPayload<"ai.generate">) {
+    return this.send("ai.generate", input);
+  }
+
+  getAiRun(input: CommandPayload<"ai.getRun">) {
+    return this.send("ai.getRun", input);
+  }
+
+  cancelAiRun(input: CommandPayload<"ai.cancelRun">) {
+    return this.send("ai.cancelRun", input);
+  }
+
+  listAiArtifacts(input: CommandPayload<"ai.listArtifacts">) {
+    return this.sendItems("ai.listArtifacts", input);
+  }
+
   getCreativePath(input: CommandPayload<"creativeStage.getPath">) {
     return this.send("creativeStage.getPath", input);
+  }
+
+  evaluateCreativeStageGate(input: CommandPayload<"creativeStage.evaluateGate">) {
+    return this.send("creativeStage.evaluateGate", input);
+  }
+
+  advanceCreativeStage(input: CommandPayload<"creativeStage.advance">) {
+    return this.send("creativeStage.advance", input);
+  }
+
+  reopenCreativeStage(input: CommandPayload<"creativeStage.reopen">) {
+    return this.send("creativeStage.reopen", input);
+  }
+
+  skipCreativeStage(input: CommandPayload<"creativeStage.skip">) {
+    return this.send("creativeStage.skip", input);
   }
 
   completeCreativeStage(input: CommandPayload<"creativeStage.complete">) {

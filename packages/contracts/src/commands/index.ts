@@ -1,21 +1,38 @@
 import type { z } from "zod";
 
+import { aiCommandSchemas } from "./ai.js";
 import { chapterCommandSchemas } from "./chapter.js";
 import { creativeCommandSchemas, creativePathCommandSchemas } from "./creative.js";
 import { memoryCommandSchemas } from "./memory.js";
 import { projectCommandSchemas } from "./project.js";
+import { settingsCommandSchemas } from "./settings.js";
 import { workflowCommandSchemas } from "./workflow.js";
 
 export const MVP_COMMAND_NAMES = [
   "app.health",
+  "settings.get",
+  "settings.update",
+  "settings.validateModel",
+  "diagnostics.getHealth",
+  "diagnostics.export",
   "project.create",
   "project.listRecent",
   "project.open",
   "project.getOverview",
   "project.backup",
+  "backup.createProject",
+  "backup.restoreProject",
   "workbench.getSnapshot",
   "workbench.getBoard",
+  "ai.generate",
+  "ai.getRun",
+  "ai.cancelRun",
+  "ai.listArtifacts",
   "creativeStage.getPath",
+  "creativeStage.evaluateGate",
+  "creativeStage.advance",
+  "creativeStage.reopen",
+  "creativeStage.skip",
   "creativeStage.complete",
   "brief.save",
   "brief.confirm",
@@ -70,8 +87,14 @@ export const MVP_COMMAND_NAMES = [
 
 export type CommandName = (typeof MVP_COMMAND_NAMES)[number];
 
+const { "app.health": appHealthCommandSchema, ...projectFeatureCommandSchemas } =
+  projectCommandSchemas;
+
 export const commandSchemas = {
-  ...projectCommandSchemas,
+  "app.health": appHealthCommandSchema,
+  ...settingsCommandSchemas,
+  ...projectFeatureCommandSchemas,
+  ...aiCommandSchemas,
   ...creativePathCommandSchemas,
   ...chapterCommandSchemas,
   ...creativeCommandSchemas,
