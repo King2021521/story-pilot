@@ -10,6 +10,8 @@ target/
 # Tauri
 apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/story-pilot-sidecar-*
+!apps/desktop/src-tauri/binaries/story-pilot-sidecar.template.sh
 
 # Logs
 *.log
@@ -24,4 +26,3 @@ logs/
 .DS_Store
 .idea/
 .vscode/
-

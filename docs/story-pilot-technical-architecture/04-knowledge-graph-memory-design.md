@@ -59,13 +59,13 @@ hypothesis
 
 状态含义：
 
-| 状态 | 含义 | 是否进入默认上下文 |
-| --- | --- | --- |
-| candidate | AI 或系统提取的候选记忆，未确认 | 否 |
-| canon | 已确认正式设定 | 是 |
-| hypothesis | 暂时可参考，但尚未正式确认 | 视任务而定 |
-| deprecated | 曾经有效但已废弃 | 否，除非做历史追踪 |
-| rejected | 明确拒绝 | 否 |
+| 状态       | 含义                            | 是否进入默认上下文 |
+| ---------- | ------------------------------- | ------------------ |
+| candidate  | AI 或系统提取的候选记忆，未确认 | 否                 |
+| canon      | 已确认正式设定                  | 是                 |
+| hypothesis | 暂时可参考，但尚未正式确认      | 视任务而定         |
+| deprecated | 曾经有效但已废弃                | 否，除非做历史追踪 |
+| rejected   | 明确拒绝                        | 否                 |
 
 关键规则：
 
@@ -78,52 +78,52 @@ hypothesis
 
 ### 节点类型
 
-| 节点 | 来源 | 说明 |
-| --- | --- | --- |
-| `Project` | projects | 项目 |
-| `Work` | works | 作品 |
-| `Volume` | volumes | 卷 |
-| `Chapter` | chapters | 章节 |
-| `Scene` | scenes | 场景 |
-| `Character` | characters | 人物 |
-| `Location` | locations | 地点 |
-| `Organization` | organizations | 组织 |
-| `Item` | items | 物品 |
-| `WorldRule` | world_rules | 世界规则 |
-| `Plotline` | plotlines | 故事线 |
-| `PlotNode` | plotline_nodes | 故事线节点 |
-| `Foreshadowing` | foreshadowings | 伏笔 |
-| `ForeshadowingEvent` | foreshadowing_events | 伏笔事件 |
-| `StoryEvent` | memories 或 scenes | 剧情事实事件 |
-| `Memory` | memories | 记忆事实 |
-| `Artifact` | artifacts | AI 或用户产物 |
-| `WorkOrder` | work_orders | 工作单 |
+| 节点                 | 来源                 | 说明          |
+| -------------------- | -------------------- | ------------- |
+| `Project`            | projects             | 项目          |
+| `Work`               | works                | 作品          |
+| `Volume`             | volumes              | 卷            |
+| `Chapter`            | chapters             | 章节          |
+| `Scene`              | scenes               | 场景          |
+| `Character`          | characters           | 人物          |
+| `Location`           | locations            | 地点          |
+| `Organization`       | organizations        | 组织          |
+| `Item`               | items                | 物品          |
+| `WorldRule`          | world_rules          | 世界规则      |
+| `Plotline`           | plotlines            | 故事线        |
+| `PlotNode`           | plotline_nodes       | 故事线节点    |
+| `Foreshadowing`      | foreshadowings       | 伏笔          |
+| `ForeshadowingEvent` | foreshadowing_events | 伏笔事件      |
+| `StoryEvent`         | memories 或 scenes   | 剧情事实事件  |
+| `Memory`             | memories             | 记忆事实      |
+| `Artifact`           | artifacts            | AI 或用户产物 |
+| `WorkOrder`          | work_orders          | 工作单        |
 
 ### 边类型
 
-| 边 | 起点 | 终点 | 含义 |
-| --- | --- | --- | --- |
-| `CONTAINS` | Work/Volume/Chapter | Volume/Chapter/Scene | 层级包含 |
-| `APPEARS_IN` | Character/Item/Location | Chapter/Scene | 出现于 |
-| `PARTICIPATES_IN` | Character | StoryEvent | 参与事件 |
-| `OCCURS_IN` | StoryEvent | Chapter/Scene | 事件发生位置 |
-| `OCCURS_BEFORE` | StoryEvent | StoryEvent | 故事时间先后 |
-| `CAUSES` | StoryEvent | StoryEvent | 因果 |
-| `KNOWS` | Character | Character | 认识 |
-| `ALLIED_WITH` | Character/Organization | Character/Organization | 同盟 |
-| `OPPOSES` | Character/Organization | Character/Organization | 对立 |
-| `HIDES_FROM` | Character | Character | 隐瞒 |
-| `BELONGS_TO` | Character | Organization | 所属 |
-| `LOCATED_IN` | Location | Location | 地点从属 |
-| `OWNS` | Character/Organization | Item | 拥有 |
-| `CONSTRAINS` | WorldRule | StoryEvent/Character/Item | 规则约束 |
-| `SEEDED_IN` | Foreshadowing | Chapter/Scene | 埋设 |
-| `REINFORCED_IN` | Foreshadowing | Chapter/Scene | 强化 |
-| `PAID_OFF_IN` | Foreshadowing | Chapter/Scene | 回收 |
-| `CONTRADICTS` | Memory/WorldRule | Memory/WorldRule | 矛盾 |
-| `SUPPORTED_BY` | Memory | Chapter/Scene/Artifact | 来源支撑 |
-| `GENERATED` | WorkOrder | Artifact/Memory | 工作单生成 |
-| `AFFECTS` | Plotline/PlotNode | Character/Chapter/Scene | 影响 |
+| 边                | 起点                    | 终点                      | 含义         |
+| ----------------- | ----------------------- | ------------------------- | ------------ |
+| `CONTAINS`        | Work/Volume/Chapter     | Volume/Chapter/Scene      | 层级包含     |
+| `APPEARS_IN`      | Character/Item/Location | Chapter/Scene             | 出现于       |
+| `PARTICIPATES_IN` | Character               | StoryEvent                | 参与事件     |
+| `OCCURS_IN`       | StoryEvent              | Chapter/Scene             | 事件发生位置 |
+| `OCCURS_BEFORE`   | StoryEvent              | StoryEvent                | 故事时间先后 |
+| `CAUSES`          | StoryEvent              | StoryEvent                | 因果         |
+| `KNOWS`           | Character               | Character                 | 认识         |
+| `ALLIED_WITH`     | Character/Organization  | Character/Organization    | 同盟         |
+| `OPPOSES`         | Character/Organization  | Character/Organization    | 对立         |
+| `HIDES_FROM`      | Character               | Character                 | 隐瞒         |
+| `BELONGS_TO`      | Character               | Organization              | 所属         |
+| `LOCATED_IN`      | Location                | Location                  | 地点从属     |
+| `OWNS`            | Character/Organization  | Item                      | 拥有         |
+| `CONSTRAINS`      | WorldRule               | StoryEvent/Character/Item | 规则约束     |
+| `SEEDED_IN`       | Foreshadowing           | Chapter/Scene             | 埋设         |
+| `REINFORCED_IN`   | Foreshadowing           | Chapter/Scene             | 强化         |
+| `PAID_OFF_IN`     | Foreshadowing           | Chapter/Scene             | 回收         |
+| `CONTRADICTS`     | Memory/WorldRule        | Memory/WorldRule          | 矛盾         |
+| `SUPPORTED_BY`    | Memory                  | Chapter/Scene/Artifact    | 来源支撑     |
+| `GENERATED`       | WorkOrder               | Artifact/Memory           | 工作单生成   |
+| `AFFECTS`         | Plotline/PlotNode       | Character/Chapter/Scene   | 影响         |
 
 ### 节点通用属性
 
@@ -211,30 +211,30 @@ GraphProjector 获取未处理事件
 
 在 SQLite 中保存：
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| projector | text pk | projector 名称 |
-| last_event_id | text nullable | 最后事件 |
-| last_event_time | integer nullable | 最后事件时间 |
-| schema_version | integer | 图 schema 版本 |
-| status | text | ok, rebuilding, failed |
-| error_json | text nullable | 最近错误 |
-| updated_at | integer | 更新时间 |
+| 字段            | 类型             | 说明                   |
+| --------------- | ---------------- | ---------------------- |
+| projector       | text pk          | projector 名称         |
+| last_event_id   | text nullable    | 最后事件               |
+| last_event_time | integer nullable | 最后事件时间           |
+| schema_version  | integer          | 图 schema 版本         |
+| status          | text             | ok, rebuilding, failed |
+| error_json      | text nullable    | 最近错误               |
+| updated_at      | integer          | 更新时间               |
 
 ## 事件到图谱的映射
 
-| 事件 | 图谱动作 |
-| --- | --- |
-| `character.created` | upsert `Character` |
-| `character.updated` | update `Character` properties |
-| `chapter.created` | upsert `Chapter`, link `Volume CONTAINS Chapter` |
-| `scene.created` | upsert `Scene`, link `Chapter CONTAINS Scene` |
-| `memory.confirmed.character_relation` | upsert relation edge |
-| `memory.confirmed.world_rule` | upsert `WorldRule`, link constraints |
-| `foreshadowing.seeded` | upsert `SEEDED_IN` |
-| `foreshadowing.paid_off` | upsert `PAID_OFF_IN` |
-| `artifact.applied.chapter` | update chapter, create support edges |
-| `memory.deprecated` | mark node or edge status deprecated |
+| 事件                                  | 图谱动作                                         |
+| ------------------------------------- | ------------------------------------------------ |
+| `character.created`                   | upsert `Character`                               |
+| `character.updated`                   | update `Character` properties                    |
+| `chapter.created`                     | upsert `Chapter`, link `Volume CONTAINS Chapter` |
+| `scene.created`                       | upsert `Scene`, link `Chapter CONTAINS Scene`    |
+| `memory.confirmed.character_relation` | upsert relation edge                             |
+| `memory.confirmed.world_rule`         | upsert `WorldRule`, link constraints             |
+| `foreshadowing.seeded`                | upsert `SEEDED_IN`                               |
+| `foreshadowing.paid_off`              | upsert `PAID_OFF_IN`                             |
+| `artifact.applied.chapter`            | update chapter, create support edges             |
+| `memory.deprecated`                   | mark node or edge status deprecated              |
 
 ## 记忆类型
 
@@ -449,11 +449,10 @@ Kuzu 是嵌入式 property graph 数据库，更符合桌面端本地优先的�
 
 ## 风险和控制
 
-| 风险 | 表现 | 控制方式 |
-| --- | --- | --- |
-| 图谱和 SQLite 不一致 | 查询结果遗漏或过期 | projection checkpoint、重建能力、事件审计 |
-| AI 提取错误记忆 | 错误事实进入后续生成 | candidate 状态、用户确认、来源引用 |
-| 图谱过密 | 检索噪声高 | 边类型分级、状态过滤、深度限制 |
-| 记忆过旧 | 旧设定干扰新设定 | deprecated 状态、版本、时间衰减 |
-| 用户确认成本高 | 候选堆积 | 自动分组、重复合并、低置信度降权 |
-
+| 风险                 | 表现                 | 控制方式                                  |
+| -------------------- | -------------------- | ----------------------------------------- |
+| 图谱和 SQLite 不一致 | 查询结果遗漏或过期   | projection checkpoint、重建能力、事件审计 |
+| AI 提取错误记忆      | 错误事实进入后续生成 | candidate 状态、用户确认、来源引用        |
+| 图谱过密             | 检索噪声高           | 边类型分级、状态过滤、深度限制            |
+| 记忆过旧             | 旧设定干扰新设定     | deprecated 状态、版本、时间衰减           |
+| 用户确认成本高       | 候选堆积             | 自动分组、重复合并、低置信度降权          |

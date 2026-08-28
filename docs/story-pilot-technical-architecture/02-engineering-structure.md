@@ -431,4 +431,4 @@ contracts command schema
 - model call log：模型、token、耗时、错误、输出引用。
 - data log：migration、graph projection、backup。
 
-日志默认按天切分并限制保留天数。模型原始输入输出默认只保存到项目内 `files/model-raw/`，由用户可配置关闭。
+日志默认按天切分并限制保留天数。模型原始输入输出默认只保存到项目内 `artifacts/model-raw/`，由用户可配置关闭。

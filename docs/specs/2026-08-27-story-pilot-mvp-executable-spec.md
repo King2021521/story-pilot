@@ -17,19 +17,19 @@
 
 ## 关键决策
 
-| 主题 | 决策 |
-| --- | --- |
-| 桌面框架 | Tauri v2 |
-| 前端框架 | React + TypeScript + Ant Design |
-| 后端框架 | NestJS + TypeScript |
-| 后端运行形态 | Tauri 管理的本地 sidecar |
-| HTTP 平台 | NestJS 默认平台适配层，不引入 Fastify |
-| 关系数据库 | SQLite + Drizzle ORM |
-| 图数据库 | Kuzu embedded |
-| AI 调用 | ModelGateway 统一封装，MVP 支持 OpenAI compatible 和 Fake provider |
-| AI 产物边界 | AI 只生成 artifact、patch、review、memory candidate，不直接写 canon |
-| 记忆事实源 | SQLite |
-| 图谱用途 | Kuzu 作为关系读模型，可从 SQLite 重建 |
+| 主题         | 决策                                                                |
+| ------------ | ------------------------------------------------------------------- |
+| 桌面框架     | Tauri v2                                                            |
+| 前端框架     | React + TypeScript + Ant Design                                     |
+| 后端框架     | NestJS + TypeScript                                                 |
+| 后端运行形态 | Tauri 管理的本地 sidecar                                            |
+| HTTP 平台    | NestJS 默认平台适配层，不引入 Fastify                               |
+| 关系数据库   | SQLite + Drizzle ORM                                                |
+| 图数据库     | Kuzu embedded                                                       |
+| AI 调用      | ModelGateway 统一封装，MVP 支持 OpenAI compatible 和 Fake provider  |
+| AI 产物边界  | AI 只生成 artifact、patch、review、memory candidate，不直接写 canon |
+| 记忆事实源   | SQLite                                                              |
+| 图谱用途     | Kuzu 作为关系读模型，可从 SQLite 重建                               |
 
 ## 非目标
 
@@ -703,17 +703,17 @@ MVP 必须支持：
 
 所有 AI 能力必须注册为 capability。
 
-| Capability | 输入 | 输出 |
-| --- | --- | --- |
-| `idea.generateConcepts` | 题材、风格、目标读者 | 故事概念候选 |
-| `storyBible.generate` | project brief、预设 | 故事圣经草案 |
-| `outline.generate` | 故事圣经、故事线 | 卷纲、章纲、剧情节点 |
-| `chapter.draft` | 章节目标、上下文包 | 章节草稿、记忆候选、审阅提示 |
-| `text.rewrite` | 选中文本、修改目标 | patch proposal |
-| `memory.extract` | 正文或 artifact | memory candidates |
-| `continuity.review` | 检查范围、图谱邻域 | review issues |
-| `foreshadowing.plan` | 大纲、伏笔状态 | 伏笔行动建议 |
-| `element.generateNames` | 类型、风格、限制 | 名称候选 |
+| Capability              | 输入                 | 输出                         |
+| ----------------------- | -------------------- | ---------------------------- |
+| `idea.generateConcepts` | 题材、风格、目标读者 | 故事概念候选                 |
+| `storyBible.generate`   | project brief、预设  | 故事圣经草案                 |
+| `outline.generate`      | 故事圣经、故事线     | 卷纲、章纲、剧情节点         |
+| `chapter.draft`         | 章节目标、上下文包   | 章节草稿、记忆候选、审阅提示 |
+| `text.rewrite`          | 选中文本、修改目标   | patch proposal               |
+| `memory.extract`        | 正文或 artifact      | memory candidates            |
+| `continuity.review`     | 检查范围、图谱邻域   | review issues                |
+| `foreshadowing.plan`    | 大纲、伏笔状态       | 伏笔行动建议                 |
+| `element.generateNames` | 类型、风格、限制     | 名称候选                     |
 
 ## ModelGateway
 
@@ -1016,15 +1016,15 @@ App
 
 ## AntD 组件使用
 
-| 场景 | AntD 组件 |
-| --- | --- |
-| 主布局 | `Layout`, `Sider`, `Content` |
-| 顶部和工具区 | `Flex`, `Space`, `Button`, `Segmented`, `Dropdown` |
-| 表单 | `Form`, `Input`, `InputNumber`, `Select`, `Radio`, `Checkbox`, `Switch` |
-| 列表和表格 | `Tree`, `Table`, `List`, `Tag`, `Badge` |
-| 看板和抽屉 | `Drawer`, `Tabs`, `Descriptions`, `Timeline` |
-| 反馈 | `App`, `message`, `notification`, `Modal`, `Progress`, `Spin` |
-| 编辑器外围 | `Splitter`, `Card` 少量使用，正文编辑器本体后续独立选型 |
+| 场景         | AntD 组件                                                               |
+| ------------ | ----------------------------------------------------------------------- |
+| 主布局       | `Layout`, `Sider`, `Content`                                            |
+| 顶部和工具区 | `Flex`, `Space`, `Button`, `Segmented`, `Dropdown`                      |
+| 表单         | `Form`, `Input`, `InputNumber`, `Select`, `Radio`, `Checkbox`, `Switch` |
+| 列表和表格   | `Tree`, `Table`, `List`, `Tag`, `Badge`                                 |
+| 看板和抽屉   | `Drawer`, `Tabs`, `Descriptions`, `Timeline`                            |
+| 反馈         | `App`, `message`, `notification`, `Modal`, `Progress`, `Spin`           |
+| 编辑器外围   | `Splitter`, `Card` 少量使用，正文编辑器本体后续独立选型                 |
 
 ### 组件边界
 
@@ -1096,62 +1096,62 @@ App
 
 ## 后端单元测试
 
-| 用例 | 断言 |
-| --- | --- |
-| `resolveMemoryCandidateDecision("accept_as_canon")` | 返回 `memoryStatus = canon` |
-| `resolveMemoryCandidateDecision("keep_as_hypothesis")` | 返回 `memoryStatus = hypothesis` |
-| locked chapter 应用 artifact | 返回 `CHAPTER_VERSION_CONFLICT` 或 forbidden |
-| AI draft workflow 完成 | artifact created，chapter 未被直接修改 |
-| memory confirm | candidate accepted，memory canon，domain event created |
+| 用例                                                   | 断言                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------ |
+| `resolveMemoryCandidateDecision("accept_as_canon")`    | 返回 `memoryStatus = canon`                            |
+| `resolveMemoryCandidateDecision("keep_as_hypothesis")` | 返回 `memoryStatus = hypothesis`                       |
+| locked chapter 应用 artifact                           | 返回 `CHAPTER_VERSION_CONFLICT` 或 forbidden           |
+| AI draft workflow 完成                                 | artifact created，chapter 未被直接修改                 |
+| memory confirm                                         | candidate accepted，memory canon，domain event created |
 
 ## 数据库测试
 
-| 用例 | 断言 |
-| --- | --- |
-| 创建空项目库 | 所有 MVP 表存在 |
-| migration 重复执行 | schema version 不重复写入 |
-| 保存章节正文 | `chapters.version` 增加，`chapter_versions` 增加 |
-| 应用 AI artifact | 事务内写版本、章节和 domain event |
-| migration 失败 | 原库可恢复 |
+| 用例               | 断言                                             |
+| ------------------ | ------------------------------------------------ |
+| 创建空项目库       | 所有 MVP 表存在                                  |
+| migration 重复执行 | schema version 不重复写入                        |
+| 保存章节正文       | `chapters.version` 增加，`chapter_versions` 增加 |
+| 应用 AI artifact   | 事务内写版本、章节和 domain event                |
+| migration 失败     | 原库可恢复                                       |
 
 ## 图谱测试
 
-| 用例 | 断言 |
-| --- | --- |
-| 创建人物 | Kuzu 有 `Character` 节点 |
-| 确认人物关系 | Kuzu 有对应关系边 |
-| 创建章节和场景 | 图谱有 `CONTAINS` 边 |
-| 伏笔埋设 | 图谱有 `SEEDED_IN` 边 |
-| 图谱重建 | 重建后关键查询结果一致 |
+| 用例           | 断言                     |
+| -------------- | ------------------------ |
+| 创建人物       | Kuzu 有 `Character` 节点 |
+| 确认人物关系   | Kuzu 有对应关系边        |
+| 创建章节和场景 | 图谱有 `CONTAINS` 边     |
+| 伏笔埋设       | 图谱有 `SEEDED_IN` 边    |
+| 图谱重建       | 重建后关键查询结果一致   |
 
 ## AI 工作流测试
 
-| 用例 | 断言 |
-| --- | --- |
+| 用例                       | 断言                               |
+| -------------------------- | ---------------------------------- |
 | fake provider 生成章节草稿 | 创建 artifact 和 memory candidates |
-| 模型返回非法 JSON | workflow failed，保留错误 |
-| 上下文超预算 | 低优先级内容被裁剪 |
-| 用户取消 | work order canceled |
-| 用户应用草稿 | chapter version 增加 |
+| 模型返回非法 JSON          | workflow failed，保留错误          |
+| 上下文超预算               | 低优先级内容被裁剪                 |
+| 用户取消                   | work order canceled                |
+| 用户应用草稿               | chapter version 增加               |
 
 ## Prompt 测试
 
-| 用例 | 断言 |
-| --- | --- |
-| 章节草稿 prompt | 包含 canon 边界、输出 schema、章节目标 |
-| 记忆提取 prompt | 要求 source_quote，不允许直接 canon |
-| 连续性检查 prompt | 区分 canon 和 hypothesis |
-| prompt 版本变更 | `model_calls.prompt_version` 被记录 |
+| 用例              | 断言                                   |
+| ----------------- | -------------------------------------- |
+| 章节草稿 prompt   | 包含 canon 边界、输出 schema、章节目标 |
+| 记忆提取 prompt   | 要求 source_quote，不允许直接 canon    |
+| 连续性检查 prompt | 区分 canon 和 hypothesis               |
+| prompt 版本变更   | `model_calls.prompt_version` 被记录    |
 
 ## 前端测试
 
-| 用例 | 断言 |
-| --- | --- |
-| ShellLayout | 左侧项目区、中间工作台、右侧看板入口存在 |
-| ChapterEditorPage | 章节树、编辑区、版本入口存在 |
-| AiTaskDrawer | 接收到 workflow event 后显示进度 |
-| MemoryConfirmDrawer | 可以接受、拒绝、合并候选 |
-| AntD ConfigProvider | 主题 token 生效 |
+| 用例                | 断言                                     |
+| ------------------- | ---------------------------------------- |
+| ShellLayout         | 左侧项目区、中间工作台、右侧看板入口存在 |
+| ChapterEditorPage   | 章节树、编辑区、版本入口存在             |
+| AiTaskDrawer        | 接收到 workflow event 后显示进度         |
+| MemoryConfirmDrawer | 可以接受、拒绝、合并候选                 |
+| AntD ConfigProvider | 主题 token 生效                          |
 
 ## 验收标准
 
@@ -1168,4 +1168,3 @@ MVP 结束时必须满足：
 - canon memory 和关系可以投影到 Kuzu。
 - 后续章节生成可以读取 canon 和图谱邻域。
 - 所有核心命令有 contracts、后端测试和前端调用封装。
-

@@ -7,7 +7,7 @@ Story Pilot is a desktop-first AI writing workbench for long-form fiction. The c
 ```text
 apps/
   desktop/        React + Vite + Tauri v2 desktop app
-  sidecar/        TypeScript sidecar backend, planned as a NestJS local service
+  sidecar/        TypeScript sidecar backend powered by NestJS
 packages/
   contracts/      Shared RPC, event, and error contracts
   domain/         Pure domain rules and state transitions
@@ -48,6 +48,24 @@ Tauri Rust check:
 ```bash
 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
+
+## Local Runtime Data
+
+The packaged desktop app initializes local data under `~/.story-pilot` on first launch:
+
+```text
+~/.story-pilot/
+  setting.json
+  global.sqlite
+  diagnostics/
+  logs/
+  temp/
+  projects/
+```
+
+For the MVP, LLM provider settings are edited directly in `setting.json`, including `apiKey`.
+`.env` remains a development fallback, but the installed app should be configured through
+`~/.story-pilot/setting.json`.
 
 ## Architecture Direction
 

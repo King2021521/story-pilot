@@ -118,14 +118,19 @@ Application Service
 Story Pilot 的数据默认落在本机：
 
 ```text
-StoryPilot/
+~/.story-pilot/
+  setting.json
   global.sqlite
+  diagnostics/
+  logs/
+  temp/
   projects/
     <projectId>/
       project.sqlite
       graph.kuzu/
-      files/
-      snapshots/
+      exports/
+      artifacts/
+      attachments/
       backups/
 ```
 
@@ -219,32 +224,32 @@ Graph Projector 根据事件更新 Kuzu
 
 ## 模块边界
 
-| 模块 | 主要职责 | 不应承担 |
-| --- | --- | --- |
-| Frontend | UI、交互、状态呈现、用户命令 | 数据库直连、LLM 密钥、复杂业务规则 |
-| Rust Bridge | Tauri 能力、sidecar 生命周期、安全边界 | AI 编排、业务服务、复杂查询 |
-| NestJS Sidecar | Controller、Module、Provider、权限校验、请求响应和事件 | 直接拼 prompt |
-| App Services | 用户用例编排和事务边界 | 具体模型 provider 细节 |
-| Domain | 创作对象、规则、状态机 | 任何外部 IO |
-| Workflow Runtime | AI 任务步骤、暂停、恢复、取消、审计 | UI 呈现 |
-| Model Gateway | provider 抽象、调用日志、流式、重试 | 业务对象最终落库 |
-| SQLite Repository | 事务性源数据 | 图遍历优化 |
-| Kuzu Graph | 关系查询、图谱检索 | 唯一事实源 |
-| File Store | 大文件、导入导出、快照 | 业务规则判断 |
+| 模块              | 主要职责                                               | 不应承担                           |
+| ----------------- | ------------------------------------------------------ | ---------------------------------- |
+| Frontend          | UI、交互、状态呈现、用户命令                           | 数据库直连、LLM 密钥、复杂业务规则 |
+| Rust Bridge       | Tauri 能力、sidecar 生命周期、安全边界                 | AI 编排、业务服务、复杂查询        |
+| NestJS Sidecar    | Controller、Module、Provider、权限校验、请求响应和事件 | 直接拼 prompt                      |
+| App Services      | 用户用例编排和事务边界                                 | 具体模型 provider 细节             |
+| Domain            | 创作对象、规则、状态机                                 | 任何外部 IO                        |
+| Workflow Runtime  | AI 任务步骤、暂停、恢复、取消、审计                    | UI 呈现                            |
+| Model Gateway     | provider 抽象、调用日志、流式、重试                    | 业务对象最终落库                   |
+| SQLite Repository | 事务性源数据                                           | 图遍历优化                         |
+| Kuzu Graph        | 关系查询、图谱检索                                     | 唯一事实源                         |
+| File Store        | 大文件、导入导出、快照                                 | 业务规则判断                       |
 
 ## 关键技术选型
 
-| 层级 | 推荐方案 | 理由 |
-| --- | --- | --- |
-| 桌面框架 | Tauri v2 | 轻量、安全能力强、适合本地应用 |
-| 桌面桥接 | Rust commands + sidecar | Rust 控制桌面能力，业务逻辑放 TS |
-| Sidecar 运行时 | NestJS + Node.js + TypeScript | 模块化、依赖注入、测试工具和工程规范更适合复杂后端 |
-| 内部 API | NestJS HTTP RPC | 保留本地 HTTP 调试和事件流能力，前端仍只能通过 Tauri bridge 调用 |
-| 关系数据库 | SQLite + Drizzle ORM | 嵌入式、事务稳定、迁移简单 |
-| 图数据库 | Kuzu embedded | 本地嵌入式 property graph，适合桌面端关系检索 |
-| 全文搜索 | SQLite FTS5 | MVP 足够，部署成本低 |
-| 向量检索 | SQLite 向量扩展或 Kuzu vector extension | 先本地化，后续可替换 |
-| 测试 | Vitest + migration tests + workflow fixtures | 适合 TS 后端和 AI 流程回归 |
+| 层级           | 推荐方案                                     | 理由                                                             |
+| -------------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| 桌面框架       | Tauri v2                                     | 轻量、安全能力强、适合本地应用                                   |
+| 桌面桥接       | Rust commands + sidecar                      | Rust 控制桌面能力，业务逻辑放 TS                                 |
+| Sidecar 运行时 | NestJS + Node.js + TypeScript                | 模块化、依赖注入、测试工具和工程规范更适合复杂后端               |
+| 内部 API       | NestJS HTTP RPC                              | 保留本地 HTTP 调试和事件流能力，前端仍只能通过 Tauri bridge 调用 |
+| 关系数据库     | SQLite + Drizzle ORM                         | 嵌入式、事务稳定、迁移简单                                       |
+| 图数据库       | Kuzu embedded                                | 本地嵌入式 property graph，适合桌面端关系检索                    |
+| 全文搜索       | SQLite FTS5                                  | MVP 足够，部署成本低                                             |
+| 向量检索       | SQLite 向量扩展或 Kuzu vector extension      | 先本地化，后续可替换                                             |
+| 测试           | Vitest + migration tests + workflow fixtures | 适合 TS 后端和 AI 流程回归                                       |
 
 ## 重要约束
 

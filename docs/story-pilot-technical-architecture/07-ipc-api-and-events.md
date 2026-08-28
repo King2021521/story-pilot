@@ -99,8 +99,8 @@ await invoke("sp_command", {
   payload: {
     projectId,
     chapterId,
-    instruction
-  }
+    instruction,
+  },
 });
 ```
 
@@ -231,88 +231,88 @@ settings.*
 
 ### App 和项目
 
-| 命令 | 说明 |
-| --- | --- |
-| `app.getBootstrapState` | 获取应用启动状态 |
-| `project.create` | 创建项目 |
-| `project.open` | 打开项目 |
-| `project.close` | 关闭项目 |
-| `project.listRecent` | 最近项目 |
-| `project.getOverview` | 项目概览 |
-| `project.backup` | 手动备份 |
-| `project.restoreSnapshot` | 从快照恢复 |
+| 命令                      | 说明             |
+| ------------------------- | ---------------- |
+| `app.getBootstrapState`   | 获取应用启动状态 |
+| `project.create`          | 创建项目         |
+| `project.open`            | 打开项目         |
+| `project.close`           | 关闭项目         |
+| `project.listRecent`      | 最近项目         |
+| `project.getOverview`     | 项目概览         |
+| `project.backup`          | 手动备份         |
+| `project.restoreSnapshot` | 从快照恢复       |
 
 ### 工作台
 
-| 命令 | 说明 |
-| --- | --- |
-| `workbench.getSnapshot` | 获取首页聚合数据 |
-| `workbench.getBoard` | 获取右侧看板数据 |
-| `workbench.updateLayoutState` | 保存布局状态 |
+| 命令                          | 说明             |
+| ----------------------------- | ---------------- |
+| `workbench.getSnapshot`       | 获取首页聚合数据 |
+| `workbench.getBoard`          | 获取右侧看板数据 |
+| `workbench.updateLayoutState` | 保存布局状态     |
 
 ### 章节
 
-| 命令 | 说明 |
-| --- | --- |
-| `chapter.list` | 章节列表 |
-| `chapter.get` | 获取章节 |
-| `chapter.create` | 创建章节 |
-| `chapter.updateMeta` | 更新章节元信息 |
-| `chapter.saveContent` | 保存正文 |
-| `chapter.listVersions` | 版本列表 |
-| `chapter.restoreVersion` | 恢复版本 |
-| `chapter.generateDraft` | 生成草稿 |
-| `chapter.reviewContinuity` | 连续性检查 |
+| 命令                       | 说明           |
+| -------------------------- | -------------- |
+| `chapter.list`             | 章节列表       |
+| `chapter.get`              | 获取章节       |
+| `chapter.create`           | 创建章节       |
+| `chapter.updateMeta`       | 更新章节元信息 |
+| `chapter.saveContent`      | 保存正文       |
+| `chapter.listVersions`     | 版本列表       |
+| `chapter.restoreVersion`   | 恢复版本       |
+| `chapter.generateDraft`    | 生成草稿       |
+| `chapter.reviewContinuity` | 连续性检查     |
 
 ### 设定对象
 
-| 命令 | 说明 |
-| --- | --- |
-| `character.create` | 创建人物 |
-| `character.update` | 更新人物 |
-| `character.generateNames` | 生成人名 |
-| `world.createRule` | 创建世界规则 |
-| `world.updateRule` | 更新世界规则 |
-| `plot.createLine` | 创建故事线 |
-| `plot.updateNode` | 更新故事线节点 |
-| `foreshadowing.create` | 创建伏笔 |
-| `foreshadowing.plan` | 规划伏笔 |
+| 命令                      | 说明           |
+| ------------------------- | -------------- |
+| `character.create`        | 创建人物       |
+| `character.update`        | 更新人物       |
+| `character.generateNames` | 生成人名       |
+| `world.createRule`        | 创建世界规则   |
+| `world.updateRule`        | 更新世界规则   |
+| `plot.createLine`         | 创建故事线     |
+| `plot.updateNode`         | 更新故事线节点 |
+| `foreshadowing.create`    | 创建伏笔       |
+| `foreshadowing.plan`      | 规划伏笔       |
 
 ### AI 工作流
 
-| 命令 | 说明 |
-| --- | --- |
+| 命令               | 说明       |
+| ------------------ | ---------- |
 | `workOrder.create` | 创建工作单 |
-| `workOrder.get` | 获取工作单 |
-| `workOrder.list` | 工作单列表 |
-| `workflow.run` | 执行工作流 |
-| `workflow.cancel` | 取消工作流 |
-| `workflow.retry` | 重试工作流 |
-| `artifact.get` | 获取产物 |
-| `artifact.apply` | 应用产物 |
-| `artifact.reject` | 拒绝产物 |
+| `workOrder.get`    | 获取工作单 |
+| `workOrder.list`   | 工作单列表 |
+| `workflow.run`     | 执行工作流 |
+| `workflow.cancel`  | 取消工作流 |
+| `workflow.retry`   | 重试工作流 |
+| `artifact.get`     | 获取产物   |
+| `artifact.apply`   | 应用产物   |
+| `artifact.reject`  | 拒绝产物   |
 
 ### 记忆和图谱
 
-| 命令 | 说明 |
-| --- | --- |
-| `memory.listCandidates` | 记忆候选列表 |
-| `memory.confirm` | 确认候选 |
-| `memory.reject` | 拒绝候选 |
-| `memory.merge` | 合并候选 |
-| `memory.search` | 记忆搜索 |
-| `graph.getNeighborhood` | 获取图谱邻域 |
-| `graph.findContradictions` | 查找矛盾 |
-| `graph.rebuild` | 重建图谱 |
+| 命令                       | 说明         |
+| -------------------------- | ------------ |
+| `memory.listCandidates`    | 记忆候选列表 |
+| `memory.confirm`           | 确认候选     |
+| `memory.reject`            | 拒绝候选     |
+| `memory.merge`             | 合并候选     |
+| `memory.search`            | 记忆搜索     |
+| `graph.getNeighborhood`    | 获取图谱邻域 |
+| `graph.findContradictions` | 查找矛盾     |
+| `graph.rebuild`            | 重建图谱     |
 
 ### 导入导出
 
-| 命令 | 说明 |
-| --- | --- |
-| `import.file` | 导入文件 |
+| 命令                     | 说明               |
+| ------------------------ | ------------------ |
+| `import.file`            | 导入文件           |
 | `import.extractMemories` | 从导入资料提取记忆 |
-| `export.run` | 导出 |
-| `export.list` | 导出记录 |
+| `export.run`             | 导出               |
+| `export.list`            | 导出记录           |
 
 ## 事件模型
 
@@ -334,54 +334,54 @@ settings.*
 
 ### 工作流事件
 
-| 事件 | 说明 |
-| --- | --- |
-| `workflow.started` | 工作流开始 |
-| `workflow.step.started` | 步骤开始 |
-| `workflow.step.completed` | 步骤完成 |
-| `workflow.step.failed` | 步骤失败 |
-| `workflow.token.delta` | 流式文本片段 |
-| `workflow.waiting_user` | 等待用户确认 |
-| `workflow.completed` | 工作流完成 |
-| `workflow.failed` | 工作流失败 |
-| `workflow.canceled` | 工作流取消 |
+| 事件                      | 说明         |
+| ------------------------- | ------------ |
+| `workflow.started`        | 工作流开始   |
+| `workflow.step.started`   | 步骤开始     |
+| `workflow.step.completed` | 步骤完成     |
+| `workflow.step.failed`    | 步骤失败     |
+| `workflow.token.delta`    | 流式文本片段 |
+| `workflow.waiting_user`   | 等待用户确认 |
+| `workflow.completed`      | 工作流完成   |
+| `workflow.failed`         | 工作流失败   |
+| `workflow.canceled`       | 工作流取消   |
 
 ### 产物事件
 
-| 事件 | 说明 |
-| --- | --- |
-| `artifact.created` | 创建产物 |
-| `artifact.updated` | 更新产物 |
-| `artifact.applied` | 应用产物 |
+| 事件                | 说明     |
+| ------------------- | -------- |
+| `artifact.created`  | 创建产物 |
+| `artifact.updated`  | 更新产物 |
+| `artifact.applied`  | 应用产物 |
 | `artifact.rejected` | 拒绝产物 |
 
 ### 记忆事件
 
-| 事件 | 说明 |
-| --- | --- |
+| 事件                       | 说明         |
+| -------------------------- | ------------ |
 | `memory.candidate.created` | 记忆候选创建 |
 | `memory.candidate.updated` | 记忆候选更新 |
-| `memory.confirmed` | 记忆确认 |
-| `memory.rejected` | 记忆拒绝 |
+| `memory.confirmed`         | 记忆确认     |
+| `memory.rejected`          | 记忆拒绝     |
 | `memory.conflict.detected` | 发现记忆冲突 |
 
 ### 看板事件
 
-| 事件 | 说明 |
-| --- | --- |
-| `board.updated` | 看板数据更新 |
+| 事件                      | 说明         |
+| ------------------------- | ------------ |
+| `board.updated`           | 看板数据更新 |
 | `project.metrics.updated` | 项目指标更新 |
-| `chapter.status.changed` | 章节状态变化 |
+| `chapter.status.changed`  | 章节状态变化 |
 
 ### 系统事件
 
-| 事件 | 说明 |
-| --- | --- |
-| `backend.ready` | sidecar ready |
-| `backend.unhealthy` | sidecar 异常 |
-| `graph.rebuild.started` | 图谱重建开始 |
-| `graph.rebuild.completed` | 图谱重建完成 |
-| `search.reindex.completed` | 索引重建完成 |
+| 事件                       | 说明          |
+| -------------------------- | ------------- |
+| `backend.ready`            | sidecar ready |
+| `backend.unhealthy`        | sidecar 异常  |
+| `graph.rebuild.started`    | 图谱重建开始  |
+| `graph.rebuild.completed`  | 图谱重建完成  |
+| `search.reindex.completed` | 索引重建完成  |
 
 ## 流式输出
 
@@ -429,16 +429,16 @@ SECURITY_*
 
 示例：
 
-| 错误码 | 说明 |
-| --- | --- |
-| `PROJECT_NOT_FOUND` | 项目不存在 |
-| `CHAPTER_VERSION_CONFLICT` | 章节版本冲突 |
-| `WORKFLOW_ALREADY_RUNNING` | 目标对象已有冲突工作流 |
-| `MODEL_PROVIDER_NOT_CONFIGURED` | 模型 provider 未配置 |
-| `MODEL_OUTPUT_PARSE_FAILED` | 模型输出解析失败 |
-| `MEMORY_CONFLICT_DETECTED` | 记忆冲突 |
-| `GRAPH_UNAVAILABLE` | 图谱不可用 |
-| `FILE_OUT_OF_SCOPE` | 文件超出允许范围 |
+| 错误码                          | 说明                   |
+| ------------------------------- | ---------------------- |
+| `PROJECT_NOT_FOUND`             | 项目不存在             |
+| `CHAPTER_VERSION_CONFLICT`      | 章节版本冲突           |
+| `WORKFLOW_ALREADY_RUNNING`      | 目标对象已有冲突工作流 |
+| `MODEL_PROVIDER_NOT_CONFIGURED` | 模型 provider 未配置   |
+| `MODEL_OUTPUT_PARSE_FAILED`     | 模型输出解析失败       |
+| `MEMORY_CONFLICT_DETECTED`      | 记忆冲突               |
+| `GRAPH_UNAVAILABLE`             | 图谱不可用             |
+| `FILE_OUT_OF_SCOPE`             | 文件超出允许范围       |
 
 ## 权限和安全
 
