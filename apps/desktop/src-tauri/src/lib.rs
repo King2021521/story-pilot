@@ -9,7 +9,7 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid;
 
-const MANAGED_SIDECAR_BINARY: &str = "binaries/story-pilot-sidecar";
+const MANAGED_SIDECAR_BINARY: &str = "story-pilot-sidecar";
 const MANAGED_SIDECAR_HOST: &str = "127.0.0.1";
 const SIDECAR_RPC_RETRY_ATTEMPTS: usize = 30;
 const SIDECAR_RPC_RETRY_DELAY: Duration = Duration::from_millis(100);
@@ -354,6 +354,26 @@ mod tests {
                 ),
             ],
         );
+    }
+
+    #[test]
+    fn managed_sidecar_command_name_matches_packaged_external_bin_basename() {
+        let config: Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("parse tauri config");
+        let external_bins = config["bundle"]["externalBin"]
+            .as_array()
+            .expect("externalBin list");
+        let sidecar_path = external_bins
+            .iter()
+            .filter_map(Value::as_str)
+            .find(|path| path.ends_with("story-pilot-sidecar"))
+            .expect("story pilot sidecar externalBin");
+        let packaged_name = Path::new(sidecar_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("sidecar packaged basename");
+
+        assert_eq!(MANAGED_SIDECAR_BINARY, packaged_name);
     }
 
     #[test]
