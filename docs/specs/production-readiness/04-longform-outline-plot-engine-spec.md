@@ -248,6 +248,65 @@ plot.analyzeOutlineImpact(input: {
 - `needs_revision`
 - `written`
 
+## 当前可复用实现
+
+- `packages/db/src/schema/creative-path.ts`：已有 outlines、volumeOutlines、chapterOutlines、powerSystems、characterRelations、characterArcs、conflicts。
+- `packages/db/src/schema/plot.ts`：已有 plotlines、plotlineNodes、storyEvents、eventRelations、foreshadowings。
+- `apps/sidecar/src/outline/outline.service.ts`：已有章纲生成、批准、应用基础，但当前是固定模板。
+- `apps/sidecar/src/plot/*`：已有剧情线、事件、伏笔服务基础。
+- `apps/desktop/src/features/creative-path/CreativePathWorkbench.tsx`：已有章纲列表和正文生成入口。
+
+## 实施切片
+
+### P3.1 分层规划数据模型
+
+产物：
+
+- 新增或迁移 `book_plans`、`volume_plans`、`arc_plans`、`chapter_plans`、`scene_plans`。
+- 建立 repository 和 migration。
+- 保留旧 `outlines`/`chapter_outlines` 兼容读取。
+
+验证：
+
+- schema test 确认表存在。
+- repository test 覆盖创建、查询、状态变更和版本。
+
+### P3.2 长篇规划 AI Workflow
+
+产物：
+
+- `book_plan_generate` 生成全书和分卷规划 artifact。
+- `rolling_chapter_plan_generate` 生成未来 10-20 章 detailed plans。
+- 输出必须引用 plotline、character、foreshadowing、world rule。
+
+验证：
+
+- mock provider 集成测试确认 artifact 不直接写 canon。
+- apply 后写入 plan 表和 domain events。
+
+### P3.3 大纲与剧情工作台
+
+产物：
+
+- 大纲树支持 book、volume、arc、chapter、scene。
+- 节点详情可编辑结构化字段。
+- 支持生成下一批章纲、应用草案、影响分析。
+
+验证：
+
+- React 测试覆盖树渲染、节点选择、生成按钮、影响报告。
+
+### P3.4 长篇压测
+
+产物：
+
+- synthetic data generator 生成 1000 章规划。
+- 大纲查询和章节定位有性能测试。
+
+验证：
+
+- 第 700 章定位到 volume/arc/plotline 耗时低于 500ms。
+
 ## 测试用例
 
 单元测试：
@@ -276,6 +335,16 @@ plot.analyzeOutlineImpact(input: {
 4. 查询第 700 章所在 volume/arc/plotline。
 5. 单次查询耗时低于 500ms。
 ```
+
+## 阶段验证清单
+
+完成 P3 时必须保存以下证据：
+
+- `pnpm --filter @story-pilot/db test`
+- `pnpm --filter @story-pilot/sidecar test`
+- `pnpm --filter @story-pilot/desktop test`
+- `pnpm verify:longform` 中的大纲子集通过。
+- 至少一个 100 万字目标项目生成全书规划和 20 章滚动章纲。
 
 ## 验收标准
 

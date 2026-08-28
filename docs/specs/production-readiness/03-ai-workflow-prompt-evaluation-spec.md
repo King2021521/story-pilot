@@ -213,6 +213,70 @@ ai.listArtifacts(input: {
 }): ArtifactRecord[]
 ```
 
+## 当前可复用实现
+
+- `packages/ai/src/model-gateway/model-gateway.ts`：已有 `generateObject`、`streamText`、`embed` 网关。
+- `packages/ai/src/prompts/prompt-registry.ts`：已有 prompt registry 基础。
+- `packages/ai/src/structured-output/*`：已有 chapter draft、memory、continuity、foreshadowing、element schema。
+- `packages/workflow-runtime/src`：已有 workflow engine 和 registry。
+- `apps/sidecar/src/ai/model-gateway.provider.ts`：已有 OpenAI-compatible provider 接线和 fake provider。
+- `packages/db/src/schema/workflow.ts`：已有 work order、workflow run、model call 基础。
+- `apps/sidecar/src/chapter/chapter.service.ts`：已有章节草稿 workflow 示例。
+
+## 实施切片
+
+### P2.1 生产态模型配置边界
+
+产物：
+
+- `ModelGatewayFactory` 根据 settings 创建真实 provider。
+- 未配置模型时返回 `AI_MODEL_NOT_CONFIGURED`，不走 fake provider。
+- fake provider 只允许测试环境显式启用。
+
+验证：
+
+- provider factory 单元测试覆盖 production/test 两种模式。
+- UI AI 按钮在未配置模型时显示设置入口。
+
+### P2.2 Capability Registry 和 Prompt Packs
+
+产物：
+
+- `AiCapabilityKey` 覆盖 brief、blueprint、world、character、relationship、plot、outline、chapter、rewrite、review、memory、retrospective。
+- 每个 capability 有 system prompt、output schema、default prompt version。
+- Genre method pack 可按题材选择。
+
+验证：
+
+- registry 测试确保每个 capability 能加载 prompt 和 schema。
+- prompt hash 变化会写入 prompt version。
+
+### P2.3 统一 AI Workflow
+
+产物：
+
+- `AiWorkflowService.generate()` 统一创建 work order、context package、model call、artifact。
+- schema 失败、HTTP 失败、取消、重试都有状态记录。
+- 所有正式 AI 入口改为调用统一 workflow。
+
+验证：
+
+- RPC 集成测试覆盖成功、schema retry、HTTP retry、cancel。
+- model_calls 记录包含 prompt version 和 contextPackageId。
+
+### P2.4 Prompt Eval
+
+产物：
+
+- 离线 deterministic eval runner。
+- 真实模型人工评审 fixture。
+- 分题材 fixture 覆盖玄幻、悬疑、都市。
+
+验证：
+
+- `pnpm --filter @story-pilot/ai test` 包含 eval runner 单元测试。
+- 手动 eval 输出保存为 `ai_eval_runs` 或发布材料。
+
 ## Prompt Eval
 
 建立 `packages/ai-evals` 或 `packages/ai/src/evals`：
@@ -279,6 +343,17 @@ E2E：
 8. 生成第 1 章正文 artifact。
 9. artifact 页面可查看 prompt version、context package 和 review notes。
 ```
+
+## 阶段验证清单
+
+完成 P2 时必须保存以下证据：
+
+- `pnpm --filter @story-pilot/ai test`
+- `pnpm --filter @story-pilot/workflow-runtime test`
+- `pnpm --filter @story-pilot/sidecar test`
+- `pnpm --filter @story-pilot/desktop test`
+- mock OpenAI-compatible provider 集成测试输出。
+- 至少一轮真实模型人工评审记录。
 
 ## 验收标准
 

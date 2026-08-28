@@ -207,6 +207,34 @@ UI 规则：
 6. 重新运行同一 work order 成功。
 ```
 
+## 测试用例
+
+单元测试：
+
+- 错误码序列化符合 `StoryPilotError`。
+- diagnostics redactor 能移除完整 API key、正文全文和完整 prompt。
+- longform generator 在相同 seed 下输出一致。
+- performance budget checker 对超预算结果返回失败。
+
+集成测试：
+
+```text
+1. 创建 synthetic project。
+2. 运行 verify:longform 子流程。
+3. 输出 performance report。
+4. 任一关键指标超预算时命令失败。
+```
+
+包验证测试：
+
+```text
+1. 构建 DMG。
+2. 校验 DMG checksum。
+3. 启动安装后的 app。
+4. 等待 sidecar health ok。
+5. 创建项目并重启恢复。
+```
+
 ## 安全与隐私检查
 
 必须检查：
@@ -218,6 +246,76 @@ UI 规则：
 - 日志不包含完整 API key。
 - 文件操作限制在授权目录和 `~/.story-pilot`。
 - 恢复备份前验证备份 manifest。
+
+## 当前可复用实现
+
+- 根 `package.json`：已有 `lint`、`typecheck`、`test`、`build`。
+- `apps/desktop/src-tauri/src/lib.rs`：已有 sidecar token、本地转发和重试测试基础。
+- `apps/desktop/src/test/sidecar-runner.test.ts`：已有 sidecar runner 测试基础。
+- `apps/sidecar/src/rpc/rpc.integration.spec.ts`：已有主链路集成测试基础。
+- `packages/testing`：可承载 synthetic project 和长篇压测工具。
+- `docs/specs/production-readiness/08-validation-traceability-matrix.md`：定义跨阶段验证证据。
+
+## 实施切片
+
+### P6.1 统一验证脚本
+
+产物：
+
+- 根 package 增加 `verify`、`verify:tauri`、`verify:package`、`verify:longform`。
+- CI 或本地发布流程使用同一套命令。
+
+验证：
+
+- `pnpm verify` 在本地通过。
+
+### P6.2 长篇 synthetic project
+
+产物：
+
+- deterministic generator 生成百万字级项目数据。
+- 性能测试输出 JSON 报告。
+- 至少 50 个 continuity issue 可被检测。
+
+验证：
+
+- `pnpm verify:longform` 通过性能预算。
+
+### P6.3 安装包 smoke 和恢复演练
+
+产物：
+
+- DMG 构建后自动 verify。
+- smoke test 覆盖首次启动、创建项目、重启恢复。
+- recovery test 覆盖 SQLite 损坏和备份恢复。
+
+验证：
+
+- smoke report 附带 app version、sidecar health、data dir。
+
+### P6.4 安全和诊断门禁
+
+产物：
+
+- 诊断包快照测试。
+- API key、正文全文、完整 prompt 脱敏检查。
+- 路径访问和 bridge token 测试纳入发布门禁。
+
+验证：
+
+- 安全检查失败时 `verify:package` 失败。
+
+## 阶段验证清单
+
+完成 P6 时必须保存以下证据：
+
+- `pnpm verify`
+- `pnpm verify:package`
+- `pnpm verify:longform`
+- 安装包 smoke report。
+- backup recovery report。
+- diagnostics redaction snapshot。
+- longform performance report。
 
 ## 验收标准
 

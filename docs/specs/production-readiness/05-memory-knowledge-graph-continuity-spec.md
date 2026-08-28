@@ -224,6 +224,69 @@ graph.rebuild(input: {
 - 点击问题定位到人物、事件、章节或设定。
 - 用户可标记 acknowledged/ignored，但必须记录 reason。
 
+## 当前可复用实现
+
+- `packages/db/src/schema/memory.ts`：已有 memory candidates、memories、context packages、projection checkpoints。
+- `packages/db/src/schema/character.ts`：已有 characters、traits、entity relations。
+- `packages/db/src/schema/plot.ts`：已有 story events、event relations、foreshadowings。
+- `packages/graph/src/projector/graph-projector.ts`：已有 domain events 到 Kuzu 的投影基础。
+- `packages/graph/src/queries/neighborhood.ts`：已有邻域、伏笔、因果、规则影响、矛盾查询基础。
+- `apps/sidecar/src/memory/memory.service.ts`：已有候选确认、拒绝、合并。
+- `apps/sidecar/src/graph/graph.service.ts`：已有 rebuild、neighborhood、contradiction 入口。
+- `packages/ai/src/context-builder/context-builder.ts`：已有章节上下文包基础。
+
+## 实施切片
+
+### P4.1 Memory V2
+
+产物：
+
+- memory 增加 scope、valid chapter range、source、evidence、supersedes、contradiction group。
+- memory candidate 增加 conflict candidates 和 source quote。
+- migration 保留旧 memory 数据。
+
+验证：
+
+- repository test 覆盖创建、合并、取代、冲突分组。
+
+### P4.2 图谱增量投影
+
+产物：
+
+- `graph.projectSinceCheckpoint` 按 domain event checkpoint 增量投影。
+- rebuild 只作为修复命令。
+- 投影失败进入 diagnostics 和看板。
+
+验证：
+
+- 集成测试覆盖新增 event 后只投影增量。
+- projection checkpoint 与最新 domain event 对齐。
+
+### P4.3 连续性规则引擎
+
+产物：
+
+- 实现首批 8 条硬规则。
+- `continuity.review` 支持 target scope。
+- issue 可 acknowledged、resolved、ignored。
+
+验证：
+
+- 每条硬规则至少一个单元测试。
+- hypothesis 冲突降级为 warning。
+
+### P4.4 混合检索 Context Retrieval
+
+产物：
+
+- FTS、embedding、graph neighborhood、recent summaries 合并排序。
+- token budget 可控。
+- context package 记录每个 item 的来源和 rank。
+
+验证：
+
+- 10000 memories 下 context package 构建低于 1500ms，不含模型调用。
+
 ## 测试用例
 
 单元测试：
@@ -252,6 +315,17 @@ graph.rebuild(input: {
 4. 查询耗时低于 1000ms。
 5. context package 在 16000 token budget 内稳定生成。
 ```
+
+## 阶段验证清单
+
+完成 P4 时必须保存以下证据：
+
+- `pnpm --filter @story-pilot/db test`
+- `pnpm --filter @story-pilot/graph test`
+- `pnpm --filter @story-pilot/ai test`
+- `pnpm --filter @story-pilot/sidecar test`
+- `pnpm verify:longform` 中的 memory/graph 子集通过。
+- 连续性规则测试报告。
 
 ## 验收标准
 

@@ -191,6 +191,69 @@ backup.restoreProject(input: { projectId: string; backupPath: string }): {
 - 模型未配置时，创作路径中所有真实 AI 按钮显示可见提示，不允许假装生成成功。
 - 诊断页展示 app home、global db、当前项目 db、graph path、sidecar health、最近错误。
 
+## 当前可复用实现
+
+- `apps/desktop/src-tauri/src/lib.rs`：已有 Rust bridge、sidecar token、RPC 转发和重试基础。
+- `apps/desktop/src-tauri/build.rs`：已有 sidecar runner 生成逻辑。
+- `apps/desktop/src-tauri/tauri.conf.json`：已有 `externalBin` 配置。
+- `apps/sidecar/src/config/runtime-settings.ts`：已有运行时配置读取基础。
+- `apps/sidecar/src/storage/project-storage.service.ts`：已有 `~/.story-pilot`、global sqlite、project sqlite、graph path 基础。
+- `apps/sidecar/src/rpc/rpc.service.ts`：已有统一 RPC 分发入口。
+- `apps/sidecar/src/health/health.service.ts`：已有 sidecar health 基础。
+
+## 实施切片
+
+### P0.1 配置和目录引导
+
+产物：
+
+- `RuntimeSettingsService` 统一从 `~/.story-pilot/setting.json` 读取配置。
+- `StorageBootstrapService` 在 sidecar 启动时创建完整目录契约。
+- `settings.get`、`settings.update`、`settings.validateModel` RPC 可用。
+
+验证：
+
+- setting 缺失、损坏、版本迁移都有测试。
+- 未配置模型时 UI 显示阻断态。
+
+### P0.2 生产 sidecar 打包
+
+产物：
+
+- sidecar 可在安装包内独立运行。
+- 不依赖源码仓库、全局 `node`、全局 `pnpm`。
+- Rust bridge 启动 sidecar 时只注入端口、token、app home。
+
+验证：
+
+- 在移除 `STORY_PILOT_REPO_ROOT` 后安装包仍能启动。
+- sidecar stderr 写入日志而不是只输出到终端。
+
+### P0.3 备份、恢复和诊断
+
+产物：
+
+- 项目备份包含 `project.sqlite`、`graph.kuzu`、项目 manifest。
+- 恢复前验证 manifest。
+- 诊断包脱敏 setting、日志和失败 workflow 摘要。
+
+验证：
+
+- 备份恢复集成测试。
+- API key 脱敏快照测试。
+
+### P0.4 安装包 smoke
+
+产物：
+
+- 自动化 smoke 脚本覆盖首次启动、创建项目、重启恢复。
+- DMG 验证纳入发布门禁。
+
+验证：
+
+- `hdiutil verify` 通过。
+- smoke 输出包含 sidecar health、setting path、project count。
+
 ## 测试用例
 
 单元测试：
@@ -220,6 +283,20 @@ E2E/smoke：
 8. 作品仍存在，项目数据库可打开。
 9. 导出诊断包，检查没有完整 apiKey。
 ```
+
+## 阶段验证清单
+
+完成 P0 时必须保存以下证据：
+
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
+- `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`
+- `pnpm --filter @story-pilot/desktop tauri:build --bundles dmg --ci`
+- `hdiutil verify "apps/desktop/src-tauri/target/release/bundle/dmg/Story Pilot_0.1.0_aarch64.dmg"`
+- 首次启动 smoke test 记录。
 
 ## 验收标准
 

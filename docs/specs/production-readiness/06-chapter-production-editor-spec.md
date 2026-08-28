@@ -236,6 +236,69 @@ writingBatch.create(input: {
 - 应用正文后立即生成摘要和记忆候选。
 - 用户离开页面前，未保存修改必须提示。
 
+## 当前可复用实现
+
+- `apps/desktop/src/features/chapter/ChapterEditorPage.tsx`：已有章节编辑、保存、生成草稿、版本抽屉基础。
+- `apps/desktop/src/features/ai/ArtifactReviewPanel.tsx`：已有 artifact 预览和应用基础。
+- `apps/desktop/src/features/memory/MemoryCandidateList.tsx`：已有记忆候选确认基础。
+- `apps/sidecar/src/chapter/chapter.service.ts`：已有章节 CRUD、版本、基于章纲生成草稿。
+- `apps/sidecar/src/artifact/artifact.service.ts`：已有 artifact 应用基础。
+- `apps/sidecar/src/memory/memory.service.ts`：已有记忆确认和图谱 rebuild。
+- `packages/domain/src/chapter-version.ts`：已有章节版本递增规则。
+
+## 实施切片
+
+### P5.1 章纲驱动正文生产
+
+产物：
+
+- `chapter.generateDraftFromPlan` 替代临时 chapterId 生成。
+- 章节生成前强制检查 chapter plan gate。
+- draft artifact 绑定 chapterPlanId、contextPackageId、workflowRunId。
+
+验证：
+
+- 没有 chapter plan 时生成失败。
+- draft 不直接覆盖 chapter content。
+
+### P5.2 Artifact Diff 和 Patch
+
+产物：
+
+- artifact 与当前正文 diff。
+- 支持应用全部、应用选中段落、拒绝并记录原因。
+- 局部改写产物为 `rewrite_patches`。
+
+验证：
+
+- 应用 patch 后创建新 chapter version。
+- 过期 baseVersion 拒绝覆盖。
+
+### P5.3 质量审阅和记忆回流
+
+产物：
+
+- `chapter.reviewQuality` 输出 score 和维度。
+- 应用正文后生成 chapter summary。
+- memory_extract 产生候选，用户确认后增量投影图谱。
+
+验证：
+
+- 应用 draft 后一定生成 summary 或失败原因。
+- pending memory candidates 出现在右侧面板。
+
+### P5.4 写作批次
+
+产物：
+
+- `writingBatch.create` 创建 3/5/10 章批次。
+- 批次状态可暂停、继续、失败重试。
+- 批次完成后进入 retrospective。
+
+验证：
+
+- 连续 10 章 draft_and_review E2E 通过。
+
 ## 测试用例
 
 单元测试：
@@ -270,6 +333,17 @@ E2E：
 8. 确认记忆候选。
 9. 进入第 2 章时上下文 readiness 更新。
 ```
+
+## 阶段验证清单
+
+完成 P5 时必须保存以下证据：
+
+- `pnpm --filter @story-pilot/domain test`
+- `pnpm --filter @story-pilot/db test`
+- `pnpm --filter @story-pilot/ai test`
+- `pnpm --filter @story-pilot/sidecar test`
+- `pnpm --filter @story-pilot/desktop test`
+- 10 章连续生产 E2E 输出。
 
 ## 验收标准
 

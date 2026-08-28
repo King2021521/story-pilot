@@ -249,6 +249,67 @@ creativeStage.skip(input: {
 - 未确认 AI 产物。
 - 一键重新评估。
 
+## 当前可复用实现
+
+- `packages/db/src/schema/creative-path.ts`：已有 `creative_stages`、brief、blueprint、outline 相关表。
+- `packages/db/src/repositories/creative-path.repository.ts`：已有阶段初始化、蓝图应用、阶段完成基础。
+- `apps/sidecar/src/creative-path/creative-path.service.ts`：已有 `getPath`、brief、blueprint、stage complete 能力。
+- `apps/desktop/src/features/creative-path/CreativePathWorkbench.tsx`：已有九步路径 UI 和中间阶段入口。
+- `apps/desktop/src/features/workbench/WorkbenchHome.tsx`：已有工作台 tab 承载。
+- `apps/desktop/src/app/ShellLayout.tsx`：已有阶段回调接线。
+
+## 实施切片
+
+### P1.1 Gate 类型和协议
+
+产物：
+
+- `CreativeStageGateReport`、`GateIssue`、`GateRequiredItem`、`DownstreamImpact` 放入 contracts。
+- `creativeStage.evaluateGate`、`creativeStage.advance`、`creativeStage.reopen`、`creativeStage.skip` 完成 Zod schema。
+
+验证：
+
+- command registry 测试覆盖全部新命令。
+- 非法 stageKey、非法 mode、缺 reason 时 schema 拒绝。
+
+### P1.2 Gate Evaluator
+
+产物：
+
+- `CreativeStageGateEvaluator` 对九个阶段逐一计算 readiness。
+- 每个阶段阻塞项有 `code`、`targetType`、`action`。
+- readiness 算法 deterministic，不调用 LLM。
+
+验证：
+
+- 每个阶段至少 1 个失败测试和 1 个通过测试。
+- 玄幻项目缺少 `power_system` 时 worldbuilding 不通过。
+
+### P1.3 阶段推进和影响分析
+
+产物：
+
+- `advance(strict)` 只允许 gate pass 后推进。
+- `advance(force)` 需要 reason 并写 domain event。
+- 上游对象更新后，下游阶段标记 `needs_revision`。
+
+验证：
+
+- RPC 集成测试覆盖 strict、force、reopen、skip。
+- 修改 blueprint 后 outline 和 chapters 被标记需修订。
+
+### P1.4 工作台门禁 UI
+
+产物：
+
+- 创作路径阶段卡展示 blocking issues 和 warnings。
+- 看板项可跳转到对应处理入口。
+- 下一阶段按钮根据 gate 状态启用或禁用。
+
+验证：
+
+- React 测试覆盖缺口渲染、跳转、重新评估、严格推进失败提示。
+
 ## 测试用例
 
 单元测试：
@@ -281,6 +342,17 @@ E2E：
 6. 使用 AI 候选生成并采纳要素。
 7. 重新评估后进入人物阶段。
 ```
+
+## 阶段验证清单
+
+完成 P1 时必须保存以下证据：
+
+- `pnpm --filter @story-pilot/contracts test`
+- `pnpm --filter @story-pilot/db test`
+- `pnpm --filter @story-pilot/sidecar test`
+- `pnpm --filter @story-pilot/desktop test`
+- `pnpm typecheck`
+- 创作路径 E2E：空项目到 worldbuilding gate pass。
 
 ## 验收标准
 
