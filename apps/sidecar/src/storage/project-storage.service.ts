@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 import { Injectable } from "@nestjs/common";
 import {
@@ -16,6 +15,14 @@ import {
   type ProjectDatabase,
   type ProjectOverviewRecord,
 } from "@story-pilot/db";
+
+import {
+  resolveRuntimeGlobalDatabasePath,
+  resolveRuntimeProjectsRoot,
+  STORY_PILOT_GLOBAL_DATABASE_PATH_ENV,
+  STORY_PILOT_HOME_ENV,
+  STORY_PILOT_PROJECTS_ROOT_ENV,
+} from "../config/runtime-settings.js";
 
 export interface CreateProjectLayoutInput {
   readonly projectId: string;
@@ -64,7 +71,7 @@ export class ProjectStorageService {
   }
 
   getGlobalDatabasePath(): string {
-    return join(this.ensureProjectsRoot(), GLOBAL_DATABASE_FILE);
+    return this.resolveGlobalDatabasePath();
   }
 
   listProjectRootPaths(): string[] {
@@ -84,7 +91,8 @@ export class ProjectStorageService {
   }
 
   async openGlobalDatabase(): Promise<GlobalDatabase> {
-    const globalDatabase = createGlobalDatabase(this.getGlobalDatabasePath());
+    const globalDatabasePath = this.ensureGlobalDatabasePath();
+    const globalDatabase = createGlobalDatabase(globalDatabasePath);
     await runGlobalMigrations(globalDatabase);
     return globalDatabase;
   }
@@ -148,12 +156,43 @@ export class ProjectStorageService {
   }
 
   private getProjectsRoot(): string {
-    return process.env.STORY_PILOT_PROJECTS_ROOT ?? join(homedir(), ".story-pilot", "projects");
+    return resolveRuntimeProjectsRoot(process.env);
   }
 
   private ensureProjectsRoot(): string {
     const projectsRoot = this.getProjectsRoot();
     mkdirSync(projectsRoot, { recursive: true });
     return projectsRoot;
+  }
+
+  private resolveGlobalDatabasePath(): string {
+    if (process.env[STORY_PILOT_GLOBAL_DATABASE_PATH_ENV] || process.env[STORY_PILOT_HOME_ENV]) {
+      return resolveRuntimeGlobalDatabasePath(process.env);
+    }
+
+    if (process.env[STORY_PILOT_PROJECTS_ROOT_ENV]) {
+      return join(this.ensureProjectsRoot(), GLOBAL_DATABASE_FILE);
+    }
+
+    return resolveRuntimeGlobalDatabasePath(process.env);
+  }
+
+  private ensureGlobalDatabasePath(): string {
+    const globalDatabasePath = this.resolveGlobalDatabasePath();
+    mkdirSync(dirname(globalDatabasePath), { recursive: true });
+    this.migrateLegacyGlobalDatabase(globalDatabasePath);
+    return globalDatabasePath;
+  }
+
+  private migrateLegacyGlobalDatabase(globalDatabasePath: string): void {
+    const legacyGlobalDatabasePath = join(this.ensureProjectsRoot(), GLOBAL_DATABASE_FILE);
+    if (resolve(legacyGlobalDatabasePath) === resolve(globalDatabasePath)) {
+      return;
+    }
+    if (existsSync(globalDatabasePath) || !existsSync(legacyGlobalDatabasePath)) {
+      return;
+    }
+
+    renameSync(legacyGlobalDatabasePath, globalDatabasePath);
   }
 }

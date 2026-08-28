@@ -4,8 +4,10 @@ import { NestFactory } from "@nestjs/core";
 
 import { AppModule } from "./app.module.js";
 import { loadLocalEnv } from "./config/env-loader.js";
+import { initializeRuntimeConfig } from "./config/runtime-settings.js";
 
 loadLocalEnv();
+initializeRuntimeConfig();
 
 const host = process.env.STORY_PILOT_SIDECAR_HOST ?? "127.0.0.1";
 const port = Number.parseInt(process.env.STORY_PILOT_SIDECAR_PORT ?? "0", 10);

@@ -60,8 +60,9 @@ Rust bridge 维护 command allowlist：
 
 模型 API Key：
 
-- 存系统 keychain。
-- `global.sqlite` 只保存 `api_key_ref`。
+- MVP 阶段直接由用户写入 `~/.story-pilot/settings.json`。
+- `global.sqlite` 不保存 API Key 明文。
+- 后续商用分发阶段再升级为系统 keychain，并在 DB 中保存 `api_key_ref`。
 - 日志和模型调用记录必须脱敏。
 - 导出项目时默认不包含密钥。
 

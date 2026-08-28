@@ -118,8 +118,10 @@ Application Service
 Story Pilot 的数据默认落在本机：
 
 ```text
-StoryPilot/
+~/.story-pilot/
+  settings.json
   global.sqlite
+  logs/
   projects/
     <projectId>/
       project.sqlite

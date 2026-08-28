@@ -32,7 +32,8 @@ SQLite source of truth
 ## 本地目录结构
 
 ```text
-StoryPilot/
+~/.story-pilot/
+  settings.json
   global.sqlite
   logs/
     app-2026-08-27.log
@@ -59,13 +60,41 @@ StoryPilot/
 
 保存跨项目数据：
 
-- 应用设置。
-- 模型 provider 配置，不包含 API Key 明文。
 - 项目索引。
 - 最近打开项目。
 - 全局预设库。
 - 用户自定义预设。
 - UI 工作区状态。
+
+### `settings.json`
+
+保存本机运行时配置。MVP 阶段为了降低配置复杂度，模型 API Key 由用户直接写入该文件；日志、模型调用记录和导出包仍必须避免泄露该字段。
+
+示例：
+
+```json
+{
+  "version": 1,
+  "storage": {
+    "homePath": "/Users/you/.story-pilot",
+    "projectsRoot": "/Users/you/.story-pilot/projects",
+    "globalDatabasePath": "/Users/you/.story-pilot/global.sqlite"
+  },
+  "llm": {
+    "defaultProviderId": "default-openai-compatible",
+    "providers": [
+      {
+        "id": "default-openai-compatible",
+        "type": "openai-compatible",
+        "name": "Default OpenAI Compatible",
+        "baseUrl": "https://api.example.com/v1",
+        "apiKey": "replace-with-your-api-key",
+        "model": "gpt-5.5"
+      }
+    ]
+  }
+}
+```
 
 ### `project.sqlite`
 
@@ -118,7 +147,7 @@ StoryPilot/
 | name | text | 展示名称 |
 | provider_type | text | openai, anthropic, local, custom |
 | base_url | text nullable | 自定义 endpoint |
-| api_key_ref | text nullable | keychain 引用 |
+| api_key_ref | text nullable | 后续升级 keychain 时使用；MVP 阶段以 `settings.json` 为准 |
 | default_model | text nullable | 默认模型 |
 | enabled | integer | 是否启用 |
 | config_json | text | 非敏感配置 |
@@ -724,4 +753,3 @@ snapshots/
 - 压缩 SQLite 和重建索引。
 
 清理必须先产生日志，并避免删除用户导入原件。
-

@@ -49,6 +49,22 @@ Tauri Rust check:
 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
 
+## Local Runtime Data
+
+The packaged desktop app initializes local data under `~/.story-pilot` on first launch:
+
+```text
+~/.story-pilot/
+  settings.json
+  global.sqlite
+  logs/
+  projects/
+```
+
+For the MVP, LLM provider settings are edited directly in `settings.json`, including `apiKey`.
+`.env` remains a development fallback, but the installed app should be configured through
+`~/.story-pilot/settings.json`.
+
 ## Architecture Direction
 
 - Tauri owns desktop capabilities, windowing, filesystem boundaries, and the future sidecar lifecycle.
