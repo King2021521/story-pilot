@@ -690,13 +690,15 @@ function LongformPlanSummary({ board }: { readonly board: CreativePathBoard }) {
 }
 
 function GateRequirementList({ report }: { readonly report: CreativeStageGateReport | undefined }) {
-  if (!report?.requirements.length) {
+  const requirements = report?.requirements ?? [];
+
+  if (requirements.length === 0) {
     return null;
   }
 
   return (
     <ul className="creative-stage-gate-list">
-      {report.requirements.map((requirement) => (
+      {requirements.map((requirement) => (
         <li className="creative-stage-gate-list__item" key={requirement.key}>
           <span>{requirement.label}</span>
           <Space size={6}>

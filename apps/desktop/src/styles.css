@@ -30,6 +30,30 @@ button {
   min-height: 100vh;
 }
 
+.boot-error {
+  display: grid;
+  min-height: 100vh;
+  align-content: center;
+  gap: 10px;
+  padding: 48px;
+  background: #f5f5f4;
+  color: #111827;
+}
+
+.boot-error h1,
+.boot-error p {
+  margin: 0;
+}
+
+.boot-error h1 {
+  font-size: 22px;
+}
+
+.boot-error p {
+  max-width: 720px;
+  color: #6b7280;
+}
+
 .story-shell {
   min-height: 100vh;
 }

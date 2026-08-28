@@ -6,7 +6,48 @@
     <title>Story Pilot</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        style="
+          font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;
+          padding: 32px;
+          color: #111827;
+        "
+      >
+        Story Pilot 正在启动...
+      </div>
+    </div>
+    <script>
+      function showBootError(event) {
+        var message =
+          event && event.reason && event.reason.message
+            ? event.reason.message
+            : event && event.message
+              ? event.message
+              : "未知启动错误";
+        window.__STORY_PILOT_BOOT_ERROR = String(message);
+        if (window.__STORY_PILOT_BOOT_STAGE === "after-react-render") {
+          return;
+        }
+        var root = document.getElementById("root");
+        if (root) {
+          root.innerHTML =
+            '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:32px;color:#991b1b;">Story Pilot 启动失败：' +
+            String(message).replace(/[&<>"']/g, function (char) {
+              return {
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              }[char];
+            }) +
+            "</div>";
+        }
+      }
+      window.addEventListener("error", showBootError);
+      window.addEventListener("unhandledrejection", showBootError);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -13,6 +13,7 @@
     "windows": [
       {
         "title": "Story Pilot",
+        "center": true,
         "width": 1440,
         "height": 920,
         "minWidth": 1080,
