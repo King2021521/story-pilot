@@ -101,14 +101,26 @@ describe("CreativePathWorkbench", () => {
     const board = createCreativePathBoard({
       arcPlans: [
         {
+          arcIndex: 1,
+          characterArcId: null,
+          endChapterIndex: 20,
+          escalation: ["发现禁令", "第一次越界", "暴露代价"],
           id: "arc_plan_1",
+          plotlineId: null,
+          purpose: "建立修行规则和第一重代价。",
+          startChapterIndex: 1,
+          status: "draft",
           title: "星潮初醒",
           volumePlanId: "volume_plan_1",
         },
       ],
       bookPlans: [
         {
+          corePromise: "每卷完成一次境界突破和一次关系反转。",
+          endingDirection: "主角以失去旧身份为代价重塑天道。",
           id: "book_plan_1",
+          mainPlotlineId: null,
+          status: "draft",
           targetWordCount: 3_000_000,
           title: "星潮纪全书规划",
         },
@@ -132,7 +144,12 @@ describe("CreativePathWorkbench", () => {
       volumePlans: [
         {
           bookPlanId: "book_plan_1",
+          climax: "主角公开打破司星阁第一条禁令。",
           id: "volume_plan_1",
+          majorConflict: "主角想借星潮修行，司星阁禁止底层接触星潮。",
+          purpose: "完成世界规则展示和主角初次突破。",
+          status: "draft",
+          targetWordCount: 360_000,
           title: "第一卷 星潮初醒",
           volumeIndex: 1,
         },

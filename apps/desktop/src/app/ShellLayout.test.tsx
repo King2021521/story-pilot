@@ -233,7 +233,12 @@ describe("ShellLayout", () => {
       volumePlans: [
         {
           bookPlanId: "book_plan_1",
+          climax: "主角在钟楼发现第一份伪证。",
           id: "volume_plan_1",
+          majorConflict: "主角追查旧案时不断触碰旧城秩序。",
+          purpose: "完成开局钩子和第一次调查反击。",
+          status: "draft",
+          targetWordCount: 300_000,
           title: "第一卷 旧城来信",
           volumeIndex: 1,
         },
@@ -549,7 +554,11 @@ describe("ShellLayout", () => {
         case "plot.generateBookPlan":
           creativePath.bookPlans = [
             {
+              corePromise: "每卷完成一次境界突破和一次关系反转。",
+              endingDirection: "主角以失去旧身份为代价重塑天道。",
               id: "book_plan_1",
+              mainPlotlineId: null,
+              status: "draft",
               targetWordCount: request.payload.targetWordCount as number,
               title: "星潮纪全书规划",
             },
@@ -557,14 +566,27 @@ describe("ShellLayout", () => {
           creativePath.volumePlans = [
             {
               bookPlanId: "book_plan_1",
+              climax: "主角公开打破司星阁第一条禁令。",
               id: "volume_plan_1",
+              majorConflict: "主角想借星潮修行，司星阁禁止底层接触星潮。",
+              purpose: "完成世界规则展示和主角初次突破。",
+              status: "draft",
+              targetWordCount: 360_000,
               title: "第一卷 星潮初醒",
               volumeIndex: 1,
             },
           ];
           creativePath.arcPlans = [
             {
+              arcIndex: 1,
+              characterArcId: null,
+              endChapterIndex: 20,
+              escalation: ["发现禁令", "第一次越界", "暴露代价"],
               id: "arc_plan_1",
+              plotlineId: null,
+              purpose: "建立修行规则和第一重代价。",
+              startChapterIndex: 1,
+              status: "draft",
               title: "旧城钟楼案",
               volumePlanId: "volume_plan_1",
             },
@@ -673,7 +695,9 @@ describe("ShellLayout", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认核心故事" }));
     fireEvent.click(screen.getByRole("button", { name: "6. 全书大纲" }));
     fireEvent.click(screen.getByRole("button", { name: "生成全书规划" }));
-    await screen.findByText("星潮纪全书规划");
+    await waitFor(() => {
+      expect(screen.getAllByText("星潮纪全书规划").length).toBeGreaterThan(0);
+    });
     fireEvent.click(screen.getByRole("button", { name: "8. 章节规划" }));
     fireEvent.click(screen.getByRole("button", { name: "生成未来 10 章章纲" }));
     await waitFor(() => {
@@ -712,7 +736,7 @@ describe("ShellLayout", () => {
       });
       expect(rpcPayload("plot.generateBookPlan")).toMatchObject({
         projectId: "project_1",
-        targetWordCount: 3_000_000,
+        targetWordCount: 800_000,
         volumeCount: 6,
       });
       expect(rpcPayload("plot.generateRollingOutline")).toMatchObject({
@@ -1483,6 +1507,199 @@ describe("ShellLayout", () => {
     expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 辅助" }));
   });
 
+  it("edits layered book outline plans with aligned form fields", async () => {
+    const project = createProject();
+    const creativePath = createCreativePathBoard({
+      arcPlans: [
+        {
+          arcIndex: 1,
+          characterArcId: null,
+          endChapterIndex: 20,
+          escalation: ["旧信出现", "证人失踪", "公堂反杀"],
+          id: "arc_plan_1",
+          plotlineId: "plotline_1",
+          purpose: "让主角从被动收信转为主动查案。",
+          startChapterIndex: 1,
+          status: "draft",
+          title: "旧信追查",
+          volumePlanId: "volume_plan_1",
+        },
+      ],
+      bookPlans: [
+        {
+          corePromise: "每卷一次权力反转和一次身份代价。",
+          endingDirection: "主角放弃旧身份，重建朝堂规则。",
+          id: "book_plan_1",
+          mainPlotlineId: "plotline_1",
+          status: "active",
+          targetWordCount: 1_200_000,
+          title: "布衣天子全书大纲",
+        },
+      ],
+      volumePlans: [
+        {
+          bookPlanId: "book_plan_1",
+          climax: "主角在公堂反杀第一次构陷。",
+          id: "volume_plan_1",
+          majorConflict: "旧贵族封锁上升通道。",
+          purpose: "完成身份压迫、入局动机和第一次公开胜利。",
+          status: "draft",
+          targetWordCount: 280_000,
+          title: "第一卷 寒门入局",
+          volumeIndex: 1,
+        },
+      ],
+    });
+    const plotlines = [
+      {
+        id: "plotline_1",
+        name: "旧案主线",
+        priority: 10,
+        summary: "围绕旧案调查推进。",
+        type: "main",
+      },
+    ];
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            creativePath,
+            foreshadowings: [],
+            items: [],
+            locations: [],
+            memoryCandidates: [],
+            organizations: [],
+            plotlines,
+            project,
+            storyEvents: [],
+            workOrders: [],
+            worldRules: [],
+          });
+        case "plot.saveBookPlanDraft": {
+          const payload = request.payload as {
+            readonly bookPlanId?: string;
+          } & Omit<(typeof creativePath.bookPlans)[number], "id">;
+          creativePath.bookPlans = [
+            {
+              ...creativePath.bookPlans[0],
+              ...payload,
+              id: payload.bookPlanId ?? "book_plan_1",
+            },
+          ];
+          return rpcSuccess(request.id, creativePath.bookPlans[0]);
+        }
+        case "plot.saveVolumePlan": {
+          const payload = request.payload as {
+            readonly volumePlanId?: string;
+          } & Omit<(typeof creativePath.volumePlans)[number], "id">;
+          creativePath.volumePlans = [
+            {
+              ...creativePath.volumePlans[0],
+              ...payload,
+              id: payload.volumePlanId ?? "volume_plan_1",
+            },
+          ];
+          return rpcSuccess(request.id, creativePath.volumePlans[0]);
+        }
+        case "plot.saveArcPlan": {
+          const payload = request.payload as {
+            readonly arcPlanId?: string;
+          } & Omit<(typeof creativePath.arcPlans)[number], "id">;
+          creativePath.arcPlans = [
+            {
+              ...creativePath.arcPlans[0],
+              ...payload,
+              id: payload.arcPlanId ?? "arc_plan_1",
+            },
+          ];
+          return rpcSuccess(request.id, creativePath.arcPlans[0]);
+        }
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    const { container } = render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "6. 全书大纲" }));
+    expect(await screen.findByRole("heading", { name: "全书计划" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "卷规划" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "阶段弧线" })).toBeInTheDocument();
+
+    const workspace = container.querySelector(".book-outline-workspace");
+    const primaryRow = workspace?.querySelector(":scope > .book-outline-primary");
+    const assistant = workspace?.querySelector(":scope > .book-outline-assistant");
+    const listPane = screen.getByRole("region", { name: "大纲层级列表" });
+    const formPane = screen.getByRole("region", { name: "大纲编辑表单" });
+
+    expect(primaryRow).toBeInstanceOf(HTMLElement);
+    expect(assistant).toBeInstanceOf(HTMLElement);
+    expect(primaryRow).toContainElement(listPane);
+    expect(primaryRow).toContainElement(formPane);
+    expect(primaryRow?.children).toHaveLength(2);
+    expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 辅助规划" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑全书规划 布衣天子全书大纲" }));
+    fireEvent.change(screen.getByLabelText("核心承诺"), {
+      target: { value: "每卷一次公开胜利和一次隐藏损失。" },
+    });
+    fireEvent.change(screen.getByLabelText("结局方向"), {
+      target: { value: "主角公开朝堂真相后离开旧身份。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存全书规划" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("plot.saveBookPlanDraft")).toMatchObject({
+        bookPlanId: "book_plan_1",
+        corePromise: "每卷一次公开胜利和一次隐藏损失。",
+        endingDirection: "主角公开朝堂真相后离开旧身份。",
+        projectId: "project_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑卷规划 第一卷 寒门入局" }));
+    fireEvent.change(screen.getByLabelText("卷核心冲突"), {
+      target: { value: "寒门新官必须用民案撬动旧贵族封锁。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存卷规划" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("plot.saveVolumePlan")).toMatchObject({
+        bookPlanId: "book_plan_1",
+        majorConflict: "寒门新官必须用民案撬动旧贵族封锁。",
+        projectId: "project_1",
+        volumePlanId: "volume_plan_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑阶段弧线 旧信追查" }));
+    fireEvent.change(screen.getByLabelText("升级链"), {
+      target: { value: "旧信出现\n证人失踪\n公堂反杀\n幕后势力露面" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存阶段弧线" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("plot.saveArcPlan")).toMatchObject({
+        arcPlanId: "arc_plan_1",
+        escalation: ["旧信出现", "证人失踪", "公堂反杀", "幕后势力露面"],
+        projectId: "project_1",
+        volumePlanId: "volume_plan_1",
+      });
+    });
+  });
+
   it("creates chapters, restores chapter versions, and reviews AI artifacts", async () => {
     const project = createProject();
     const chapter = {
@@ -1763,18 +1980,35 @@ interface TestCreativePathBoard {
     title: string;
   }>;
   bookPlans: Array<{
+    corePromise: string;
+    endingDirection: null | string;
     id: string;
+    mainPlotlineId: null | string;
+    status: string;
     targetWordCount: number;
     title: string;
   }>;
   volumePlans: Array<{
     bookPlanId: string;
+    climax: null | string;
     id: string;
+    majorConflict: string;
+    purpose: string;
+    status: string;
+    targetWordCount: number;
     title: string;
     volumeIndex: number;
   }>;
   arcPlans: Array<{
+    arcIndex: number;
+    characterArcId: null | string;
+    endChapterIndex: null | number;
+    escalation: string[];
     id: string;
+    plotlineId: null | string;
+    purpose: string;
+    startChapterIndex: null | number;
+    status: string;
     title: string;
     volumePlanId: string;
   }>;

@@ -59,7 +59,10 @@ import {
   type CompleteCoreStoryFieldsResult,
   type CoreStoryFields,
   type CreateStoryEventValues,
+  type SaveArcPlanValues,
+  type SaveBookPlanDraftValues,
   type SaveCoreStoryFieldsResult,
+  type SaveVolumePlanValues,
   type UpdateCharacterValues,
   type WorkbenchBoard,
   type WorkbenchChapter,
@@ -1041,6 +1044,90 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const saveBookPlanDraft = useCallback(
+    async (input: SaveBookPlanDraftValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveBookPlanDraft({
+          corePromise: input.corePromise.trim(),
+          endingDirection: nullableText(input.endingDirection),
+          mainPlotlineId: nullableText(input.mainPlotlineId),
+          projectId: activeProject.id,
+          status: input.status,
+          targetWordCount: input.targetWordCount,
+          title: input.title.trim(),
+          ...optionalText("bookPlanId", input.bookPlanId),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("全书规划已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const saveVolumePlan = useCallback(
+    async (input: SaveVolumePlanValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveVolumePlan({
+          bookPlanId: input.bookPlanId,
+          climax: nullableText(input.climax),
+          majorConflict: input.majorConflict.trim(),
+          projectId: activeProject.id,
+          purpose: input.purpose.trim(),
+          status: input.status,
+          targetWordCount: input.targetWordCount,
+          title: input.title.trim(),
+          volumeIndex: input.volumeIndex,
+          ...optionalText("volumePlanId", input.volumePlanId),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("卷规划已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const saveArcPlan = useCallback(
+    async (input: SaveArcPlanValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveArcPlan({
+          arcIndex: input.arcIndex,
+          characterArcId: nullableText(input.characterArcId),
+          endChapterIndex: nullableNumber(input.endChapterIndex),
+          escalation: input.escalation,
+          plotlineId: nullableText(input.plotlineId),
+          projectId: activeProject.id,
+          purpose: input.purpose.trim(),
+          startChapterIndex: nullableNumber(input.startChapterIndex),
+          status: input.status,
+          title: input.title.trim(),
+          volumePlanId: input.volumePlanId,
+          ...optionalText("arcPlanId", input.arcPlanId),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("阶段弧线已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const generateRollingOutline = useCallback(
     async (input: {
       readonly volumePlanId?: string;
@@ -1318,7 +1405,10 @@ export function ShellLayout() {
           onRestoreChapterVersion={restoreChapterVersion}
           onSaveChapter={saveChapter}
           onSaveBrief={saveBrief}
+          onSaveArcPlan={saveArcPlan}
+          onSaveBookPlanDraft={saveBookPlanDraft}
           onSaveCoreStoryFields={saveCoreStoryFields}
+          onSaveVolumePlan={saveVolumePlan}
           onSaveWorldbuildingFields={saveWorldbuildingFields}
           onSelectChapter={selectChapter}
           onSkipStage={skipStage}
@@ -1496,6 +1586,15 @@ function optionalText<TKey extends string>(
 ): Partial<Record<TKey, string>> {
   const trimmed = value?.trim();
   return trimmed ? ({ [key]: trimmed } as Record<TKey, string>) : {};
+}
+
+function nullableText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function nullableNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : null;
 }
 
 function optionalNumber<TKey extends string>(

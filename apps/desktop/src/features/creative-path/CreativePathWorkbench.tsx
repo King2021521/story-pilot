@@ -192,20 +192,37 @@ export interface ChapterOutlineItem {
 }
 
 export interface BookPlanItem {
+  readonly corePromise: string;
+  readonly endingDirection: string | null;
   readonly id: string;
+  readonly mainPlotlineId: string | null;
+  readonly status: string;
   readonly title: string;
   readonly targetWordCount: number;
 }
 
 export interface VolumePlanItem {
-  readonly id: string;
   readonly bookPlanId: string;
+  readonly climax: string | null;
+  readonly id: string;
+  readonly majorConflict: string;
+  readonly purpose: string;
+  readonly status: string;
   readonly title: string;
+  readonly targetWordCount: number;
   readonly volumeIndex: number;
 }
 
 export interface ArcPlanItem {
+  readonly arcIndex: number;
+  readonly characterArcId: string | null;
+  readonly endChapterIndex: number | null;
+  readonly escalation: readonly string[];
   readonly id: string;
+  readonly plotlineId: string | null;
+  readonly purpose: string;
+  readonly startChapterIndex: number | null;
+  readonly status: string;
   readonly volumePlanId: string;
   readonly title: string;
 }

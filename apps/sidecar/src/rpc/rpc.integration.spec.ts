@@ -626,6 +626,126 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("saves editable longform outline plans and exposes full fields on the workbench board", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_editable_outline_project",
+          payload: {
+            genre: "权谋",
+            title: "布衣天子",
+          },
+        }),
+      );
+      const projectId = getString(project, "id");
+
+      const bookPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveBookPlanDraft",
+          id: "req_save_book_plan_draft",
+          payload: {
+            corePromise: "小人物每卷完成一次权力反转，并付出一次身份代价。",
+            endingDirection: "主角放弃旧身份，重建朝堂规则。",
+            mainPlotlineId: "plotline_main",
+            projectId,
+            status: "active",
+            targetWordCount: 1_200_000,
+            title: "布衣天子全书大纲",
+          },
+        }),
+      );
+      const volumePlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveVolumePlan",
+          id: "req_save_volume_plan",
+          payload: {
+            bookPlanId: getString(bookPlan, "id"),
+            climax: "主角在公堂反杀第一次构陷。",
+            majorConflict: "旧贵族封锁上升通道，主角必须借民案撬动权力结构。",
+            projectId,
+            purpose: "完成身份压迫、入局动机和第一次公开胜利。",
+            status: "draft",
+            targetWordCount: 280_000,
+            title: "第一卷 寒门入局",
+            volumeIndex: 1,
+          },
+        }),
+      );
+      const arcPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveArcPlan",
+          id: "req_save_arc_plan",
+          payload: {
+            arcIndex: 1,
+            endChapterIndex: 24,
+            escalation: ["旧案开场", "证人失踪", "公堂反杀"],
+            plotlineId: "plotline_main",
+            projectId,
+            purpose: "用第一阶段让主角从被动受害转为主动查案。",
+            startChapterIndex: 1,
+            status: "draft",
+            title: "旧案破口",
+            volumePlanId: getString(volumePlan, "id"),
+          },
+        }),
+      );
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_editable_outline_board",
+          payload: { projectId },
+        }),
+      );
+      const boardCreativePath = getRecord(board, "creativePath");
+
+      expect(bookPlan).toMatchObject({
+        corePromise: "小人物每卷完成一次权力反转，并付出一次身份代价。",
+        endingDirection: "主角放弃旧身份，重建朝堂规则。",
+        mainPlotlineId: "plotline_main",
+        status: "active",
+        targetWordCount: 1_200_000,
+        title: "布衣天子全书大纲",
+      });
+      expect(volumePlan).toMatchObject({
+        bookPlanId: getString(bookPlan, "id"),
+        climax: "主角在公堂反杀第一次构陷。",
+        majorConflict: "旧贵族封锁上升通道，主角必须借民案撬动权力结构。",
+        purpose: "完成身份压迫、入局动机和第一次公开胜利。",
+        targetWordCount: 280_000,
+      });
+      expect(arcPlan).toMatchObject({
+        endChapterIndex: 24,
+        escalation: ["旧案开场", "证人失踪", "公堂反杀"],
+        plotlineId: "plotline_main",
+        startChapterIndex: 1,
+        volumePlanId: getString(volumePlan, "id"),
+      });
+      expect(getRecordArray(boardCreativePath, "bookPlans")).toEqual([
+        expect.objectContaining({
+          corePromise: "小人物每卷完成一次权力反转，并付出一次身份代价。",
+          id: getString(bookPlan, "id"),
+        }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "volumePlans")).toEqual([
+        expect.objectContaining({
+          id: getString(volumePlan, "id"),
+          majorConflict: "旧贵族封锁上升通道，主角必须借民案撬动权力结构。",
+        }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "arcPlans")).toEqual([
+        expect.objectContaining({
+          escalation: ["旧案开场", "证人失踪", "公堂反杀"],
+          id: getString(arcPlan, "id"),
+          purpose: "用第一阶段让主角从被动受害转为主动查案。",
+        }),
+      ]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("initializes the nine-step creative path for new projects", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {

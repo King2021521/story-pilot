@@ -220,6 +220,42 @@ describe("StoryPilotApiClient", () => {
       artifactId: "artifact_book_plan_1",
       projectId: "project_1",
     });
+    await api.saveBookPlanDraft({
+      bookPlanId: "book_plan_1",
+      corePromise: "每卷完成一次核心爽点兑现。",
+      endingDirection: "终局揭示皇权背后的真正代价。",
+      mainPlotlineId: "plotline_1",
+      projectId: "project_1",
+      status: "draft",
+      targetWordCount: 3_000_000,
+      title: "全书大纲",
+    });
+    await api.saveVolumePlan({
+      bookPlanId: "book_plan_1",
+      climax: "卷末完成第一次公开破局。",
+      majorConflict: "主角调查旧案，旧城权力结构持续封锁真相。",
+      projectId: "project_1",
+      purpose: "完成开局压迫、主线启动和第一次胜利。",
+      status: "draft",
+      targetWordCount: 360_000,
+      title: "第一卷 旧信入局",
+      volumeIndex: 1,
+      volumePlanId: "volume_plan_1",
+    });
+    await api.saveArcPlan({
+      arcIndex: 1,
+      arcPlanId: "arc_plan_1",
+      characterArcId: "character_arc_1",
+      endChapterIndex: 20,
+      escalation: ["旧信出现", "第一次误导", "公开破局"],
+      plotlineId: "plotline_1",
+      projectId: "project_1",
+      purpose: "完成从被动收信到主动调查的阶段转向。",
+      startChapterIndex: 1,
+      status: "draft",
+      title: "旧信追查",
+      volumePlanId: "volume_plan_1",
+    });
     await api.generateRollingOutline({
       chapterCount: 10,
       projectId: "project_1",
@@ -371,6 +407,9 @@ describe("StoryPilotApiClient", () => {
       "ai.generate",
       "plot.generateBookPlan",
       "plot.applyBookPlan",
+      "plot.saveBookPlanDraft",
+      "plot.saveVolumePlan",
+      "plot.saveArcPlan",
       "plot.generateRollingOutline",
       "plot.applyChapterPlans",
       "plot.analyzeOutlineImpact",

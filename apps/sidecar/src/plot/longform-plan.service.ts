@@ -70,6 +70,9 @@ export interface AnalyzeOutlineImpactResult {
 
 type GenerateBookPlanInput = CommandPayload<"plot.generateBookPlan">;
 type ApplyBookPlanInput = CommandPayload<"plot.applyBookPlan">;
+type SaveBookPlanDraftInput = CommandPayload<"plot.saveBookPlanDraft">;
+type SaveVolumePlanInput = CommandPayload<"plot.saveVolumePlan">;
+type SaveArcPlanInput = CommandPayload<"plot.saveArcPlan">;
 type GenerateRollingOutlineInput = CommandPayload<"plot.generateRollingOutline">;
 type ApplyChapterPlansInput = CommandPayload<"plot.applyChapterPlans">;
 type AnalyzeOutlineImpactInput = CommandPayload<"plot.analyzeOutlineImpact">;
@@ -275,6 +278,125 @@ export class LongformPlanService {
       })();
 
       return { artifact: appliedArtifact, ...created };
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async saveBookPlanDraft(input: SaveBookPlanDraftInput): Promise<BookPlanRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const bookPlanId = input.bookPlanId ?? randomUUID();
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const bookPlan = new LongformPlanRepository(projectDatabase).saveBookPlanDraft({
+          bookPlanId,
+          corePromise: input.corePromise,
+          endingDirection: normalizeNullableText(input.endingDirection),
+          mainPlotlineId: normalizeNullableText(input.mainPlotlineId),
+          now,
+          projectId: input.projectId,
+          status: input.status,
+          targetWordCount: input.targetWordCount,
+          title: input.title,
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: bookPlan.id,
+          aggregateType: "book_plan",
+          eventId: randomUUID(),
+          eventType: "book_plan.saved",
+          now,
+          payload: {
+            status: bookPlan.status,
+            targetWordCount: bookPlan.targetWordCount,
+          },
+          projectId: input.projectId,
+        });
+
+        return bookPlan;
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async saveVolumePlan(input: SaveVolumePlanInput): Promise<VolumePlanRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const volumePlanId = input.volumePlanId ?? randomUUID();
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const volumePlan = new LongformPlanRepository(projectDatabase).saveVolumePlan({
+          bookPlanId: input.bookPlanId,
+          climax: normalizeNullableText(input.climax),
+          majorConflict: input.majorConflict,
+          now,
+          projectId: input.projectId,
+          purpose: input.purpose,
+          status: input.status,
+          targetWordCount: input.targetWordCount,
+          title: input.title,
+          volumeIndex: input.volumeIndex,
+          volumePlanId,
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: volumePlan.id,
+          aggregateType: "volume_plan",
+          eventId: randomUUID(),
+          eventType: "volume_plan.saved",
+          now,
+          payload: {
+            bookPlanId: volumePlan.bookPlanId,
+            status: volumePlan.status,
+            volumeIndex: volumePlan.volumeIndex,
+          },
+          projectId: input.projectId,
+        });
+
+        return volumePlan;
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async saveArcPlan(input: SaveArcPlanInput): Promise<ArcPlanRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const arcPlanId = input.arcPlanId ?? randomUUID();
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const arcPlan = new LongformPlanRepository(projectDatabase).saveArcPlan({
+          arcIndex: input.arcIndex,
+          arcPlanId,
+          characterArcId: normalizeNullableText(input.characterArcId),
+          endChapterIndex: normalizeNullableNumber(input.endChapterIndex),
+          escalation: input.escalation,
+          now,
+          plotlineId: normalizeNullableText(input.plotlineId),
+          projectId: input.projectId,
+          purpose: input.purpose,
+          startChapterIndex: normalizeNullableNumber(input.startChapterIndex),
+          status: input.status,
+          title: input.title,
+          volumePlanId: input.volumePlanId,
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: arcPlan.id,
+          aggregateType: "arc_plan",
+          eventId: randomUUID(),
+          eventType: "arc_plan.saved",
+          now,
+          payload: {
+            arcIndex: arcPlan.arcIndex,
+            status: arcPlan.status,
+            volumePlanId: arcPlan.volumePlanId,
+          },
+          projectId: input.projectId,
+        });
+
+        return arcPlan;
+      })();
     } finally {
       projectDatabase.close();
     }
@@ -697,6 +819,15 @@ function normalizeRollingChapterPlans(
     })),
     riskNotes: output.riskNotes,
   };
+}
+
+function normalizeNullableText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeNullableNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : null;
 }
 
 function resolveRollingOutlineTarget(

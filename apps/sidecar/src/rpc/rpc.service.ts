@@ -283,6 +283,19 @@ export class RpcService {
           payload as CommandPayload<"plot.applyBookPlan">,
         );
       }
+      case "plot.saveBookPlanDraft": {
+        return this.longformPlanService.saveBookPlanDraft(
+          payload as CommandPayload<"plot.saveBookPlanDraft">,
+        );
+      }
+      case "plot.saveVolumePlan": {
+        return this.longformPlanService.saveVolumePlan(
+          payload as CommandPayload<"plot.saveVolumePlan">,
+        );
+      }
+      case "plot.saveArcPlan": {
+        return this.longformPlanService.saveArcPlan(payload as CommandPayload<"plot.saveArcPlan">);
+      }
       case "plot.generateRollingOutline": {
         return this.longformPlanService.generateRollingOutline(
           payload as CommandPayload<"plot.generateRollingOutline">,

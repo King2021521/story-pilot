@@ -41,6 +41,9 @@ describe("command registry", () => {
       "outline.applyChapterOutline",
       "plot.generateBookPlan",
       "plot.applyBookPlan",
+      "plot.saveBookPlanDraft",
+      "plot.saveVolumePlan",
+      "plot.saveArcPlan",
       "plot.generateRollingOutline",
       "plot.applyChapterPlans",
       "plot.analyzeOutlineImpact",
@@ -513,6 +516,84 @@ describe("command registry", () => {
     ).toEqual({
       artifactId: "artifact_1",
       projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveBookPlanDraft", {
+        bookPlanId: "book_plan_1",
+        corePromise: "每卷完成一次核心爽点兑现。",
+        endingDirection: "主角公开终局代价。",
+        mainPlotlineId: "plotline_1",
+        projectId: "proj_1",
+        status: "active",
+        targetWordCount: 3_000_000,
+        title: "全书大纲",
+      }),
+    ).toEqual({
+      bookPlanId: "book_plan_1",
+      corePromise: "每卷完成一次核心爽点兑现。",
+      endingDirection: "主角公开终局代价。",
+      mainPlotlineId: "plotline_1",
+      projectId: "proj_1",
+      status: "active",
+      targetWordCount: 3_000_000,
+      title: "全书大纲",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveVolumePlan", {
+        bookPlanId: "book_plan_1",
+        climax: "卷末完成第一次公开破局。",
+        majorConflict: "底层修士与司星阁禁令正面冲突。",
+        projectId: "proj_1",
+        purpose: "展示规则、压迫和第一次突破。",
+        status: "draft",
+        targetWordCount: 360_000,
+        title: "第一卷 星潮初醒",
+        volumeIndex: 1,
+        volumePlanId: "volume_plan_1",
+      }),
+    ).toEqual({
+      bookPlanId: "book_plan_1",
+      climax: "卷末完成第一次公开破局。",
+      majorConflict: "底层修士与司星阁禁令正面冲突。",
+      projectId: "proj_1",
+      purpose: "展示规则、压迫和第一次突破。",
+      status: "draft",
+      targetWordCount: 360_000,
+      title: "第一卷 星潮初醒",
+      volumeIndex: 1,
+      volumePlanId: "volume_plan_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveArcPlan", {
+        arcIndex: 1,
+        arcPlanId: "arc_plan_1",
+        characterArcId: "character_arc_1",
+        endChapterIndex: 20,
+        escalation: ["发现禁令", "第一次越界", "暴露代价"],
+        plotlineId: "plotline_1",
+        projectId: "proj_1",
+        purpose: "建立修行规则和第一重代价。",
+        startChapterIndex: 1,
+        status: "draft",
+        title: "星潮初醒",
+        volumePlanId: "volume_plan_1",
+      }),
+    ).toEqual({
+      arcIndex: 1,
+      arcPlanId: "arc_plan_1",
+      characterArcId: "character_arc_1",
+      endChapterIndex: 20,
+      escalation: ["发现禁令", "第一次越界", "暴露代价"],
+      plotlineId: "plotline_1",
+      projectId: "proj_1",
+      purpose: "建立修行规则和第一重代价。",
+      startChapterIndex: 1,
+      status: "draft",
+      title: "星潮初醒",
+      volumePlanId: "volume_plan_1",
     });
 
     expect(

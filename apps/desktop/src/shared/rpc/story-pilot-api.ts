@@ -133,6 +133,18 @@ export class StoryPilotApiClient {
     return this.send("plot.applyBookPlan", input);
   }
 
+  saveBookPlanDraft(input: CommandPayload<"plot.saveBookPlanDraft">) {
+    return this.send("plot.saveBookPlanDraft", input);
+  }
+
+  saveVolumePlan(input: CommandPayload<"plot.saveVolumePlan">) {
+    return this.send("plot.saveVolumePlan", input);
+  }
+
+  saveArcPlan(input: CommandPayload<"plot.saveArcPlan">) {
+    return this.send("plot.saveArcPlan", input);
+  }
+
   generateRollingOutline(input: CommandPayload<"plot.generateRollingOutline">) {
     return this.send("plot.generateRollingOutline", input);
   }

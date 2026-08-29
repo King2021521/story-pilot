@@ -104,6 +104,13 @@ const plotlineNodeStatusSchema = z
 
 const plotlineTextFieldSchema = z.string().max(500).optional();
 const plotlineRelationIdsSchema = z.array(z.string().min(1)).default([]);
+const outlinePlanTextFieldSchema = z.string().max(800).default("");
+const outlinePlanOptionalTextFieldSchema = z.string().max(800).nullable().optional();
+const outlinePlanOptionalIdSchema = z.string().min(1).nullable().optional();
+const outlinePlanStatusSchema = z
+  .enum(["draft", "active", "approved", "archived"])
+  .default("draft");
+const outlinePlanEscalationSchema = z.array(z.string().min(1).max(160)).max(12).default([]);
 
 const coreStoryFieldsSchema = z.object({
   antagonistForce: coreStoryTextFieldSchema,
@@ -205,6 +212,39 @@ export const creativePathCommandSchemas = {
   }),
   "plot.applyBookPlan": projectIdPayloadSchema.extend({
     artifactId: z.string().min(1),
+  }),
+  "plot.saveBookPlanDraft": projectIdPayloadSchema.extend({
+    bookPlanId: z.string().min(1).optional(),
+    corePromise: outlinePlanTextFieldSchema,
+    endingDirection: outlinePlanOptionalTextFieldSchema,
+    mainPlotlineId: outlinePlanOptionalIdSchema,
+    status: outlinePlanStatusSchema,
+    targetWordCount: z.number().int().min(100_000).max(10_000_000),
+    title: z.string().min(1).max(120),
+  }),
+  "plot.saveVolumePlan": projectIdPayloadSchema.extend({
+    bookPlanId: z.string().min(1),
+    climax: outlinePlanOptionalTextFieldSchema,
+    majorConflict: outlinePlanTextFieldSchema,
+    purpose: outlinePlanTextFieldSchema,
+    status: outlinePlanStatusSchema,
+    targetWordCount: z.number().int().min(10_000).max(2_000_000),
+    title: z.string().min(1).max(120),
+    volumeIndex: z.number().int().min(1).max(100),
+    volumePlanId: z.string().min(1).optional(),
+  }),
+  "plot.saveArcPlan": projectIdPayloadSchema.extend({
+    arcIndex: z.number().int().min(1).max(300),
+    arcPlanId: z.string().min(1).optional(),
+    characterArcId: outlinePlanOptionalIdSchema,
+    endChapterIndex: z.number().int().positive().nullable().optional(),
+    escalation: outlinePlanEscalationSchema,
+    plotlineId: outlinePlanOptionalIdSchema,
+    purpose: outlinePlanTextFieldSchema,
+    startChapterIndex: z.number().int().positive().nullable().optional(),
+    status: outlinePlanStatusSchema,
+    title: z.string().min(1).max(120),
+    volumePlanId: z.string().min(1),
   }),
   "plot.generateRollingOutline": projectIdPayloadSchema.extend({
     arcPlanId: z.string().min(1).optional(),

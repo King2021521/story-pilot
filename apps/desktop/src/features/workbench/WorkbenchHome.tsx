@@ -71,11 +71,14 @@ import {
   type WorldRuleElement,
 } from "../creative/CreativeElementsPanel";
 import type {
+  ArcPlanItem,
+  BookPlanItem,
   ChapterPlanItem,
   CompletableCreativeStageKey,
   CreativePathBoard,
   CreativeStageKey,
   SaveBriefValues,
+  VolumePlanItem,
 } from "../creative-path/CreativePathWorkbench";
 import { MemoryCandidateList, type MemoryCandidateItem } from "../memory/MemoryCandidateList";
 import type { MemoryCandidateDecisionInput } from "../memory/MemoryConfirmDrawer";
@@ -300,6 +303,77 @@ const PLOTLINE_NODE_FORM_DEFAULTS = {
   status: "planned",
 } satisfies Pick<CreatePlotlineNodeValues, "kind" | "status">;
 
+const OUTLINE_PLAN_STATUS_OPTIONS: Array<{
+  readonly label: string;
+  readonly value: SaveBookPlanDraftValues["status"];
+}> = [
+  { label: "草稿", value: "draft" },
+  { label: "进行中", value: "active" },
+  { label: "已确认", value: "approved" },
+  { label: "归档", value: "archived" },
+];
+
+const OUTLINE_PLAN_STATUS_LABELS = Object.fromEntries(
+  OUTLINE_PLAN_STATUS_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<SaveBookPlanDraftValues["status"], string>;
+
+const BOOK_PLAN_FIELD_HELP = {
+  corePromise: {
+    description: "写给读者的长期回报：爽点、悬念、情感奖励、升级节奏或关系反转。",
+    question: "这本书每一大段要持续兑现什么？",
+  },
+  endingDirection: {
+    description: "不用写死结局细节，明确终局代价、终局胜利方式和主角最后状态即可。",
+    question: "故事最终要把读者带到哪里？",
+  },
+  mainPlotlineId: {
+    description: "选择驱动全书结构的主故事线，卷规划和阶段弧线会围绕它拆解。",
+    question: "哪条故事线是全书发动机？",
+  },
+  targetWordCount: {
+    description: "用于估算卷数、阶段密度和每卷体量，后续章节规划会继承这个约束。",
+    question: "全书大概要写多长？",
+  },
+} as const;
+
+const VOLUME_PLAN_FIELD_HELP = {
+  climax: {
+    description: "写清卷末最强场面或决定性反转，用来校准中段铺垫。",
+    question: "这一卷用什么高潮收束？",
+  },
+  majorConflict: {
+    description: "这一卷的主要对抗关系，最好能写成双方目标不可兼得的冲突。",
+    question: "这一卷最大的对抗是什么？",
+  },
+  purpose: {
+    description: "这一卷承担的叙事任务，例如开局入局、地图扩张、反派压迫或关系破裂。",
+    question: "这一卷在全书中负责什么？",
+  },
+  targetWordCount: {
+    description: "控制分卷体量，避免某一卷承载过多剧情或中段过长。",
+    question: "这一卷计划写多少字？",
+  },
+} as const;
+
+const ARC_PLAN_FIELD_HELP = {
+  chapterRange: {
+    description: "用起止章节限定阶段边界，后续滚动章纲会按这个区间分配节奏。",
+    question: "这条弧线覆盖哪些章节？",
+  },
+  escalation: {
+    description: "每行一个升级节点，从诱因、误导、受挫、反击到阶段回收。",
+    question: "冲突如何一层层升级？",
+  },
+  plotlineId: {
+    description: "关联到前面设计的故事线，保证阶段弧线不是孤立事件。",
+    question: "这条阶段弧线服务哪条故事线？",
+  },
+  purpose: {
+    description: "写清阶段完成的转向，例如从被动到主动、从怀疑到确认、从结盟到决裂。",
+    question: "这一阶段要改变什么？",
+  },
+} as const;
+
 const WORLD_DIMENSIONS = [
   {
     description: "时代、文明程度、现实或架空、世界规模、基本类型。",
@@ -502,6 +576,9 @@ export interface UpdateCharacterValues {
 
 export type WorldbuildingFields = CommandPayload<"worldbuilding.saveFields">["fields"];
 export type CoreStoryFields = CommandPayload<"blueprint.saveForm">["fields"];
+export type SaveBookPlanDraftValues = Omit<CommandPayload<"plot.saveBookPlanDraft">, "projectId">;
+export type SaveVolumePlanValues = Omit<CommandPayload<"plot.saveVolumePlan">, "projectId">;
+export type SaveArcPlanValues = Omit<CommandPayload<"plot.saveArcPlan">, "projectId">;
 
 interface CoreStoryFormValues extends Omit<CoreStoryFields, "differentiators" | "risks"> {
   readonly differentiatorsText: string;
@@ -606,6 +683,9 @@ export interface WorkbenchHomeProps {
     readonly targetWordCount: number;
     readonly volumeCount: number;
   }): Promise<void> | void;
+  onSaveBookPlanDraft(input: SaveBookPlanDraftValues): Promise<void> | void;
+  onSaveVolumePlan(input: SaveVolumePlanValues): Promise<void> | void;
+  onSaveArcPlan(input: SaveArcPlanValues): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateDraftFromPlan(input: { readonly chapterPlanId: string }): Promise<void> | void;
   onGenerateOutline(input: {
@@ -677,6 +757,9 @@ export function WorkbenchHome({
   onRestoreChapterVersion,
   onSaveChapter,
   onSaveBrief,
+  onSaveBookPlanDraft,
+  onSaveVolumePlan,
+  onSaveArcPlan,
   onSaveCoreStoryFields,
   onSaveWorldbuildingFields,
   onSelectChapter,
@@ -744,6 +827,9 @@ export function WorkbenchHome({
           onRejectMemory,
           onRestoreChapterVersion,
           onSaveBrief,
+          onSaveBookPlanDraft,
+          onSaveVolumePlan,
+          onSaveArcPlan,
           onSaveChapter,
           onSaveCoreStoryFields,
           onSaveWorldbuildingFields,
@@ -800,6 +886,9 @@ function renderModule(input: {
     readonly targetWordCount: number;
     readonly volumeCount: number;
   }): Promise<void> | void;
+  onSaveBookPlanDraft(input: SaveBookPlanDraftValues): Promise<void> | void;
+  onSaveVolumePlan(input: SaveVolumePlanValues): Promise<void> | void;
+  onSaveArcPlan(input: SaveArcPlanValues): Promise<void> | void;
   onGenerateDraft(input: GenerateChapterDraftRequest): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateDraftFromPlan(input: { readonly chapterPlanId: string }): Promise<void> | void;
@@ -894,6 +983,11 @@ function renderModule(input: {
         <BookOutlineModule
           creativePath={input.creativePath}
           onGenerateBookPlan={input.onGenerateBookPlan}
+          onSaveArcPlan={input.onSaveArcPlan}
+          onSaveBookPlanDraft={input.onSaveBookPlanDraft}
+          onSaveVolumePlan={input.onSaveVolumePlan}
+          plotlines={input.board.plotlines ?? []}
+          project={input.board.project}
         />
       );
     case "plot-nodes":
@@ -2464,36 +2558,655 @@ function StorylineNodeList({
 function BookOutlineModule({
   creativePath,
   onGenerateBookPlan,
+  onSaveArcPlan,
+  onSaveBookPlanDraft,
+  onSaveVolumePlan,
+  plotlines,
+  project,
 }: {
   readonly creativePath: CreativePathBoard;
+  readonly plotlines: readonly PlotlineElement[];
+  readonly project: WorkbenchProject;
   onGenerateBookPlan(input: {
     readonly targetWordCount: number;
     readonly volumeCount: number;
   }): Promise<void> | void;
+  onSaveBookPlanDraft(input: SaveBookPlanDraftValues): Promise<void> | void;
+  onSaveVolumePlan(input: SaveVolumePlanValues): Promise<void> | void;
+  onSaveArcPlan(input: SaveArcPlanValues): Promise<void> | void;
 }) {
+  const [bookForm] = Form.useForm<BookPlanFormValues>();
+  const [volumeForm] = Form.useForm<VolumePlanFormValues>();
+  const [arcForm] = Form.useForm<ArcPlanFormValues>();
+  const [generateForm] = Form.useForm<BookPlanGenerateFormValues>();
+  const [selectedBookPlanId, setSelectedBookPlanId] = useState<string | null>(
+    () => creativePath.bookPlans[0]?.id ?? null,
+  );
+  const [selectedVolumePlanId, setSelectedVolumePlanId] = useState<string | null>(
+    () => creativePath.volumePlans[0]?.id ?? null,
+  );
+  const [selectedArcPlanId, setSelectedArcPlanId] = useState<string | null>(
+    () => creativePath.arcPlans[0]?.id ?? null,
+  );
+
+  const selectedBookPlan =
+    creativePath.bookPlans.find((plan) => plan.id === selectedBookPlanId) ?? null;
+  const visibleVolumePlans = selectedBookPlan
+    ? creativePath.volumePlans.filter((plan) => plan.bookPlanId === selectedBookPlan.id)
+    : creativePath.volumePlans;
+  const selectedVolumePlan =
+    visibleVolumePlans.find((plan) => plan.id === selectedVolumePlanId) ?? null;
+  const visibleArcPlans = selectedVolumePlan
+    ? creativePath.arcPlans.filter((plan) => plan.volumePlanId === selectedVolumePlan.id)
+    : creativePath.arcPlans;
+  const selectedArcPlan = visibleArcPlans.find((plan) => plan.id === selectedArcPlanId) ?? null;
+  const bookPlanOptions = creativePath.bookPlans.map((plan) => ({
+    label: plan.title,
+    value: plan.id,
+  }));
+  const volumePlanOptions = creativePath.volumePlans.map((plan) => ({
+    label: `${plan.volumeIndex}. ${plan.title}`,
+    value: plan.id,
+  }));
+  const plotlineOptions = plotlines.map((plotline) => ({
+    label: plotline.name,
+    value: plotline.id,
+  }));
+
+  useEffect(() => {
+    bookForm.setFieldsValue(
+      bookPlanToFormValues(selectedBookPlan, {
+        estimatedWordCount:
+          creativePath.brief?.estimatedWordCount ?? project.wordCountGoal ?? 800_000,
+        title: project.title,
+      }),
+    );
+  }, [
+    bookForm,
+    creativePath.brief?.estimatedWordCount,
+    project.title,
+    project.wordCountGoal,
+    selectedBookPlan,
+  ]);
+
+  useEffect(() => {
+    volumeForm.setFieldsValue(
+      volumePlanToFormValues(selectedVolumePlan, {
+        bookPlanId: selectedBookPlan?.id ?? creativePath.bookPlans[0]?.id ?? "",
+        targetWordCount: estimateNextVolumeWordCount(selectedBookPlan),
+        volumeIndex: getNextVolumeIndex(creativePath.volumePlans),
+      }),
+    );
+  }, [
+    creativePath.bookPlans,
+    creativePath.volumePlans,
+    selectedBookPlan,
+    selectedVolumePlan,
+    volumeForm,
+  ]);
+
+  useEffect(() => {
+    arcForm.setFieldsValue(
+      arcPlanToFormValues(selectedArcPlan, {
+        arcIndex: getNextArcIndex(creativePath.arcPlans, selectedVolumePlan?.id),
+        volumePlanId: selectedVolumePlan?.id ?? creativePath.volumePlans[0]?.id ?? "",
+      }),
+    );
+  }, [
+    arcForm,
+    creativePath.arcPlans,
+    creativePath.volumePlans,
+    selectedArcPlan,
+    selectedVolumePlan,
+  ]);
+
+  useEffect(() => {
+    generateForm.setFieldsValue({
+      targetWordCount:
+        selectedBookPlan?.targetWordCount ??
+        creativePath.brief?.estimatedWordCount ??
+        project.wordCountGoal ??
+        800_000,
+      volumeCount: Math.max(creativePath.volumePlans.length, 6),
+    });
+  }, [
+    creativePath.brief?.estimatedWordCount,
+    creativePath.volumePlans.length,
+    generateForm,
+    project.wordCountGoal,
+    selectedBookPlan,
+  ]);
+
+  const handleSelectBookPlan = (plan: BookPlanItem) => {
+    const firstVolume = creativePath.volumePlans.find((volume) => volume.bookPlanId === plan.id);
+    const firstArc = firstVolume
+      ? creativePath.arcPlans.find((arc) => arc.volumePlanId === firstVolume.id)
+      : undefined;
+    setSelectedBookPlanId(plan.id);
+    setSelectedVolumePlanId(firstVolume?.id ?? null);
+    setSelectedArcPlanId(firstArc?.id ?? null);
+  };
+
+  const handleSelectVolumePlan = (plan: VolumePlanItem) => {
+    const bookPlan = creativePath.bookPlans.find((candidate) => candidate.id === plan.bookPlanId);
+    const firstArc = creativePath.arcPlans.find((arc) => arc.volumePlanId === plan.id);
+    setSelectedBookPlanId(bookPlan?.id ?? null);
+    setSelectedVolumePlanId(plan.id);
+    setSelectedArcPlanId(firstArc?.id ?? null);
+  };
+
+  const handleSelectArcPlan = (plan: ArcPlanItem) => {
+    const volumePlan = creativePath.volumePlans.find(
+      (candidate) => candidate.id === plan.volumePlanId,
+    );
+    const bookPlan = volumePlan
+      ? creativePath.bookPlans.find((candidate) => candidate.id === volumePlan.bookPlanId)
+      : undefined;
+    setSelectedBookPlanId(bookPlan?.id ?? null);
+    setSelectedVolumePlanId(volumePlan?.id ?? null);
+    setSelectedArcPlanId(plan.id);
+  };
+
   return (
-    <div className="module-stack">
+    <div className="module-stack book-outline-workspace">
       <ModuleHeader eyebrow="6 / 9" title="全书大纲" />
-      <ModuleSection title="生成全书规划">
+      <div className="book-outline-primary">
+        <section aria-label="大纲层级列表" className="book-outline-pane book-outline-tier-list">
+          <header className="book-outline-pane__header">
+            <Title level={5}>大纲层级</Title>
+            <Space size={6}>
+              <Tag>{creativePath.bookPlans.length} 本</Tag>
+              <Tag>{creativePath.volumePlans.length} 卷</Tag>
+              <Tag>{creativePath.arcPlans.length} 弧线</Tag>
+            </Space>
+          </header>
+          <BookOutlineTierGroup
+            emptyText="暂无全书计划"
+            items={creativePath.bookPlans}
+            renderMeta={(plan) => formatPlanWordCount(plan.targetWordCount)}
+            renderTitle={(plan) => plan.title}
+            selectedId={selectedBookPlan?.id ?? null}
+            title="全书计划"
+            toAriaLabel={(plan) => `编辑全书规划 ${plan.title}`}
+            onSelect={handleSelectBookPlan}
+          />
+          <BookOutlineTierGroup
+            emptyText="暂无卷规划"
+            items={visibleVolumePlans}
+            renderMeta={(plan) =>
+              `${OUTLINE_PLAN_STATUS_LABELS[plan.status as SaveBookPlanDraftValues["status"]] ?? plan.status} · ${formatPlanWordCount(plan.targetWordCount)}`
+            }
+            renderTitle={(plan) => `${plan.volumeIndex}. ${plan.title}`}
+            selectedId={selectedVolumePlan?.id ?? null}
+            title="卷规划"
+            toAriaLabel={(plan) => `编辑卷规划 ${plan.title}`}
+            onSelect={handleSelectVolumePlan}
+          />
+          <BookOutlineTierGroup
+            emptyText="暂无阶段弧线"
+            items={visibleArcPlans}
+            renderMeta={(plan) => `第 ${plan.arcIndex} 段 · ${plan.escalation.length} 个升级点`}
+            renderTitle={(plan) => plan.title}
+            selectedId={selectedArcPlan?.id ?? null}
+            title="阶段弧线"
+            toAriaLabel={(plan) => `编辑阶段弧线 ${plan.title}`}
+            onSelect={handleSelectArcPlan}
+          />
+        </section>
+
+        <section aria-label="大纲编辑表单" className="book-outline-pane book-outline-editor">
+          <header className="book-outline-pane__header">
+            <Title level={5}>大纲编辑</Title>
+            <Space size={8} wrap>
+              <Button
+                aria-label="新建全书计划"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setSelectedBookPlanId(null);
+                  setSelectedVolumePlanId(null);
+                  setSelectedArcPlanId(null);
+                }}
+              >
+                新建全书
+              </Button>
+              <Button
+                aria-label="新建卷规划"
+                disabled={creativePath.bookPlans.length === 0}
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setSelectedVolumePlanId(null);
+                  setSelectedArcPlanId(null);
+                }}
+              >
+                新建卷
+              </Button>
+              <Button
+                aria-label="新建阶段弧线"
+                disabled={creativePath.volumePlans.length === 0}
+                icon={<PlusOutlined />}
+                onClick={() => setSelectedArcPlanId(null)}
+              >
+                新建弧线
+              </Button>
+            </Space>
+          </header>
+
+          <div className="book-outline-editor-grid">
+            <section className="book-outline-form-block">
+              <Title level={5}>全书计划</Title>
+              <Form
+                form={bookForm}
+                layout="vertical"
+                onFinish={async (values) => {
+                  const payload: SaveBookPlanDraftValues = {
+                    corePromise: values.corePromise?.trim() ?? "",
+                    endingDirection: normalizedNullableFormText(values.endingDirection),
+                    mainPlotlineId: normalizedNullableFormText(values.mainPlotlineId),
+                    status: values.status ?? "draft",
+                    targetWordCount: values.targetWordCount ?? 800_000,
+                    title: values.title?.trim() ?? project.title,
+                    ...(selectedBookPlan ? { bookPlanId: selectedBookPlan.id } : {}),
+                  };
+                  await onSaveBookPlanDraft(payload);
+                }}
+              >
+                <div className="book-outline-form-grid">
+                  <Form.Item
+                    label="全书标题"
+                    name="title"
+                    rules={[{ message: "请输入全书标题", required: true }]}
+                  >
+                    <Input
+                      aria-label="全书标题"
+                      maxLength={120}
+                      placeholder="如：布衣天子全书大纲"
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label={
+                      <FieldLabelWithHelp
+                        description={BOOK_PLAN_FIELD_HELP.targetWordCount.description}
+                        label="目标字数"
+                        question={BOOK_PLAN_FIELD_HELP.targetWordCount.question}
+                      />
+                    }
+                    name="targetWordCount"
+                    rules={[{ message: "请输入目标字数", required: true }]}
+                  >
+                    <InputNumber
+                      aria-label="目标字数"
+                      max={10_000_000}
+                      min={100_000}
+                      step={100_000}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label={
+                      <FieldLabelWithHelp
+                        description={BOOK_PLAN_FIELD_HELP.mainPlotlineId.description}
+                        label="主故事线"
+                        question={BOOK_PLAN_FIELD_HELP.mainPlotlineId.question}
+                      />
+                    }
+                    name="mainPlotlineId"
+                  >
+                    <Select
+                      allowClear
+                      aria-label="主故事线"
+                      options={plotlineOptions}
+                      placeholder="选择主故事线"
+                    />
+                  </Form.Item>
+                  <Form.Item label="状态" name="status">
+                    <Select aria-label="全书状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
+                  </Form.Item>
+                  <Form.Item
+                    className="book-outline-form-grid__wide"
+                    label={
+                      <FieldLabelWithHelp
+                        description={BOOK_PLAN_FIELD_HELP.corePromise.description}
+                        label="核心承诺"
+                        question={BOOK_PLAN_FIELD_HELP.corePromise.question}
+                      />
+                    }
+                    name="corePromise"
+                  >
+                    <Input.TextArea
+                      aria-label="核心承诺"
+                      autoSize={{ maxRows: 6, minRows: 3 }}
+                      maxLength={800}
+                      placeholder="如：每卷一次公开胜利和一次隐藏损失。"
+                      showCount
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    className="book-outline-form-grid__wide"
+                    label={
+                      <FieldLabelWithHelp
+                        description={BOOK_PLAN_FIELD_HELP.endingDirection.description}
+                        label="结局方向"
+                        question={BOOK_PLAN_FIELD_HELP.endingDirection.question}
+                      />
+                    }
+                    name="endingDirection"
+                  >
+                    <Input.TextArea
+                      aria-label="结局方向"
+                      autoSize={{ maxRows: 5, minRows: 2 }}
+                      maxLength={800}
+                      placeholder="如：公开真相后，主角放弃旧身份。"
+                      showCount
+                    />
+                  </Form.Item>
+                </div>
+                <Button
+                  aria-label="保存全书规划"
+                  htmlType="submit"
+                  icon={<SaveOutlined />}
+                  type="primary"
+                >
+                  保存全书规划
+                </Button>
+              </Form>
+            </section>
+
+            <section className="book-outline-form-block">
+              <Title level={5}>卷规划</Title>
+              <Form
+                form={volumeForm}
+                layout="vertical"
+                onFinish={async (values) => {
+                  const payload: SaveVolumePlanValues = {
+                    bookPlanId: values.bookPlanId ?? selectedBookPlan?.id ?? "",
+                    climax: normalizedNullableFormText(values.climax),
+                    majorConflict: values.majorConflict?.trim() ?? "",
+                    purpose: values.purpose?.trim() ?? "",
+                    status: values.status ?? "draft",
+                    targetWordCount:
+                      values.targetWordCount ?? estimateNextVolumeWordCount(selectedBookPlan),
+                    title: values.title?.trim() ?? "未命名卷",
+                    volumeIndex: values.volumeIndex ?? getNextVolumeIndex(creativePath.volumePlans),
+                    ...(selectedVolumePlan ? { volumePlanId: selectedVolumePlan.id } : {}),
+                  };
+                  await onSaveVolumePlan(payload);
+                }}
+              >
+                <div className="book-outline-form-grid">
+                  <Form.Item
+                    label="所属全书规划"
+                    name="bookPlanId"
+                    rules={[{ message: "请先选择全书规划", required: true }]}
+                  >
+                    <Select
+                      aria-label="所属全书规划"
+                      disabled={bookPlanOptions.length === 0}
+                      options={bookPlanOptions}
+                    />
+                  </Form.Item>
+                  <Form.Item label="卷序号" name="volumeIndex">
+                    <InputNumber aria-label="卷序号" max={100} min={1} />
+                  </Form.Item>
+                  <Form.Item
+                    label="卷标题"
+                    name="title"
+                    rules={[{ message: "请输入卷标题", required: true }]}
+                  >
+                    <Input aria-label="卷标题" maxLength={120} placeholder="如：第一卷 寒门入局" />
+                  </Form.Item>
+                  <Form.Item
+                    label={
+                      <FieldLabelWithHelp
+                        description={VOLUME_PLAN_FIELD_HELP.targetWordCount.description}
+                        label="卷目标字数"
+                        question={VOLUME_PLAN_FIELD_HELP.targetWordCount.question}
+                      />
+                    }
+                    name="targetWordCount"
+                  >
+                    <InputNumber
+                      aria-label="卷目标字数"
+                      max={2_000_000}
+                      min={10_000}
+                      step={10_000}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    className="book-outline-form-grid__wide"
+                    label={
+                      <FieldLabelWithHelp
+                        description={VOLUME_PLAN_FIELD_HELP.purpose.description}
+                        label="卷叙事任务"
+                        question={VOLUME_PLAN_FIELD_HELP.purpose.question}
+                      />
+                    }
+                    name="purpose"
+                  >
+                    <Input.TextArea
+                      aria-label="卷叙事任务"
+                      autoSize={{ maxRows: 5, minRows: 2 }}
+                      maxLength={800}
+                      placeholder="如：完成身份压迫、入局动机和第一次公开胜利。"
+                      showCount
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    className="book-outline-form-grid__wide"
+                    label={
+                      <FieldLabelWithHelp
+                        description={VOLUME_PLAN_FIELD_HELP.majorConflict.description}
+                        label="卷核心冲突"
+                        question={VOLUME_PLAN_FIELD_HELP.majorConflict.question}
+                      />
+                    }
+                    name="majorConflict"
+                  >
+                    <Input.TextArea
+                      aria-label="卷核心冲突"
+                      autoSize={{ maxRows: 5, minRows: 2 }}
+                      maxLength={800}
+                      placeholder="如：寒门新官必须用民案撬动旧贵族封锁。"
+                      showCount
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    className="book-outline-form-grid__wide"
+                    label={
+                      <FieldLabelWithHelp
+                        description={VOLUME_PLAN_FIELD_HELP.climax.description}
+                        label="卷末高潮"
+                        question={VOLUME_PLAN_FIELD_HELP.climax.question}
+                      />
+                    }
+                    name="climax"
+                  >
+                    <Input.TextArea
+                      aria-label="卷末高潮"
+                      autoSize={{ maxRows: 5, minRows: 2 }}
+                      maxLength={800}
+                      placeholder="如：主角在公堂反杀第一次构陷。"
+                      showCount
+                    />
+                  </Form.Item>
+                  <Form.Item label="卷状态" name="status">
+                    <Select aria-label="卷状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
+                  </Form.Item>
+                </div>
+                <Button
+                  aria-label="保存卷规划"
+                  disabled={bookPlanOptions.length === 0}
+                  htmlType="submit"
+                  icon={<SaveOutlined />}
+                  type="primary"
+                >
+                  保存卷规划
+                </Button>
+              </Form>
+            </section>
+
+            <section className="book-outline-form-block book-outline-form-block--wide">
+              <Title level={5}>阶段弧线</Title>
+              <Form
+                form={arcForm}
+                layout="vertical"
+                onFinish={async (values) => {
+                  const payload: SaveArcPlanValues = {
+                    arcIndex:
+                      values.arcIndex ??
+                      getNextArcIndex(creativePath.arcPlans, values.volumePlanId),
+                    characterArcId: normalizedNullableFormText(values.characterArcId),
+                    endChapterIndex: values.endChapterIndex ?? null,
+                    escalation: parseEscalationText(values.escalationText),
+                    plotlineId: normalizedNullableFormText(values.plotlineId),
+                    purpose: values.purpose?.trim() ?? "",
+                    startChapterIndex: values.startChapterIndex ?? null,
+                    status: values.status ?? "draft",
+                    title: values.title?.trim() ?? "未命名阶段弧线",
+                    volumePlanId: values.volumePlanId ?? selectedVolumePlan?.id ?? "",
+                    ...(selectedArcPlan ? { arcPlanId: selectedArcPlan.id } : {}),
+                  };
+                  await onSaveArcPlan(payload);
+                }}
+              >
+                <Form.Item hidden name="characterArcId">
+                  <Input aria-label="关联人物弧线" />
+                </Form.Item>
+                <div className="book-outline-form-grid book-outline-form-grid--arc">
+                  <Form.Item
+                    label="所属卷规划"
+                    name="volumePlanId"
+                    rules={[{ message: "请先选择卷规划", required: true }]}
+                  >
+                    <Select
+                      aria-label="所属卷规划"
+                      disabled={volumePlanOptions.length === 0}
+                      options={volumePlanOptions}
+                    />
+                  </Form.Item>
+                  <Form.Item label="弧线序号" name="arcIndex">
+                    <InputNumber aria-label="弧线序号" max={300} min={1} />
+                  </Form.Item>
+                  <Form.Item
+                    label="弧线标题"
+                    name="title"
+                    rules={[{ message: "请输入弧线标题", required: true }]}
+                  >
+                    <Input aria-label="弧线标题" maxLength={120} placeholder="如：旧案破口" />
+                  </Form.Item>
+                  <Form.Item
+                    label={
+                      <FieldLabelWithHelp
+                        description={ARC_PLAN_FIELD_HELP.plotlineId.description}
+                        label="关联故事线"
+                        question={ARC_PLAN_FIELD_HELP.plotlineId.question}
+                      />
+                    }
+                    name="plotlineId"
+                  >
+                    <Select
+                      allowClear
+                      aria-label="关联故事线"
+                      options={plotlineOptions}
+                      placeholder="选择故事线"
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label={
+                      <FieldLabelWithHelp
+                        description={ARC_PLAN_FIELD_HELP.chapterRange.description}
+                        label="起始章节"
+                        question={ARC_PLAN_FIELD_HELP.chapterRange.question}
+                      />
+                    }
+                    name="startChapterIndex"
+                  >
+                    <InputNumber aria-label="起始章节" min={1} />
+                  </Form.Item>
+                  <Form.Item label="结束章节" name="endChapterIndex">
+                    <InputNumber aria-label="结束章节" min={1} />
+                  </Form.Item>
+                  <Form.Item label="弧线状态" name="status">
+                    <Select aria-label="弧线状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
+                  </Form.Item>
+                  <Form.Item
+                    className="book-outline-form-grid__wide"
+                    label={
+                      <FieldLabelWithHelp
+                        description={ARC_PLAN_FIELD_HELP.purpose.description}
+                        label="阶段目的"
+                        question={ARC_PLAN_FIELD_HELP.purpose.question}
+                      />
+                    }
+                    name="purpose"
+                  >
+                    <Input.TextArea
+                      aria-label="阶段目的"
+                      autoSize={{ maxRows: 5, minRows: 2 }}
+                      maxLength={800}
+                      placeholder="如：让主角从被动受害转为主动查案。"
+                      showCount
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    className="book-outline-form-grid__wide"
+                    label={
+                      <FieldLabelWithHelp
+                        description={ARC_PLAN_FIELD_HELP.escalation.description}
+                        label="升级链"
+                        question={ARC_PLAN_FIELD_HELP.escalation.question}
+                      />
+                    }
+                    name="escalationText"
+                  >
+                    <Input.TextArea
+                      aria-label="升级链"
+                      autoSize={{ maxRows: 8, minRows: 4 }}
+                      maxLength={1200}
+                      placeholder={"旧案开场\n证人失踪\n公堂反杀"}
+                    />
+                  </Form.Item>
+                </div>
+                <Button
+                  aria-label="保存阶段弧线"
+                  disabled={volumePlanOptions.length === 0}
+                  htmlType="submit"
+                  icon={<SaveOutlined />}
+                  type="primary"
+                >
+                  保存阶段弧线
+                </Button>
+              </Form>
+            </section>
+          </div>
+        </section>
+      </div>
+
+      <section aria-label="AI 辅助规划" className="book-outline-pane book-outline-assistant">
+        <header className="book-outline-pane__header">
+          <Title level={5}>AI 辅助规划</Title>
+        </header>
         <Form
-          initialValues={{ targetWordCount: 3_000_000, volumeCount: 6 }}
+          form={generateForm}
           layout="vertical"
-          onFinish={(values: { readonly targetWordCount: number; readonly volumeCount: number }) =>
-            onGenerateBookPlan(values)
-          }
+          onFinish={async (values) => {
+            await onGenerateBookPlan({
+              targetWordCount: values.targetWordCount ?? 800_000,
+              volumeCount: values.volumeCount ?? 6,
+            });
+          }}
         >
-          <Row gutter={[14, 0]}>
-            <Col lg={8} xs={24}>
-              <Form.Item label="目标字数" name="targetWordCount">
-                <InputNumber aria-label="目标字数" max={10_000_000} min={100_000} step={100_000} />
-              </Form.Item>
-            </Col>
-            <Col lg={8} xs={24}>
-              <Form.Item label="预计卷数" name="volumeCount">
-                <InputNumber aria-label="预计卷数" max={30} min={1} />
-              </Form.Item>
-            </Col>
-          </Row>
+          <div className="book-outline-generate-grid">
+            <Form.Item label="生成目标字数" name="targetWordCount">
+              <InputNumber
+                aria-label="生成目标字数"
+                max={10_000_000}
+                min={100_000}
+                step={100_000}
+              />
+            </Form.Item>
+            <Form.Item label="生成预计卷数" name="volumeCount">
+              <InputNumber aria-label="生成预计卷数" max={30} min={1} />
+            </Form.Item>
+          </div>
           <Button
             aria-label="生成全书规划"
             htmlType="submit"
@@ -2503,48 +3216,194 @@ function BookOutlineModule({
             生成全书规划
           </Button>
         </Form>
-      </ModuleSection>
-      <Row gutter={[14, 14]}>
-        <Col lg={8} xs={24}>
-          <PlanList
-            emptyText="暂无全书规划"
-            items={creativePath.bookPlans}
-            title="全书规划"
-            toItem={(plan) => ({
-              description: `${plan.targetWordCount.toLocaleString()} 字`,
-              id: plan.id,
-              label: plan.title,
-              tags: ["book"],
-            })}
-          />
-        </Col>
-        <Col lg={8} xs={24}>
-          <PlanList
-            emptyText="暂无卷规划"
-            items={creativePath.volumePlans}
-            title="卷 / 阶段"
-            toItem={(plan) => ({
-              id: plan.id,
-              label: plan.title,
-              tags: [`第 ${plan.volumeIndex} 卷`],
-            })}
-          />
-        </Col>
-        <Col lg={8} xs={24}>
-          <PlanList
-            emptyText="暂无弧线规划"
-            items={creativePath.arcPlans}
-            title="阶段弧线"
-            toItem={(plan) => ({
-              id: plan.id,
-              label: plan.title,
-              tags: ["arc"],
-            })}
-          />
-        </Col>
-      </Row>
+      </section>
     </div>
   );
+}
+
+interface BookPlanFormValues {
+  readonly corePromise?: string;
+  readonly endingDirection?: string | null | undefined;
+  readonly mainPlotlineId?: string | null | undefined;
+  readonly status?: SaveBookPlanDraftValues["status"];
+  readonly targetWordCount?: number;
+  readonly title?: string;
+}
+
+interface VolumePlanFormValues {
+  readonly bookPlanId?: string;
+  readonly climax?: string | null | undefined;
+  readonly majorConflict?: string;
+  readonly purpose?: string;
+  readonly status?: SaveVolumePlanValues["status"];
+  readonly targetWordCount?: number;
+  readonly title?: string;
+  readonly volumeIndex?: number;
+}
+
+interface ArcPlanFormValues {
+  readonly arcIndex?: number;
+  readonly characterArcId?: string | null | undefined;
+  readonly endChapterIndex?: number | null | undefined;
+  readonly escalationText?: string;
+  readonly plotlineId?: string | null | undefined;
+  readonly purpose?: string;
+  readonly startChapterIndex?: number | null | undefined;
+  readonly status?: SaveArcPlanValues["status"];
+  readonly title?: string;
+  readonly volumePlanId?: string;
+}
+
+interface BookPlanGenerateFormValues {
+  readonly targetWordCount?: number;
+  readonly volumeCount?: number;
+}
+
+function BookOutlineTierGroup<TItem extends { readonly id: string }>({
+  emptyText,
+  items,
+  onSelect,
+  renderMeta,
+  renderTitle,
+  selectedId,
+  title,
+  toAriaLabel,
+}: {
+  readonly emptyText: string;
+  readonly items: readonly TItem[];
+  readonly selectedId: string | null;
+  readonly title: string;
+  renderMeta(item: TItem): string;
+  renderTitle(item: TItem): string;
+  toAriaLabel(item: TItem): string;
+  onSelect(item: TItem): void;
+}) {
+  return (
+    <section className="book-outline-tier-list__section">
+      <header>
+        <Text strong>{title}</Text>
+        <Tag>{items.length}</Tag>
+      </header>
+      {items.length === 0 ? (
+        <Empty description={emptyText} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <ul className="book-outline-tier-list__items">
+          {items.map((item) => (
+            <li key={item.id}>
+              <button
+                aria-label={toAriaLabel(item)}
+                className={[
+                  "book-outline-tier-list__item",
+                  selectedId === item.id ? "book-outline-tier-list__item--selected" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                type="button"
+                onClick={() => onSelect(item)}
+              >
+                <strong>{renderTitle(item)}</strong>
+                <span>{renderMeta(item)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function bookPlanToFormValues(
+  plan: BookPlanItem | null,
+  fallback: { readonly estimatedWordCount: number; readonly title: string },
+): BookPlanFormValues {
+  return {
+    corePromise: plan?.corePromise ?? "",
+    endingDirection: plan?.endingDirection ?? "",
+    mainPlotlineId: plan?.mainPlotlineId ?? undefined,
+    status: (plan?.status as SaveBookPlanDraftValues["status"] | undefined) ?? "draft",
+    targetWordCount: plan?.targetWordCount ?? fallback.estimatedWordCount,
+    title: plan?.title ?? `${fallback.title}全书大纲`,
+  };
+}
+
+function volumePlanToFormValues(
+  plan: VolumePlanItem | null,
+  fallback: {
+    readonly bookPlanId: string;
+    readonly targetWordCount: number;
+    readonly volumeIndex: number;
+  },
+): VolumePlanFormValues {
+  return {
+    bookPlanId: plan?.bookPlanId ?? fallback.bookPlanId,
+    climax: plan?.climax ?? "",
+    majorConflict: plan?.majorConflict ?? "",
+    purpose: plan?.purpose ?? "",
+    status: (plan?.status as SaveVolumePlanValues["status"] | undefined) ?? "draft",
+    targetWordCount: plan?.targetWordCount ?? fallback.targetWordCount,
+    title: plan?.title ?? "",
+    volumeIndex: plan?.volumeIndex ?? fallback.volumeIndex,
+  };
+}
+
+function arcPlanToFormValues(
+  plan: ArcPlanItem | null,
+  fallback: { readonly arcIndex: number; readonly volumePlanId: string },
+): ArcPlanFormValues {
+  return {
+    arcIndex: plan?.arcIndex ?? fallback.arcIndex,
+    characterArcId: plan?.characterArcId ?? undefined,
+    endChapterIndex: plan?.endChapterIndex ?? null,
+    escalationText: joinEscalation(plan?.escalation ?? []),
+    plotlineId: plan?.plotlineId ?? undefined,
+    purpose: plan?.purpose ?? "",
+    startChapterIndex: plan?.startChapterIndex ?? null,
+    status: (plan?.status as SaveArcPlanValues["status"] | undefined) ?? "draft",
+    title: plan?.title ?? "",
+    volumePlanId: plan?.volumePlanId ?? fallback.volumePlanId,
+  };
+}
+
+function parseEscalationText(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(/\n|；|;|，|,/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .slice(0, 12);
+}
+
+function joinEscalation(escalation: readonly string[]): string {
+  return escalation.join("\n");
+}
+
+function normalizedNullableFormText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function getNextVolumeIndex(volumePlans: readonly VolumePlanItem[]): number {
+  return (
+    volumePlans.reduce((maxVolumeIndex, plan) => Math.max(maxVolumeIndex, plan.volumeIndex), 0) + 1
+  );
+}
+
+function getNextArcIndex(
+  arcPlans: readonly ArcPlanItem[],
+  volumePlanId: string | undefined,
+): number {
+  return (
+    arcPlans
+      .filter((plan) => (volumePlanId ? plan.volumePlanId === volumePlanId : true))
+      .reduce((maxArcIndex, plan) => Math.max(maxArcIndex, plan.arcIndex), 0) + 1
+  );
+}
+
+function estimateNextVolumeWordCount(bookPlan: BookPlanItem | null): number {
+  return Math.max(10_000, Math.round((bookPlan?.targetWordCount ?? 800_000) / 6));
+}
+
+function formatPlanWordCount(wordCount: number): string {
+  return `${wordCount.toLocaleString()} 字`;
 }
 
 function PlotNodesModule({
@@ -2992,6 +3851,12 @@ function WorkspaceContextPanel({
           <Descriptions.Item label="世界观维度">
             {filledWorldbuildingFieldCount}/{WORLD_DIMENSIONS.length}
           </Descriptions.Item>
+        ) : activeModuleKey === "book-outline" ? (
+          <>
+            <Descriptions.Item label="全书规划">{creativePath.bookPlans.length}</Descriptions.Item>
+            <Descriptions.Item label="卷规划">{creativePath.volumePlans.length}</Descriptions.Item>
+            <Descriptions.Item label="阶段弧线">{creativePath.arcPlans.length}</Descriptions.Item>
+          </>
         ) : (
           <Descriptions.Item label="世界规则">{board.worldRules?.length ?? 0}</Descriptions.Item>
         )}
@@ -3043,24 +3908,6 @@ function ModuleSection({
       </header>
       {children}
     </section>
-  );
-}
-
-function PlanList<TItem>({
-  emptyText,
-  items,
-  title,
-  toItem,
-}: {
-  readonly emptyText: string;
-  readonly items: readonly TItem[];
-  readonly title: string;
-  toItem(item: TItem): CompactListItem;
-}) {
-  return (
-    <ModuleSection title={title}>
-      <CompactList emptyText={emptyText} items={items.map(toItem)} />
-    </ModuleSection>
   );
 }
 
