@@ -696,6 +696,177 @@ button {
   line-height: 1.5;
 }
 
+.plot-node-design-workspace {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.plot-node-design-primary {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.plot-node-design-pane {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 18px;
+}
+
+.plot-node-design-pane__header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plot-node-design-pane__header h5 {
+  margin: 0;
+}
+
+.plot-node-design-pane__header .ant-typography-secondary {
+  max-width: 560px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.plot-node-design-list {
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 148px);
+  overflow: hidden;
+  align-content: start;
+}
+
+.plot-node-roster-group {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.plot-node-roster-group > header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plot-node-roster {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.plot-node-roster__item {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+  border: 1px solid #ebe9e6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fbfaf8;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.plot-node-roster__item:hover,
+.plot-node-roster__item:focus-visible {
+  border-color: #d6d3cf;
+  background: #ffffff;
+  outline: 0;
+}
+
+.plot-node-roster__item--selected {
+  border-color: #1f2937;
+  background: #ffffff;
+  box-shadow: inset 3px 0 0 #1f2937;
+}
+
+.plot-node-roster__title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plot-node-roster__title-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-node-roster__title-row span {
+  flex: 0 0 auto;
+  color: #8f8b86;
+  font-size: 13px;
+}
+
+.plot-node-roster__item > .ant-typography-secondary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.plot-node-editor-stack {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.plot-node-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 14px 18px;
+  min-width: 0;
+}
+
+.plot-node-form-grid__wide {
+  grid-column: 1 / -1;
+}
+
+.plot-node-form-grid .ant-input-number {
+  width: 100%;
+}
+
+.plot-node-form-actions {
+  padding-top: 4px;
+}
+
+.plot-node-ai-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) auto;
+  gap: 14px 18px;
+  align-items: end;
+  min-width: 0;
+}
+
+.plot-node-ai-grid__actions {
+  align-self: end;
+}
+
 .book-outline-workspace {
   display: grid;
   gap: 16px;
@@ -1426,6 +1597,20 @@ button {
 
   .storyline-node-list__item {
     grid-template-columns: 1fr;
+  }
+
+  .plot-node-design-primary,
+  .plot-node-ai-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plot-node-design-list {
+    position: static;
+    max-height: none;
+  }
+
+  .plot-node-roster {
+    max-height: 240px;
   }
 
   .book-outline-primary,

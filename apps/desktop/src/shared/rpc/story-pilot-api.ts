@@ -354,12 +354,20 @@ export class StoryPilotApiClient {
     return this.send("storyEvent.create", input);
   }
 
+  updateStoryEvent(input: CommandPayload<"storyEvent.update">) {
+    return this.send("storyEvent.update", input);
+  }
+
   listForeshadowings(input: CommandPayload<"foreshadowing.list">) {
     return this.sendItems("foreshadowing.list", input);
   }
 
   createForeshadowing(input: CommandPayload<"foreshadowing.create">) {
     return this.send("foreshadowing.create", input);
+  }
+
+  updateForeshadowing(input: CommandPayload<"foreshadowing.update">) {
+    return this.send("foreshadowing.update", input);
   }
 
   planForeshadowing(input: CommandPayload<"foreshadowing.plan">) {

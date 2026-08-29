@@ -75,8 +75,10 @@ describe("command registry", () => {
       "plotline.updateNode",
       "storyEvent.list",
       "storyEvent.create",
+      "storyEvent.update",
       "foreshadowing.list",
       "foreshadowing.create",
+      "foreshadowing.update",
       "foreshadowing.plan",
       "workOrder.list",
       "workOrder.get",
@@ -823,6 +825,39 @@ describe("command registry", () => {
     });
   });
 
+  it("parses story event updates with editable plot-node fields", () => {
+    expect(
+      parseCommandPayload("storyEvent.update", {
+        projectId: "proj_1",
+        storyEventId: "event_1",
+        patch: {
+          chapterId: "chapter_3",
+          description: "主角意识到旧信并非偶然出现。",
+          eventType: "reveal",
+          participants: [
+            {
+              entityType: "character",
+              entityId: "char_1",
+              role: "witness",
+            },
+          ],
+          status: "draft",
+          storyTime: "第 3 章夜雨",
+          title: "旧信真意",
+        },
+      }),
+    ).toMatchObject({
+      patch: {
+        chapterId: "chapter_3",
+        description: "主角意识到旧信并非偶然出现。",
+        eventType: "reveal",
+        status: "draft",
+        storyTime: "第 3 章夜雨",
+      },
+      storyEventId: "event_1",
+    });
+  });
+
   it("parses foreshadowings with seed and payoff event links", () => {
     expect(
       parseCommandPayload("foreshadowing.create", {
@@ -836,6 +871,32 @@ describe("command registry", () => {
     ).toMatchObject({
       payoffEventId: "event_payoff",
       seedEventId: "event_seed",
+    });
+  });
+
+  it("parses foreshadowing updates with importance and event links", () => {
+    expect(
+      parseCommandPayload("foreshadowing.update", {
+        foreshadowingId: "foreshadowing_1",
+        projectId: "proj_1",
+        patch: {
+          description: "信纸水印第一次出现，读者只看见图案。",
+          importance: 5,
+          payoffEventId: "event_payoff",
+          payoffExpectation: "第 20 章揭示水印来自伪造档案。",
+          seedEventId: "event_seed",
+          status: "payoff_ready",
+          title: "水印伏笔",
+        },
+      }),
+    ).toMatchObject({
+      foreshadowingId: "foreshadowing_1",
+      patch: {
+        importance: 5,
+        payoffEventId: "event_payoff",
+        seedEventId: "event_seed",
+        status: "payoff_ready",
+      },
     });
   });
 

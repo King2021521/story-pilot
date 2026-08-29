@@ -171,6 +171,7 @@ describe("StoryPilotApiClient", () => {
       importance: 3,
       payoffExpectation: "后续揭示档案伪造者。",
       projectId: "project_1",
+      status: "seeded",
       title: "水印伏笔",
     });
 
@@ -393,9 +394,36 @@ describe("StoryPilotApiClient", () => {
       eventType: "discovery",
       participants: [],
       projectId: "project_1",
+      status: "draft",
       title: "旧信",
     });
+    await api.updateStoryEvent({
+      patch: {
+        description: "旧信水印指向官府档案纸。",
+        status: "canon",
+        storyTime: "第 3 章",
+      },
+      projectId: "project_1",
+      storyEventId: "event_1",
+    });
     await api.listForeshadowings({ projectId: "project_1" });
+    await api.createForeshadowing({
+      description: "信纸水印暗示十年前档案。",
+      importance: 3,
+      payoffExpectation: "后续揭示档案伪造者。",
+      projectId: "project_1",
+      status: "seeded",
+      title: "水印伏笔",
+    });
+    await api.updateForeshadowing({
+      foreshadowingId: "foreshadowing_1",
+      patch: {
+        importance: 5,
+        payoffExpectation: "第 20 章回收水印。",
+        status: "payoff_ready",
+      },
+      projectId: "project_1",
+    });
     await api.planForeshadowing({
       projectId: "project_1",
     });
@@ -449,7 +477,10 @@ describe("StoryPilotApiClient", () => {
       "plotline.updateNode",
       "storyEvent.list",
       "storyEvent.create",
+      "storyEvent.update",
       "foreshadowing.list",
+      "foreshadowing.create",
+      "foreshadowing.update",
       "foreshadowing.plan",
     ]);
   });

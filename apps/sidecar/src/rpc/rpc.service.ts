@@ -680,12 +680,18 @@ export class RpcService {
           eventType: parsed.eventType,
           participants: parsed.participants,
           projectId: parsed.projectId,
+          status: parsed.status,
           title: parsed.title,
           ...(parsed.chapterId === undefined ? {} : { chapterId: parsed.chapterId }),
           ...(parsed.sceneId === undefined ? {} : { sceneId: parsed.sceneId }),
           ...(parsed.storyTime === undefined ? {} : { storyTime: parsed.storyTime }),
         };
         return this.storyEventService.createStoryEvent(input);
+      }
+      case "storyEvent.update": {
+        return this.storyEventService.updateStoryEvent(
+          payload as CommandPayload<"storyEvent.update">,
+        );
       }
       case "storyEvent.list": {
         const parsed = payload as CommandPayload<"storyEvent.list">;
@@ -695,7 +701,9 @@ export class RpcService {
         const parsed = payload as CommandPayload<"foreshadowing.create">;
         const input: CreateForeshadowingInput = {
           description: parsed.description,
+          importance: parsed.importance,
           projectId: parsed.projectId,
+          status: parsed.status,
           title: parsed.title,
           ...(parsed.payoffEventId === undefined ? {} : { payoffEventId: parsed.payoffEventId }),
           ...(parsed.payoffExpectation === undefined
@@ -704,6 +712,11 @@ export class RpcService {
           ...(parsed.seedEventId === undefined ? {} : { seedEventId: parsed.seedEventId }),
         };
         return this.foreshadowingService.createForeshadowing(input);
+      }
+      case "foreshadowing.update": {
+        return this.foreshadowingService.updateForeshadowing(
+          payload as CommandPayload<"foreshadowing.update">,
+        );
       }
       case "foreshadowing.list": {
         const parsed = payload as CommandPayload<"foreshadowing.list">;

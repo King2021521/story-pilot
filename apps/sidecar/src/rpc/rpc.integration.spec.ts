@@ -2128,6 +2128,135 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("updates plot node workspace records through RPC and returns board-aligned fields", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_plot_nodes_update",
+          payload: { genre: "权谋", title: "布衣天子" },
+        }),
+      );
+
+      const storyEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.create",
+          id: "req_story_event_create_for_update",
+          payload: {
+            description: "秦钰收到带水印的旧信。",
+            eventType: "discovery",
+            projectId: getString(project, "id"),
+            status: "draft",
+            storyTime: "第 1 章夜雨",
+            title: "旧信出现",
+          },
+        }),
+      );
+      const payoffEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.create",
+          id: "req_story_event_payoff_for_update",
+          payload: {
+            description: "秦钰在公堂指出档案被调包。",
+            eventType: "reveal",
+            projectId: getString(project, "id"),
+            title: "档案调包真相",
+          },
+        }),
+      );
+      const foreshadowing = await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.create",
+          id: "req_foreshadowing_create_for_update",
+          payload: {
+            description: "信纸水印第一次出现，暂不解释来源。",
+            importance: 4,
+            projectId: getString(project, "id"),
+            seedEventId: getString(storyEvent, "id"),
+            status: "seeded",
+            title: "信纸水印",
+          },
+        }),
+      );
+
+      const updatedStoryEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.update",
+          id: "req_story_event_update",
+          payload: {
+            patch: {
+              description: "秦钰确认旧信水印来自官府档案纸。",
+              eventType: "reveal",
+              status: "canon",
+              storyTime: "第 3 章公堂前",
+              title: "水印来源暴露",
+            },
+            projectId: getString(project, "id"),
+            storyEventId: getString(storyEvent, "id"),
+          },
+        }),
+      );
+      const updatedForeshadowing = await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.update",
+          id: "req_foreshadowing_update",
+          payload: {
+            foreshadowingId: getString(foreshadowing, "id"),
+            patch: {
+              description: "水印像是普通纸纹，实则是官府档案纸暗纹。",
+              importance: 5,
+              payoffEventId: getString(payoffEvent, "id"),
+              payoffExpectation: "第 20 章揭示水印证明档案调包。",
+              status: "payoff_ready",
+              title: "档案纸水印",
+            },
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const board = await expectRpcData(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_board_plot_nodes_update",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+
+      expect(updatedStoryEvent).toMatchObject({
+        eventType: "reveal",
+        status: "canon",
+        storyTime: "第 3 章公堂前",
+        summary: "秦钰确认旧信水印来自官府档案纸。",
+        title: "水印来源暴露",
+      });
+      expect(updatedForeshadowing).toMatchObject({
+        importance: 5,
+        payoffText: "第 20 章揭示水印证明档案调包。",
+        status: "payoff_ready",
+      });
+      expect(board).toMatchObject({
+        foreshadowings: [
+          expect.objectContaining({
+            importance: 5,
+            title: "档案纸水印",
+          }),
+        ],
+        storyEvents: [
+          expect.objectContaining({
+            storyTime: "第 3 章公堂前",
+            title: "水印来源暴露",
+          }),
+          expect.objectContaining({
+            title: "档案调包真相",
+          }),
+        ],
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("generates AI element candidates and accepts them into creative object stores", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {

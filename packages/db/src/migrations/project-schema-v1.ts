@@ -626,6 +626,7 @@ create table if not exists foreshadowings (
   project_id text not null references projects(id) on delete cascade,
   title text not null,
   status text not null default 'seeded',
+  importance integer not null default 3,
   seed_text text,
   payoff_text text,
   created_at integer not null,

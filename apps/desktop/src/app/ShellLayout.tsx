@@ -38,6 +38,7 @@ import type {
 } from "../features/creative-path/CreativePathWorkbench";
 import type {
   AcceptElementCandidatesValues,
+  CreateForeshadowingValues,
   ElementCandidateItem,
   GenerateElementCandidatesResult,
   GenerateElementCandidatesValues,
@@ -64,6 +65,8 @@ import {
   type SaveCoreStoryFieldsResult,
   type SaveVolumePlanValues,
   type UpdateCharacterValues,
+  type UpdateForeshadowingValues,
+  type UpdateStoryEventValues,
   type WorkbenchBoard,
   type WorkbenchChapter,
   type WorkbenchProject,
@@ -657,15 +660,21 @@ export function ShellLayout() {
   );
 
   const createForeshadowing = useCallback(
-    async (input: Omit<CommandPayload<"foreshadowing.create">, "projectId">) => {
+    async (input: CreateForeshadowingValues) => {
       if (!activeProject) {
         return;
       }
 
       try {
         await storyPilotApi.createForeshadowing({
-          ...input,
+          description: input.description,
+          importance: input.importance,
+          ...optionalText("payoffExpectation", input.payoffExpectation),
+          ...optionalText("payoffEventId", input.payoffEventId),
           projectId: activeProject.id,
+          ...optionalText("seedEventId", input.seedEventId),
+          status: input.status ?? "seeded",
+          title: input.title,
         });
         await refreshBoard(activeProject.id);
         message.success("伏笔已创建");
@@ -684,15 +693,77 @@ export function ShellLayout() {
 
       try {
         await storyPilotApi.createStoryEvent({
+          ...optionalText("chapterId", input.chapterId),
           description: input.description,
           eventType: input.eventType,
-          participants: [],
+          participants: [...(input.participants ?? [])],
           projectId: activeProject.id,
+          status: input.status ?? "draft",
           title: input.title,
           ...optionalText("storyTime", input.storyTime),
         });
         await refreshBoard(activeProject.id);
         message.success("剧情节点已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const updateStoryEvent = useCallback(
+    async (input: UpdateStoryEventValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updateStoryEvent({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("剧情节点已更新");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const updateForeshadowing = useCallback(
+    async (input: UpdateForeshadowingValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updateForeshadowing({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("伏笔已更新");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const planForeshadowing = useCallback(
+    async (input: Omit<CommandPayload<"foreshadowing.plan">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.planForeshadowing({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("伏笔回收规划已提交");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -1400,6 +1471,7 @@ export function ShellLayout() {
           onGenerateOutline={generateOutline}
           onGenerateRollingOutline={generateRollingOutline}
           onLoadChapterVersions={loadChapterVersions}
+          onPlanForeshadowing={planForeshadowing}
           onRejectMemory={rejectMemory}
           onReopenStage={reopenStage}
           onRestoreChapterVersion={restoreChapterVersion}
@@ -1413,8 +1485,10 @@ export function ShellLayout() {
           onSelectChapter={selectChapter}
           onSkipStage={skipStage}
           onUpdateCharacter={updateCharacter}
+          onUpdateForeshadowing={updateForeshadowing}
           onUpdatePlotline={updatePlotline}
           onUpdatePlotlineNode={updatePlotlineNode}
+          onUpdateStoryEvent={updateStoryEvent}
           savingChapter={savingChapter}
           selectedChapterId={selectedChapterId}
         />

@@ -1507,6 +1507,152 @@ describe("ShellLayout", () => {
     expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 辅助" }));
   });
 
+  it("edits plot nodes with a stable form-first layout and aligned fields", async () => {
+    const project = createProject();
+    const chapter = {
+      content: "",
+      id: "chapter_3",
+      title: "第三章 公堂前夜",
+      version: 0,
+    };
+    const characters = [
+      {
+        id: "character_qinyu",
+        name: "秦钰",
+        role: "protagonist",
+      },
+    ];
+    const storyEvents = [
+      {
+        chapterId: null,
+        eventType: "discovery",
+        id: "event_seed",
+        participants: [],
+        sceneId: null,
+        status: "draft",
+        storyTime: "第 1 章夜雨",
+        summary: "秦钰收到带水印的旧信。",
+        title: "旧信出现",
+      },
+      {
+        chapterId: null,
+        eventType: "reveal",
+        id: "event_payoff",
+        participants: [],
+        sceneId: null,
+        status: "planned",
+        storyTime: null,
+        summary: "秦钰在公堂指出档案被调包。",
+        title: "档案调包真相",
+      },
+    ];
+    const foreshadowings = [
+      {
+        id: "foreshadowing_1",
+        importance: 4,
+        links: [{ eventId: "event_seed", role: "seed" }],
+        payoffText: "",
+        seedText: "信纸水印第一次出现，暂不解释来源。",
+        status: "seeded",
+        title: "信纸水印",
+      },
+    ];
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [chapter],
+            characters,
+            foreshadowings,
+            items: [],
+            locations: [],
+            memoryCandidates: [],
+            organizations: [],
+            plotlines: [],
+            project,
+            storyEvents,
+            workOrders: [],
+            worldRules: [],
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    const { container } = render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "7. 剧情节点" }));
+    expect(await screen.findByRole("heading", { name: "剧情节点设计" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "剧情节点档案" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "伏笔 / 回收档案" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI 回收辅助" })).toBeInTheDocument();
+
+    const workspace = container.querySelector(".plot-node-design-workspace");
+    const primaryRow = workspace?.querySelector(":scope > .plot-node-design-primary");
+    const assistant = workspace?.querySelector(":scope > .plot-node-design-assistant");
+    const listPane = screen.getByRole("region", { name: "剧情节点列表面板" });
+    const eventFormPane = screen.getByRole("region", { name: "剧情节点档案表单" });
+    const foreshadowingPane = screen.getByRole("region", { name: "伏笔回收表单" });
+
+    expect(primaryRow).toBeInstanceOf(HTMLElement);
+    expect(assistant).toBeInstanceOf(HTMLElement);
+    expect(primaryRow).toContainElement(listPane);
+    expect(primaryRow).toContainElement(eventFormPane);
+    expect(primaryRow).toContainElement(foreshadowingPane);
+    expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 回收辅助" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑剧情节点 旧信出现" }));
+    fireEvent.change(screen.getByLabelText("节点标题"), { target: { value: "水印来源暴露" } });
+    fireEvent.change(screen.getByLabelText("故事时间"), { target: { value: "第 3 章公堂前" } });
+    fireEvent.change(screen.getByLabelText("节点描述"), {
+      target: { value: "秦钰确认旧信水印来自官府档案纸。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存剧情节点" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("storyEvent.update")).toMatchObject({
+        patch: {
+          description: "秦钰确认旧信水印来自官府档案纸。",
+          storyTime: "第 3 章公堂前",
+          title: "水印来源暴露",
+        },
+        projectId: "project_1",
+        storyEventId: "event_seed",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑伏笔 信纸水印" }));
+    fireEvent.change(screen.getByLabelText("伏笔内容"), {
+      target: { value: "水印像是普通纸纹，实则是官府档案纸暗纹。" },
+    });
+    fireEvent.change(screen.getByLabelText("回收方案"), {
+      target: { value: "第 20 章揭示水印证明档案调包。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存伏笔" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("foreshadowing.update")).toMatchObject({
+        foreshadowingId: "foreshadowing_1",
+        patch: {
+          description: "水印像是普通纸纹，实则是官府档案纸暗纹。",
+          payoffExpectation: "第 20 章揭示水印证明档案调包。",
+        },
+        projectId: "project_1",
+      });
+    });
+  });
+
   it("edits layered book outline plans with aligned form fields", async () => {
     const project = createProject();
     const creativePath = createCreativePathBoard({

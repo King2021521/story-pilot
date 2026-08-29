@@ -516,6 +516,53 @@ const EVENT_TYPE_OPTIONS = [
   { label: "自定义", value: "custom" },
 ] as const;
 
+type StoryEventTypeValue = CommandPayload<"storyEvent.create">["eventType"];
+type StoryEventStatusValue = CommandPayload<"storyEvent.create">["status"];
+type ForeshadowingStatusValue = CommandPayload<"foreshadowing.create">["status"];
+
+const STORY_EVENT_STATUS_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: StoryEventStatusValue;
+}> = [
+  { label: "草稿", value: "draft" },
+  { label: "已规划", value: "planned" },
+  { label: "正史", value: "canon" },
+  { label: "归档", value: "archived" },
+];
+
+const FORESHADOWING_STATUS_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: ForeshadowingStatusValue;
+}> = [
+  { label: "已埋设", value: "seeded" },
+  { label: "待回收", value: "payoff_ready" },
+  { label: "已回收", value: "paid_off" },
+  { label: "归档", value: "archived" },
+];
+
+const EVENT_TYPE_LABELS = Object.fromEntries(
+  EVENT_TYPE_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<StoryEventTypeValue, string>;
+
+const STORY_EVENT_STATUS_LABELS = Object.fromEntries(
+  STORY_EVENT_STATUS_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<StoryEventStatusValue, string>;
+
+const FORESHADOWING_STATUS_LABELS = Object.fromEntries(
+  FORESHADOWING_STATUS_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<ForeshadowingStatusValue, string>;
+
+const STORY_EVENT_FORM_DEFAULTS = {
+  eventType: "discovery",
+  participants: [],
+  status: "draft",
+} satisfies Pick<StoryEventFormValues, "eventType" | "participants" | "status">;
+
+const FORESHADOWING_FORM_DEFAULTS = {
+  importance: 3,
+  status: "seeded",
+} satisfies Pick<ForeshadowingFormValues, "importance" | "status">;
+
 const MODULE_STAGE_MAP: Partial<Record<WorkspaceModuleKey, CreativeStageKey>> = {
   basic: "brief",
   "book-outline": "outline",
@@ -546,11 +593,22 @@ export interface WorkbenchChapter {
 }
 
 export interface StoryEventElement {
+  readonly chapterId?: string | null;
   readonly eventType: string;
   readonly id: string;
+  readonly participants?: readonly StoryEventParticipantElement[];
+  readonly sceneId?: string | null;
   readonly status: string;
+  readonly storyTime?: string | null;
   readonly summary: string;
   readonly title: string;
+}
+
+export interface StoryEventParticipantElement {
+  readonly entityId: string;
+  readonly entityType: string;
+  readonly id?: string;
+  readonly role: string;
 }
 
 export interface CreateStoryEventValues {
@@ -566,7 +624,40 @@ export interface CreateStoryEventValues {
     | "travel"
     | "custom";
   readonly storyTime?: string;
+  readonly status?: StoryEventStatusValue;
+  readonly chapterId?: string;
+  readonly participants?: readonly CreateStoryEventParticipantValues[];
   readonly title: string;
+}
+
+export interface CreateStoryEventParticipantValues {
+  readonly entityType: string;
+  readonly entityId: string;
+  readonly role: string;
+}
+
+export type UpdateStoryEventValues = Omit<CommandPayload<"storyEvent.update">, "projectId">;
+export type UpdateForeshadowingValues = Omit<CommandPayload<"foreshadowing.update">, "projectId">;
+export type PlanForeshadowingValues = Omit<CommandPayload<"foreshadowing.plan">, "projectId">;
+
+interface StoryEventFormValues {
+  readonly title: string;
+  readonly description: string;
+  readonly eventType: StoryEventTypeValue;
+  readonly status: StoryEventStatusValue;
+  readonly chapterId: string | undefined;
+  readonly storyTime: string;
+  readonly participants: readonly string[];
+}
+
+interface ForeshadowingFormValues {
+  readonly title: string;
+  readonly description: string;
+  readonly payoffExpectation: string;
+  readonly importance: number;
+  readonly seedEventId: string | undefined;
+  readonly payoffEventId: string | undefined;
+  readonly status: ForeshadowingStatusValue;
 }
 
 export interface UpdateCharacterValues {
@@ -698,14 +789,17 @@ export interface WorkbenchHomeProps {
     readonly startChapterIndex: number;
     readonly chapterCount: 10 | 20;
   }): Promise<void> | void;
+  onPlanForeshadowing(input: PlanForeshadowingValues): Promise<void> | void;
   onReopenStage(input: {
     readonly stageKey: CreativeStageKey;
     readonly reason?: string;
   }): Promise<void> | void;
   onSaveBrief(input: SaveBriefValues): Promise<void> | void;
   onUpdateCharacter(input: UpdateCharacterValues): Promise<void> | void;
+  onUpdateForeshadowing(input: UpdateForeshadowingValues): Promise<void> | void;
   onUpdatePlotline(input: UpdatePlotlineValues): Promise<void> | void;
   onUpdatePlotlineNode(input: UpdatePlotlineNodeValues): Promise<void> | void;
+  onUpdateStoryEvent(input: UpdateStoryEventValues): Promise<void> | void;
   onSkipStage(input: {
     readonly stageKey: CreativeStageKey;
     readonly reason: string;
@@ -753,6 +847,7 @@ export function WorkbenchHome({
   onGenerateOutline,
   onGenerateRollingOutline,
   onLoadChapterVersions,
+  onPlanForeshadowing,
   onRejectMemory,
   onRestoreChapterVersion,
   onSaveChapter,
@@ -764,8 +859,10 @@ export function WorkbenchHome({
   onSaveWorldbuildingFields,
   onSelectChapter,
   onUpdateCharacter,
+  onUpdateForeshadowing,
   onUpdatePlotline,
   onUpdatePlotlineNode,
+  onUpdateStoryEvent,
   savingChapter = false,
   selectedChapterId,
 }: WorkbenchHomeProps) {
@@ -824,6 +921,7 @@ export function WorkbenchHome({
           onGenerateOutline,
           onGenerateRollingOutline,
           onLoadChapterVersions,
+          onPlanForeshadowing,
           onRejectMemory,
           onRestoreChapterVersion,
           onSaveBrief,
@@ -835,8 +933,10 @@ export function WorkbenchHome({
           onSaveWorldbuildingFields,
           onSelectChapter,
           onUpdateCharacter,
+          onUpdateForeshadowing,
           onUpdatePlotline,
           onUpdatePlotlineNode,
+          onUpdateStoryEvent,
           savingChapter,
           selectedChapter,
         })}
@@ -910,6 +1010,7 @@ function renderModule(input: {
     readonly chapterCount: 10 | 20;
   }): Promise<void> | void;
   onLoadChapterVersions(input: LoadChapterVersionsRequest): Promise<void> | void;
+  onPlanForeshadowing(input: PlanForeshadowingValues): Promise<void> | void;
   onRejectMemory(candidateId: string): Promise<void> | void;
   onRestoreChapterVersion(input: RestoreChapterVersionRequest): Promise<void> | void;
   onSaveBrief(input: SaveBriefValues): Promise<void> | void;
@@ -920,8 +1021,10 @@ function renderModule(input: {
   onSaveWorldbuildingFields(input: { readonly fields: WorldbuildingFields }): Promise<void> | void;
   onSelectChapter(chapterId: string): void;
   onUpdateCharacter(input: UpdateCharacterValues): Promise<void> | void;
+  onUpdateForeshadowing(input: UpdateForeshadowingValues): Promise<void> | void;
   onUpdatePlotline(input: UpdatePlotlineValues): Promise<void> | void;
   onUpdatePlotlineNode(input: UpdatePlotlineNodeValues): Promise<void> | void;
+  onUpdateStoryEvent(input: UpdateStoryEventValues): Promise<void> | void;
 }) {
   switch (input.activeModuleKey) {
     case "basic":
@@ -993,9 +1096,14 @@ function renderModule(input: {
     case "plot-nodes":
       return (
         <PlotNodesModule
+          chapters={input.board.chapters}
+          characters={input.board.characters ?? []}
           foreshadowings={input.board.foreshadowings ?? []}
           onCreateForeshadowing={input.onCreateForeshadowing}
           onCreateStoryEvent={input.onCreateStoryEvent}
+          onPlanForeshadowing={input.onPlanForeshadowing}
+          onUpdateForeshadowing={input.onUpdateForeshadowing}
+          onUpdateStoryEvent={input.onUpdateStoryEvent}
           storyEvents={input.board.storyEvents ?? []}
         />
       );
@@ -3407,167 +3515,694 @@ function formatPlanWordCount(wordCount: number): string {
 }
 
 function PlotNodesModule({
+  chapters,
+  characters,
   foreshadowings,
   onCreateForeshadowing,
   onCreateStoryEvent,
+  onPlanForeshadowing,
+  onUpdateForeshadowing,
+  onUpdateStoryEvent,
   storyEvents,
 }: {
+  readonly chapters: readonly WorkbenchChapter[];
+  readonly characters: readonly CharacterElement[];
   readonly foreshadowings: readonly ForeshadowingElement[];
   readonly storyEvents: readonly StoryEventElement[];
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreateStoryEvent(input: CreateStoryEventValues): Promise<void> | void;
+  onPlanForeshadowing(input: PlanForeshadowingValues): Promise<void> | void;
+  onUpdateForeshadowing(input: UpdateForeshadowingValues): Promise<void> | void;
+  onUpdateStoryEvent(input: UpdateStoryEventValues): Promise<void> | void;
 }) {
-  const [eventForm] = Form.useForm<CreateStoryEventValues>();
-  const [foreshadowingForm] = Form.useForm<CreateForeshadowingValues>();
+  const [eventForm] = Form.useForm<StoryEventFormValues>();
+  const [foreshadowingForm] = Form.useForm<ForeshadowingFormValues>();
+  const [assistantForm] = Form.useForm<PlanForeshadowingValues>();
+  const [selectedEventId, setSelectedEventId] = useState<string | undefined>(storyEvents[0]?.id);
+  const [selectedForeshadowingId, setSelectedForeshadowingId] = useState<string | undefined>(
+    foreshadowings[0]?.id,
+  );
+
+  const selectedEvent = storyEvents.find((event) => event.id === selectedEventId);
+  const selectedForeshadowing = foreshadowings.find(
+    (foreshadowing) => foreshadowing.id === selectedForeshadowingId,
+  );
+  const chapterOptions = useMemo(
+    () => chapters.map((chapter) => ({ label: chapter.title, value: chapter.id })),
+    [chapters],
+  );
+  const characterOptions = useMemo(
+    () => characters.map((character) => ({ label: character.name, value: character.id })),
+    [characters],
+  );
+  const storyEventOptions = useMemo(
+    () => storyEvents.map((event) => ({ label: event.title, value: event.id })),
+    [storyEvents],
+  );
+
+  useEffect(() => {
+    if (selectedEvent) {
+      eventForm.setFieldsValue(storyEventToFormValues(selectedEvent));
+      return;
+    }
+
+    eventForm.setFieldsValue({
+      ...STORY_EVENT_FORM_DEFAULTS,
+      chapterId: undefined,
+      description: "",
+      storyTime: "",
+      title: "",
+    });
+  }, [eventForm, selectedEvent]);
+
+  useEffect(() => {
+    if (selectedForeshadowing) {
+      foreshadowingForm.setFieldsValue(foreshadowingToFormValues(selectedForeshadowing));
+      return;
+    }
+
+    foreshadowingForm.setFieldsValue({
+      ...FORESHADOWING_FORM_DEFAULTS,
+      description: "",
+      payoffEventId: undefined,
+      payoffExpectation: "",
+      seedEventId: undefined,
+      title: "",
+    });
+  }, [foreshadowingForm, selectedForeshadowing]);
 
   return (
-    <div className="module-stack">
+    <div className="module-stack plot-node-design-workspace">
       <ModuleHeader eyebrow="7 / 9" title="剧情节点设计" />
-      <ModuleSection title="新增剧情节点">
-        <Form
-          name="storyEventForm"
-          form={eventForm}
-          initialValues={{ eventType: "discovery" }}
-          layout="vertical"
-          onFinish={async (values) => {
-            const storyTime = values.storyTime?.trim();
-
-            await onCreateStoryEvent({
-              description: values.description.trim(),
-              eventType: values.eventType,
-              title: values.title.trim(),
-              ...(storyTime ? { storyTime } : {}),
-            });
-            eventForm.resetFields();
-            eventForm.setFieldValue("eventType", "discovery");
-          }}
+      <div className="plot-node-design-primary">
+        <section
+          aria-label="剧情节点列表面板"
+          className="plot-node-design-pane plot-node-design-list"
         >
-          <Row gutter={[14, 0]}>
-            <Col lg={8} xs={24}>
-              <Form.Item
-                label="节点标题"
-                name="title"
-                rules={[{ required: true, message: "请输入节点标题" }]}
-              >
-                <Input aria-label="节点标题" />
-              </Form.Item>
-            </Col>
-            <Col lg={8} xs={24}>
-              <Form.Item label="节点类型" name="eventType">
-                <Select aria-label="节点类型" options={[...EVENT_TYPE_OPTIONS]} />
-              </Form.Item>
-            </Col>
-            <Col lg={8} xs={24}>
-              <Form.Item label="故事时间" name="storyTime">
-                <Input aria-label="故事时间" />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item
-                label="节点描述"
-                name="description"
-                rules={[{ required: true, message: "请输入节点描述" }]}
-              >
-                <Input.TextArea aria-label="节点描述" autoSize={{ maxRows: 4, minRows: 2 }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Button
-            aria-label="创建剧情节点"
-            htmlType="submit"
-            icon={<PlusOutlined />}
-            type="primary"
+          <header className="plot-node-design-pane__header">
+            <Title level={5}>节点与伏笔</Title>
+            <Text type="secondary">{storyEvents.length + foreshadowings.length} 项</Text>
+          </header>
+          <div className="plot-node-roster-group">
+            <header>
+              <Text strong>剧情节点</Text>
+              <Text type="secondary">{storyEvents.length} 个</Text>
+            </header>
+            <PlotNodeEventList
+              events={storyEvents}
+              selectedEventId={selectedEventId}
+              onSelectEvent={setSelectedEventId}
+            />
+          </div>
+          <div className="plot-node-roster-group">
+            <header>
+              <Text strong>伏笔池</Text>
+              <Text type="secondary">{foreshadowings.length} 条</Text>
+            </header>
+            <PlotNodeForeshadowingList
+              foreshadowings={foreshadowings}
+              selectedForeshadowingId={selectedForeshadowingId}
+              onSelectForeshadowing={setSelectedForeshadowingId}
+            />
+          </div>
+        </section>
+
+        <div className="plot-node-editor-stack">
+          <section
+            aria-label="剧情节点档案表单"
+            className="plot-node-design-pane plot-node-event-editor"
           >
-            创建剧情节点
-          </Button>
-        </Form>
-      </ModuleSection>
+            <header className="plot-node-design-pane__header">
+              <div>
+                <Title level={5}>剧情节点档案</Title>
+                <Text type="secondary">事件的冲突、信息增量和情绪转折。</Text>
+              </div>
+              <Button
+                aria-label="新建剧情节点"
+                icon={<PlusOutlined />}
+                onClick={() => setSelectedEventId(undefined)}
+              >
+                新建
+              </Button>
+            </header>
+            <Form
+              name="storyEventForm"
+              form={eventForm}
+              initialValues={STORY_EVENT_FORM_DEFAULTS}
+              layout="vertical"
+              onFinish={async (values) => {
+                const normalized = normalizeStoryEventFormValues(values);
 
-      <ModuleSection title="新增伏笔 / 回收">
+                if (selectedEvent) {
+                  await onUpdateStoryEvent({
+                    patch: storyEventFormValuesToPatch(normalized),
+                    storyEventId: selectedEvent.id,
+                  });
+                  return;
+                }
+
+                await onCreateStoryEvent(storyEventFormValuesToCreateInput(normalized));
+                eventForm.resetFields();
+                eventForm.setFieldsValue({
+                  ...STORY_EVENT_FORM_DEFAULTS,
+                  chapterId: undefined,
+                  description: "",
+                  storyTime: "",
+                  title: "",
+                });
+              }}
+            >
+              <div className="plot-node-form-grid">
+                <Form.Item
+                  label={characterFieldLabel("节点标题", "用一句话写清读者会如何记住这个事件。")}
+                  name="title"
+                  rules={[{ required: true, message: "请输入节点标题" }]}
+                >
+                  <Input aria-label="节点标题" placeholder="如：旧信出现" />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "节点类型",
+                    "选择事件在故事里的功能：发现、冲突、揭示、决定、失败、胜利等。",
+                  )}
+                  name="eventType"
+                >
+                  <Select aria-label="节点类型" options={[...EVENT_TYPE_OPTIONS]} />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel("事件状态", "区分草稿、已规划、已写入正史或归档。")}
+                  name="status"
+                >
+                  <Select aria-label="事件状态" options={[...STORY_EVENT_STATUS_OPTIONS]} />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "所在章节",
+                    "可选。用于把节点落到具体章节，方便后续章纲引用。",
+                  )}
+                  name="chapterId"
+                >
+                  <Select
+                    allowClear
+                    aria-label="所在章节"
+                    options={chapterOptions}
+                    placeholder="未指定"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "故事时间",
+                    "写故事内时间，例如“第 3 章夜雨”或“十年前”。",
+                  )}
+                  name="storyTime"
+                >
+                  <Input aria-label="故事时间" placeholder="如：第 3 章夜雨" />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel("涉及角色", "选择实际参与或被这个事件影响的角色。")}
+                  name="participants"
+                >
+                  <Select
+                    allowClear
+                    aria-label="涉及角色"
+                    mode="multiple"
+                    options={characterOptions}
+                    placeholder="未指定"
+                  />
+                </Form.Item>
+                <Form.Item
+                  className="plot-node-form-grid__wide"
+                  label={characterFieldLabel(
+                    "节点描述",
+                    "写清事件事实、冲突变化、读者新获得的信息和人物状态变化。",
+                  )}
+                  name="description"
+                  rules={[{ required: true, message: "请输入节点描述" }]}
+                >
+                  <Input.TextArea
+                    aria-label="节点描述"
+                    autoSize={{ maxRows: 6, minRows: 4 }}
+                    maxLength={500}
+                    showCount
+                  />
+                </Form.Item>
+              </div>
+              <Space className="plot-node-form-actions" wrap>
+                <Button
+                  aria-label={selectedEvent ? "保存剧情节点" : "创建剧情节点"}
+                  htmlType="submit"
+                  icon={selectedEvent ? <SaveOutlined /> : <PlusOutlined />}
+                  type="primary"
+                >
+                  {selectedEvent ? "保存剧情节点" : "创建剧情节点"}
+                </Button>
+              </Space>
+            </Form>
+          </section>
+
+          <section
+            aria-label="伏笔回收表单"
+            className="plot-node-design-pane plot-node-foreshadowing-editor"
+          >
+            <header className="plot-node-design-pane__header">
+              <div>
+                <Title level={5}>伏笔 / 回收档案</Title>
+                <Text type="secondary">埋什么、在哪里埋、用什么代价回收。</Text>
+              </div>
+              <Button
+                aria-label="新建伏笔"
+                icon={<PlusOutlined />}
+                onClick={() => setSelectedForeshadowingId(undefined)}
+              >
+                新建
+              </Button>
+            </header>
+            <Form
+              name="foreshadowingForm"
+              form={foreshadowingForm}
+              initialValues={FORESHADOWING_FORM_DEFAULTS}
+              layout="vertical"
+              onFinish={async (values) => {
+                const normalized = normalizeForeshadowingFormValues(values);
+
+                if (selectedForeshadowing) {
+                  await onUpdateForeshadowing({
+                    foreshadowingId: selectedForeshadowing.id,
+                    patch: foreshadowingFormValuesToPatch(normalized),
+                  });
+                  return;
+                }
+
+                await onCreateForeshadowing(foreshadowingFormValuesToCreateInput(normalized));
+                foreshadowingForm.resetFields();
+                foreshadowingForm.setFieldsValue({
+                  ...FORESHADOWING_FORM_DEFAULTS,
+                  description: "",
+                  payoffEventId: undefined,
+                  payoffExpectation: "",
+                  seedEventId: undefined,
+                  title: "",
+                });
+              }}
+            >
+              <div className="plot-node-form-grid">
+                <Form.Item
+                  label={characterFieldLabel("伏笔标题", "给这个伏笔一个便于长期追踪的名称。")}
+                  name="title"
+                  rules={[{ required: true, message: "请输入伏笔标题" }]}
+                >
+                  <Input aria-label="伏笔标题" placeholder="如：信纸水印" />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "重要性",
+                    "1 到 5 级，数值越高越需要在主线中明确回收。",
+                  )}
+                  name="importance"
+                >
+                  <InputNumber aria-label="伏笔重要性" max={5} min={1} />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel("伏笔状态", "已埋设、待回收、已回收或归档。")}
+                  name="status"
+                >
+                  <Select aria-label="伏笔状态" options={[...FORESHADOWING_STATUS_OPTIONS]} />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "埋设事件",
+                    "这个伏笔第一次出现或被读者感知的剧情节点。",
+                  )}
+                  name="seedEventId"
+                >
+                  <Select
+                    allowClear
+                    aria-label="埋设事件"
+                    options={storyEventOptions}
+                    placeholder="未指定"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "回收事件",
+                    "这个伏笔最终解释、兑现或反转的剧情节点。",
+                  )}
+                  name="payoffEventId"
+                >
+                  <Select
+                    allowClear
+                    aria-label="回收事件"
+                    options={storyEventOptions}
+                    placeholder="未指定"
+                  />
+                </Form.Item>
+                <Form.Item
+                  className="plot-node-form-grid__wide"
+                  label={characterFieldLabel(
+                    "伏笔内容",
+                    "写读者当下能看到的表层信息，避免提前解释谜底。",
+                  )}
+                  name="description"
+                  rules={[{ required: true, message: "请输入伏笔内容" }]}
+                >
+                  <Input.TextArea
+                    aria-label="伏笔内容"
+                    autoSize={{ maxRows: 5, minRows: 3 }}
+                    maxLength={500}
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  className="plot-node-form-grid__wide"
+                  label={characterFieldLabel(
+                    "回收方案",
+                    "写清什么时候回收、回收后改变什么信息或人物处境。",
+                  )}
+                  name="payoffExpectation"
+                >
+                  <Input.TextArea
+                    aria-label="回收方案"
+                    autoSize={{ maxRows: 5, minRows: 3 }}
+                    maxLength={500}
+                    showCount
+                  />
+                </Form.Item>
+              </div>
+              <Space className="plot-node-form-actions" wrap>
+                <Button
+                  aria-label={selectedForeshadowing ? "保存伏笔" : "创建伏笔"}
+                  htmlType="submit"
+                  icon={selectedForeshadowing ? <SaveOutlined /> : <PlusOutlined />}
+                  type="primary"
+                >
+                  {selectedForeshadowing ? "保存伏笔" : "创建伏笔"}
+                </Button>
+              </Space>
+            </Form>
+          </section>
+        </div>
+      </div>
+
+      <section
+        aria-label="AI 回收辅助"
+        className="plot-node-design-pane plot-node-design-assistant"
+      >
+        <header className="plot-node-design-pane__header">
+          <div>
+            <Title level={5}>AI 回收辅助</Title>
+            <Text type="secondary">基于当前节点、伏笔和上下文生成回收建议。</Text>
+          </div>
+        </header>
         <Form
-          name="foreshadowingForm"
-          form={foreshadowingForm}
-          initialValues={{ importance: 3 }}
+          form={assistantForm}
           layout="vertical"
           onFinish={async (values) => {
-            const payoffExpectation = values.payoffExpectation?.trim();
-
-            await onCreateForeshadowing({
-              description: values.description.trim(),
-              importance: values.importance,
-              title: values.title.trim(),
-              ...(payoffExpectation ? { payoffExpectation } : {}),
-            });
-            foreshadowingForm.resetFields();
-            foreshadowingForm.setFieldValue("importance", 3);
+            const chapterId = trimOptionalText(values.chapterId);
+            await onPlanForeshadowing(chapterId === undefined ? {} : { chapterId });
           }}
         >
-          <Row gutter={[14, 0]}>
-            <Col lg={8} xs={24}>
-              <Form.Item
-                label="伏笔标题"
-                name="title"
-                rules={[{ required: true, message: "请输入伏笔标题" }]}
+          <div className="plot-node-ai-grid">
+            <Form.Item
+              label={characterFieldLabel(
+                "章节范围",
+                "可选。指定章节后，AI 会优先为这一段设计埋设与回收。",
+              )}
+              name="chapterId"
+            >
+              <Select
+                allowClear
+                aria-label="章节范围"
+                options={chapterOptions}
+                placeholder="全书范围"
+              />
+            </Form.Item>
+            <Form.Item className="plot-node-ai-grid__actions" label=" ">
+              <Button
+                aria-label="生成伏笔回收方案"
+                htmlType="submit"
+                icon={<ThunderboltOutlined />}
+                type="primary"
               >
-                <Input aria-label="伏笔标题" />
-              </Form.Item>
-            </Col>
-            <Col lg={6} xs={24}>
-              <Form.Item label="重要性" name="importance">
-                <InputNumber aria-label="伏笔重要性" max={5} min={1} />
-              </Form.Item>
-            </Col>
-            <Col lg={10} xs={24}>
-              <Form.Item label="回收预期" name="payoffExpectation">
-                <Input aria-label="回收预期" />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item
-                label="伏笔内容"
-                name="description"
-                rules={[{ required: true, message: "请输入伏笔内容" }]}
-              >
-                <Input.TextArea aria-label="伏笔内容" autoSize={{ maxRows: 4, minRows: 2 }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Button aria-label="创建伏笔" htmlType="submit" icon={<PlusOutlined />} type="primary">
-            创建伏笔
-          </Button>
+                生成伏笔回收方案
+              </Button>
+            </Form.Item>
+          </div>
         </Form>
-      </ModuleSection>
-
-      <Row gutter={[14, 14]}>
-        <Col lg={12} xs={24}>
-          <ModuleSection title="剧情节点列表">
-            <CompactList
-              emptyText="暂无剧情节点"
-              items={storyEvents.map((event) => ({
-                description: event.summary,
-                id: event.id,
-                label: event.title,
-                tags: [event.eventType, event.status],
-              }))}
-            />
-          </ModuleSection>
-        </Col>
-        <Col lg={12} xs={24}>
-          <ModuleSection title="伏笔列表">
-            <CompactList
-              emptyText="暂无伏笔"
-              items={foreshadowings.map((foreshadowing) => ({
-                description: foreshadowing.seedText ?? undefined,
-                id: foreshadowing.id,
-                label: foreshadowing.title,
-                tags: [foreshadowing.status],
-              }))}
-            />
-          </ModuleSection>
-        </Col>
-      </Row>
+      </section>
     </div>
   );
+}
+
+function PlotNodeEventList({
+  events,
+  onSelectEvent,
+  selectedEventId,
+}: {
+  readonly events: readonly StoryEventElement[];
+  readonly selectedEventId: string | undefined;
+  onSelectEvent(eventId: string): void;
+}) {
+  if (events.length === 0) {
+    return <Empty description="暂无剧情节点" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <ul className="plot-node-roster">
+      {events.map((event) => (
+        <li key={event.id}>
+          <button
+            aria-label={`编辑剧情节点 ${event.title}`}
+            className={[
+              "plot-node-roster__item",
+              selectedEventId === event.id ? "plot-node-roster__item--selected" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            type="button"
+            onClick={() => onSelectEvent(event.id)}
+          >
+            <span className="plot-node-roster__title-row">
+              <Text strong>{event.title}</Text>
+              <Text type="secondary">{getStoryEventStatusLabel(event.status)}</Text>
+            </span>
+            {event.summary ? <Text type="secondary">{event.summary}</Text> : null}
+            <Space size={6} wrap>
+              <Tag>{getStoryEventTypeLabel(event.eventType)}</Tag>
+              {event.storyTime ? <Tag>{event.storyTime}</Tag> : null}
+            </Space>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PlotNodeForeshadowingList({
+  foreshadowings,
+  onSelectForeshadowing,
+  selectedForeshadowingId,
+}: {
+  readonly foreshadowings: readonly ForeshadowingElement[];
+  readonly selectedForeshadowingId: string | undefined;
+  onSelectForeshadowing(foreshadowingId: string): void;
+}) {
+  if (foreshadowings.length === 0) {
+    return <Empty description="暂无伏笔" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <ul className="plot-node-roster">
+      {foreshadowings.map((foreshadowing) => (
+        <li key={foreshadowing.id}>
+          <button
+            aria-label={`编辑伏笔 ${foreshadowing.title}`}
+            className={[
+              "plot-node-roster__item",
+              selectedForeshadowingId === foreshadowing.id
+                ? "plot-node-roster__item--selected"
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            type="button"
+            onClick={() => onSelectForeshadowing(foreshadowing.id)}
+          >
+            <span className="plot-node-roster__title-row">
+              <Text strong>{foreshadowing.title}</Text>
+              <Text type="secondary">{getForeshadowingStatusLabel(foreshadowing.status)}</Text>
+            </span>
+            {foreshadowing.seedText ? <Text type="secondary">{foreshadowing.seedText}</Text> : null}
+            <Space size={6} wrap>
+              <Tag>重要性 {normalizeForeshadowingImportance(foreshadowing.importance)}</Tag>
+              {getForeshadowingEventId(foreshadowing, "payoff") ? <Tag>已有回收点</Tag> : null}
+            </Space>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function storyEventToFormValues(event: StoryEventElement): StoryEventFormValues {
+  return {
+    chapterId: event.chapterId ?? undefined,
+    description: event.summary,
+    eventType: getStoryEventTypeValue(event.eventType),
+    participants: (event.participants ?? [])
+      .filter((participant) => participant.entityType === "character")
+      .map((participant) => participant.entityId),
+    status: getStoryEventStatusValue(event.status),
+    storyTime: event.storyTime ?? "",
+    title: event.title,
+  };
+}
+
+function normalizeStoryEventFormValues(values: StoryEventFormValues): StoryEventFormValues {
+  return {
+    chapterId: trimOptionalText(values.chapterId),
+    description: values.description.trim(),
+    eventType: getStoryEventTypeValue(values.eventType),
+    participants: normalizeStringList(values.participants),
+    status: getStoryEventStatusValue(values.status),
+    storyTime: trimOptionalText(values.storyTime) ?? "",
+    title: values.title.trim(),
+  };
+}
+
+function storyEventFormValuesToCreateInput(values: StoryEventFormValues): CreateStoryEventValues {
+  const chapterId = trimOptionalText(values.chapterId);
+  const storyTime = trimOptionalText(values.storyTime);
+
+  return {
+    description: values.description,
+    eventType: values.eventType,
+    participants: storyEventParticipantInputs(values.participants),
+    status: values.status,
+    title: values.title,
+    ...(chapterId === undefined ? {} : { chapterId }),
+    ...(storyTime === undefined ? {} : { storyTime }),
+  };
+}
+
+function storyEventFormValuesToPatch(
+  values: StoryEventFormValues,
+): UpdateStoryEventValues["patch"] {
+  return {
+    chapterId: normalizedNullableFormText(values.chapterId),
+    description: values.description,
+    eventType: values.eventType,
+    participants: storyEventParticipantInputs(values.participants),
+    status: values.status,
+    storyTime: normalizedNullableFormText(values.storyTime),
+    title: values.title,
+  };
+}
+
+function storyEventParticipantInputs(
+  participantIds: readonly string[],
+): CreateStoryEventParticipantValues[] {
+  return participantIds.map((entityId) => ({
+    entityId,
+    entityType: "character",
+    role: "actor",
+  }));
+}
+
+function foreshadowingToFormValues(foreshadowing: ForeshadowingElement): ForeshadowingFormValues {
+  return {
+    description: foreshadowing.seedText ?? "",
+    importance: normalizeForeshadowingImportance(foreshadowing.importance),
+    payoffEventId: getForeshadowingEventId(foreshadowing, "payoff"),
+    payoffExpectation: foreshadowing.payoffText ?? "",
+    seedEventId: getForeshadowingEventId(foreshadowing, "seed"),
+    status: getForeshadowingStatusValue(foreshadowing.status),
+    title: foreshadowing.title,
+  };
+}
+
+function normalizeForeshadowingFormValues(
+  values: ForeshadowingFormValues,
+): ForeshadowingFormValues {
+  return {
+    description: values.description.trim(),
+    importance: normalizeForeshadowingImportance(values.importance),
+    payoffEventId: trimOptionalText(values.payoffEventId),
+    payoffExpectation: trimOptionalText(values.payoffExpectation) ?? "",
+    seedEventId: trimOptionalText(values.seedEventId),
+    status: getForeshadowingStatusValue(values.status),
+    title: values.title.trim(),
+  };
+}
+
+function foreshadowingFormValuesToCreateInput(
+  values: ForeshadowingFormValues,
+): CreateForeshadowingValues {
+  const payoffExpectation = trimOptionalText(values.payoffExpectation);
+  const payoffEventId = trimOptionalText(values.payoffEventId);
+  const seedEventId = trimOptionalText(values.seedEventId);
+
+  return {
+    description: values.description,
+    importance: values.importance,
+    status: values.status,
+    title: values.title,
+    ...(payoffExpectation === undefined ? {} : { payoffExpectation }),
+    ...(payoffEventId === undefined ? {} : { payoffEventId }),
+    ...(seedEventId === undefined ? {} : { seedEventId }),
+  };
+}
+
+function foreshadowingFormValuesToPatch(
+  values: ForeshadowingFormValues,
+): UpdateForeshadowingValues["patch"] {
+  return {
+    description: normalizedNullableFormText(values.description),
+    importance: values.importance,
+    payoffEventId: normalizedNullableFormText(values.payoffEventId),
+    payoffExpectation: normalizedNullableFormText(values.payoffExpectation),
+    seedEventId: normalizedNullableFormText(values.seedEventId),
+    status: values.status,
+    title: values.title,
+  };
+}
+
+function getStoryEventTypeLabel(value: string | null | undefined): string {
+  return EVENT_TYPE_LABELS[getStoryEventTypeValue(value)];
+}
+
+function getStoryEventStatusLabel(value: string | null | undefined): string {
+  return STORY_EVENT_STATUS_LABELS[getStoryEventStatusValue(value)];
+}
+
+function getForeshadowingStatusLabel(value: string | null | undefined): string {
+  return FORESHADOWING_STATUS_LABELS[getForeshadowingStatusValue(value)];
+}
+
+function getStoryEventTypeValue(value: string | null | undefined): StoryEventTypeValue {
+  return isKeyOf(EVENT_TYPE_LABELS, value) ? value : STORY_EVENT_FORM_DEFAULTS.eventType;
+}
+
+function getStoryEventStatusValue(value: string | null | undefined): StoryEventStatusValue {
+  return isKeyOf(STORY_EVENT_STATUS_LABELS, value) ? value : STORY_EVENT_FORM_DEFAULTS.status;
+}
+
+function getForeshadowingStatusValue(value: string | null | undefined): ForeshadowingStatusValue {
+  return isKeyOf(FORESHADOWING_STATUS_LABELS, value) ? value : FORESHADOWING_FORM_DEFAULTS.status;
+}
+
+function getForeshadowingEventId(
+  foreshadowing: ForeshadowingElement,
+  role: "payoff" | "seed",
+): string | undefined {
+  return foreshadowing.links?.find((link) => link.role === role)?.eventId;
+}
+
+function normalizeForeshadowingImportance(value: number | null | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return FORESHADOWING_FORM_DEFAULTS.importance;
+  }
+
+  return Math.min(5, Math.max(1, Math.round(value)));
 }
 
 function ChapterPlanningModule({
@@ -3833,6 +4468,13 @@ function WorkspaceContextPanel({
   const filledWorldbuildingFieldCount = countFilledWorldbuildingFields(
     board.worldbuildingProfile?.fields,
   );
+  const plotNodeForeshadowings = board.foreshadowings ?? [];
+  const readyForeshadowingCount = plotNodeForeshadowings.filter(
+    (foreshadowing) => foreshadowing.status === "payoff_ready",
+  ).length;
+  const paidForeshadowingCount = plotNodeForeshadowings.filter(
+    (foreshadowing) => foreshadowing.status === "paid_off",
+  ).length;
 
   return (
     <aside aria-label="上下文面板" className="novel-context-panel">
@@ -3857,12 +4499,21 @@ function WorkspaceContextPanel({
             <Descriptions.Item label="卷规划">{creativePath.volumePlans.length}</Descriptions.Item>
             <Descriptions.Item label="阶段弧线">{creativePath.arcPlans.length}</Descriptions.Item>
           </>
+        ) : activeModuleKey === "plot-nodes" ? (
+          <>
+            <Descriptions.Item label="剧情节点">{board.storyEvents?.length ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="伏笔池">{plotNodeForeshadowings.length}</Descriptions.Item>
+            <Descriptions.Item label="待回收">{readyForeshadowingCount}</Descriptions.Item>
+            <Descriptions.Item label="已回收">{paidForeshadowingCount}</Descriptions.Item>
+          </>
         ) : (
           <Descriptions.Item label="世界规则">{board.worldRules?.length ?? 0}</Descriptions.Item>
         )}
         <Descriptions.Item label="人物">{board.characters?.length ?? 0}</Descriptions.Item>
         <Descriptions.Item label="故事线">{board.plotlines?.length ?? 0}</Descriptions.Item>
-        <Descriptions.Item label="剧情节点">{board.storyEvents?.length ?? 0}</Descriptions.Item>
+        {activeModuleKey === "plot-nodes" ? null : (
+          <Descriptions.Item label="剧情节点">{board.storyEvents?.length ?? 0}</Descriptions.Item>
+        )}
         <Descriptions.Item label="待审产物">{board.artifacts.length}</Descriptions.Item>
       </Descriptions>
       <div className="novel-context-panel__block">
@@ -4041,43 +4692,6 @@ function CandidateList({
           </li>
         );
       })}
-    </ul>
-  );
-}
-
-interface CompactListItem {
-  readonly description?: string | undefined;
-  readonly id: string;
-  readonly label: string;
-  readonly tags: readonly string[];
-}
-
-function CompactList({
-  emptyText,
-  items,
-}: {
-  readonly emptyText: string;
-  readonly items: readonly CompactListItem[];
-}) {
-  if (items.length === 0) {
-    return <Empty description={emptyText} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-  }
-
-  return (
-    <ul className="creative-list">
-      {items.map((item) => (
-        <li className="creative-list__item" key={item.id}>
-          <div className="creative-list__content">
-            <Text strong>{item.label}</Text>
-            {item.description ? <Text type="secondary">{item.description}</Text> : null}
-            <Space size={6} wrap>
-              {item.tags.map((tag) => (
-                <Tag key={tag}>{tag}</Tag>
-              ))}
-            </Space>
-          </div>
-        </li>
-      ))}
     </ul>
   );
 }

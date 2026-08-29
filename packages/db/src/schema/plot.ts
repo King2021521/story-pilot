@@ -145,6 +145,7 @@ export const foreshadowings = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     status: text("status").notNull().default("seeded"),
+    importance: integer("importance").notNull().default(3),
     seedText: text("seed_text"),
     payoffText: text("payoff_text"),
     createdAt: integer("created_at").notNull(),

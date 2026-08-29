@@ -37,6 +37,9 @@ export interface StoryEventRecord {
   readonly projectId: string;
   readonly title: string;
   readonly eventType: string;
+  readonly chapterId: string | null;
+  readonly sceneId: string | null;
+  readonly storyTime: string | null;
   readonly summary: string;
   readonly status: string;
   readonly participants: StoryEventParticipantRecord[];
@@ -56,6 +59,7 @@ export interface ForeshadowingRecord {
   readonly projectId: string;
   readonly title: string;
   readonly status: string;
+  readonly importance: number;
   readonly seedText: string | null;
   readonly payoffText: string | null;
   readonly links: ForeshadowingEventLinkRecord[];
@@ -143,6 +147,7 @@ export interface CreateStoryEventRecordInput {
   readonly chapterId?: string;
   readonly sceneId?: string;
   readonly storyTime?: string;
+  readonly status?: string;
   readonly participants: readonly CreateStoryEventParticipantInput[];
   readonly now?: number;
 }
@@ -160,10 +165,41 @@ export interface CreateForeshadowingRecordInput {
   readonly title: string;
   readonly description: string;
   readonly payoffExpectation?: string;
+  readonly importance?: number;
   readonly seedEventLinkId?: string;
   readonly seedEventId?: string;
   readonly payoffEventLinkId?: string;
   readonly payoffEventId?: string;
+  readonly status?: string;
+  readonly now?: number;
+}
+
+export interface UpdateStoryEventRecordInput {
+  readonly storyEventId: string;
+  readonly projectId: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly eventType?: string;
+  readonly chapterId?: string | null;
+  readonly sceneId?: string | null;
+  readonly storyTime?: string | null;
+  readonly status?: string;
+  readonly participants?: readonly CreateStoryEventParticipantInput[];
+  readonly now?: number;
+}
+
+export interface UpdateForeshadowingRecordInput {
+  readonly foreshadowingId: string;
+  readonly projectId: string;
+  readonly title?: string;
+  readonly description?: string | null;
+  readonly payoffExpectation?: string | null;
+  readonly importance?: number;
+  readonly seedEventLinkId?: string;
+  readonly seedEventId?: string | null;
+  readonly payoffEventLinkId?: string;
+  readonly payoffEventId?: string | null;
+  readonly status?: string;
   readonly now?: number;
 }
 
@@ -207,6 +243,10 @@ interface StoryEventRow {
   readonly project_id: string;
   readonly title: string;
   readonly event_type: string;
+  readonly event_time: string | null;
+  readonly causal_importance: number;
+  readonly chapter_id: string | null;
+  readonly scene_id: string | null;
   readonly summary: string;
   readonly status: string;
 }
@@ -225,6 +265,7 @@ interface ForeshadowingRow {
   readonly project_id: string;
   readonly title: string;
   readonly status: string;
+  readonly importance: number;
   readonly seed_text: string | null;
   readonly payoff_text: string | null;
 }
@@ -473,7 +514,7 @@ export class PlotRepository {
           )
           values (
             @eventId, @projectId, @title, @eventType, @storyTime, @position, @description,
-            @chapterId, @sceneId, 'canon', @now, @now
+            @chapterId, @sceneId, @status, @now, @now
           )
         `,
         )
@@ -486,6 +527,7 @@ export class PlotRepository {
           position,
           projectId: input.projectId,
           sceneId: input.sceneId ?? null,
+          status: input.status ?? "canon",
           storyTime: input.storyTime ?? null,
           title: input.title,
         });
@@ -541,19 +583,21 @@ export class PlotRepository {
         .prepare(
           `
           insert into foreshadowings (
-            id, project_id, title, status, seed_text, payoff_text, created_at, updated_at
+            id, project_id, title, status, importance, seed_text, payoff_text, created_at, updated_at
           )
           values (
-            @foreshadowingId, @projectId, @title, 'seeded', @description, @payoffExpectation, @now, @now
+            @foreshadowingId, @projectId, @title, @status, @importance, @description, @payoffExpectation, @now, @now
           )
         `,
         )
         .run({
           description: input.description,
           foreshadowingId: input.foreshadowingId,
+          importance: input.importance ?? 3,
           now,
           payoffExpectation: input.payoffExpectation ?? null,
           projectId: input.projectId,
+          status: input.status ?? "seeded",
           title: input.title,
         });
 
@@ -596,6 +640,143 @@ export class PlotRepository {
       .all(projectId) as ForeshadowingRow[];
 
     return rows.map((row) => this.getForeshadowing(projectId, row.id)).filter(isDefined);
+  }
+
+  updateStoryEvent(input: UpdateStoryEventRecordInput): StoryEventRecord {
+    const now = input.now ?? Date.now();
+    const updates = ["updated_at = @now"];
+    const params: Record<string, unknown> = {
+      now,
+      projectId: input.projectId,
+      storyEventId: input.storyEventId,
+    };
+
+    addTextUpdate(updates, params, "title", "title", input.title);
+    addTextUpdate(updates, params, "event_type", "eventType", input.eventType);
+    addTextUpdate(updates, params, "status", "status", input.status);
+    addTextUpdate(updates, params, "summary", "description", input.description);
+    addNullableTextUpdate(updates, params, "chapter_id", "chapterId", input.chapterId);
+    addNullableTextUpdate(updates, params, "scene_id", "sceneId", input.sceneId);
+    addNullableTextUpdate(updates, params, "event_time", "storyTime", input.storyTime);
+
+    const update = this.projectDatabase.client.transaction(() => {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update story_events
+          set ${updates.join(", ")}
+          where project_id = @projectId and id = @storyEventId
+          `,
+        )
+        .run(params);
+
+      if (input.participants !== undefined) {
+        this.projectDatabase.client
+          .prepare("delete from event_participants where project_id = ? and event_id = ?")
+          .run(input.projectId, input.storyEventId);
+
+        for (const participant of input.participants) {
+          this.projectDatabase.client
+            .prepare(
+              `
+              insert into event_participants (
+                id, project_id, event_id, entity_type, entity_id, role, created_at
+              )
+              values (
+                @participantId, @projectId, @storyEventId, @entityType, @entityId, @role, @now
+              )
+              `,
+            )
+            .run({
+              entityId: participant.entityId,
+              entityType: participant.entityType,
+              now,
+              participantId: participant.participantId,
+              projectId: input.projectId,
+              role: participant.role,
+              storyEventId: input.storyEventId,
+            });
+        }
+      }
+    });
+
+    update();
+
+    const event = this.getStoryEvent(input.projectId, input.storyEventId);
+    if (!event) {
+      throw new Error(`STORY_EVENT_NOT_FOUND: ${input.storyEventId}`);
+    }
+
+    return event;
+  }
+
+  updateForeshadowing(input: UpdateForeshadowingRecordInput): ForeshadowingRecord {
+    const now = input.now ?? Date.now();
+    const updates = ["updated_at = @now"];
+    const params: Record<string, unknown> = {
+      foreshadowingId: input.foreshadowingId,
+      now,
+      projectId: input.projectId,
+    };
+
+    addTextUpdate(updates, params, "title", "title", input.title);
+    addTextUpdate(updates, params, "status", "status", input.status);
+    addNullableTextUpdate(updates, params, "seed_text", "description", input.description);
+    addNullableTextUpdate(
+      updates,
+      params,
+      "payoff_text",
+      "payoffExpectation",
+      input.payoffExpectation,
+    );
+
+    if (input.importance !== undefined) {
+      updates.push("importance = @importance");
+      params.importance = input.importance;
+    }
+
+    const update = this.projectDatabase.client.transaction(() => {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update foreshadowings
+          set ${updates.join(", ")}
+          where project_id = @projectId and id = @foreshadowingId
+          `,
+        )
+        .run(params);
+
+      if (input.seedEventId !== undefined) {
+        this.replaceForeshadowingEventLink({
+          eventId: input.seedEventId,
+          foreshadowingId: input.foreshadowingId,
+          now,
+          projectId: input.projectId,
+          role: "seed",
+          ...(input.seedEventLinkId === undefined ? {} : { linkId: input.seedEventLinkId }),
+        });
+      }
+
+      if (input.payoffEventId !== undefined) {
+        this.replaceForeshadowingEventLink({
+          eventId: input.payoffEventId,
+          foreshadowingId: input.foreshadowingId,
+          now,
+          projectId: input.projectId,
+          role: "payoff",
+          ...(input.payoffEventLinkId === undefined ? {} : { linkId: input.payoffEventLinkId }),
+        });
+      }
+    });
+
+    update();
+
+    const foreshadowing = this.getForeshadowing(input.projectId, input.foreshadowingId);
+    if (!foreshadowing) {
+      throw new Error(`FORESHADOWING_NOT_FOUND: ${input.foreshadowingId}`);
+    }
+
+    return foreshadowing;
   }
 
   updatePlotlineNode(input: UpdatePlotlineNodeRecordInput): PlotlineNodeRecord {
@@ -661,6 +842,38 @@ export class PlotRepository {
       .run(input);
   }
 
+  private replaceForeshadowingEventLink(input: {
+    readonly linkId?: string;
+    readonly projectId: string;
+    readonly foreshadowingId: string;
+    readonly eventId: string | null;
+    readonly role: "seed" | "payoff";
+    readonly now: number;
+  }): void {
+    this.projectDatabase.client
+      .prepare(
+        "delete from foreshadowing_events where project_id = ? and foreshadowing_id = ? and role = ?",
+      )
+      .run(input.projectId, input.foreshadowingId, input.role);
+
+    if (input.eventId === null) {
+      return;
+    }
+
+    if (!input.linkId) {
+      throw new Error(`FORESHADOWING_EVENT_LINK_ID_REQUIRED: ${input.role}`);
+    }
+
+    this.insertForeshadowingEvent({
+      eventId: input.eventId,
+      linkId: input.linkId,
+      foreshadowingId: input.foreshadowingId,
+      now: input.now,
+      projectId: input.projectId,
+      role: input.role,
+    });
+  }
+
   private getStoryEvent(projectId: string, eventId: string): StoryEventRecord | undefined {
     const row = this.projectDatabase.client
       .prepare("select * from story_events where project_id = ? and id = ?")
@@ -678,11 +891,14 @@ export class PlotRepository {
       .map((participant) => mapParticipantRow(participant as StoryEventParticipantRow));
 
     return {
+      chapterId: row.chapter_id,
       eventType: row.event_type,
       id: row.id,
       participants,
       projectId: row.project_id,
+      sceneId: row.scene_id,
       status: row.status,
+      storyTime: row.event_time,
       summary: row.summary,
       title: row.title,
     };
@@ -709,6 +925,7 @@ export class PlotRepository {
 
     return {
       id: row.id,
+      importance: row.importance,
       links,
       payoffText: row.payoff_text,
       projectId: row.project_id,
@@ -810,7 +1027,7 @@ function addNullableTextUpdate(
   params: Record<string, unknown>,
   column: string,
   paramName: string,
-  value: string | undefined,
+  value: string | null | undefined,
 ): void {
   if (value === undefined) {
     return;
@@ -833,8 +1050,11 @@ function addJsonArrayUpdate(
   params[paramName] = stringifyStringArray(value);
 }
 
-function normalizeNullableText(value: string | undefined): string | null {
+function normalizeNullableText(value: string | null | undefined): string | null {
   if (value === undefined) {
+    return null;
+  }
+  if (value === null) {
     return null;
   }
   const trimmed = value.trim();

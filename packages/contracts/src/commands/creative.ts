@@ -112,6 +112,62 @@ const outlinePlanStatusSchema = z
   .default("draft");
 const outlinePlanEscalationSchema = z.array(z.string().min(1).max(160)).max(12).default([]);
 
+const storyEventTypeSchema = z
+  .enum([
+    "decision",
+    "discovery",
+    "conflict",
+    "reveal",
+    "loss",
+    "victory",
+    "betrayal",
+    "travel",
+    "custom",
+  ])
+  .default("custom");
+
+const storyEventStatusSchema = z.enum(["draft", "planned", "canon", "archived"]).default("canon");
+
+const storyEventParticipantSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: z.string().min(1),
+  role: z.string().min(1).default("participant"),
+});
+
+const storyEventPatchSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().min(1).optional(),
+    eventType: storyEventTypeSchema.optional(),
+    status: storyEventStatusSchema.optional(),
+    chapterId: z.string().min(1).nullable().optional(),
+    sceneId: z.string().min(1).nullable().optional(),
+    storyTime: z.string().nullable().optional(),
+    outcome: z.string().optional(),
+    participants: z.array(storyEventParticipantSchema).optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "At least one story event field must be provided",
+  });
+
+const foreshadowingStatusSchema = z
+  .enum(["seeded", "payoff_ready", "paid_off", "archived"])
+  .default("seeded");
+
+const foreshadowingPatchSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().min(1).nullable().optional(),
+    payoffExpectation: z.string().nullable().optional(),
+    importance: z.number().int().min(1).max(5).optional(),
+    seedEventId: z.string().min(1).nullable().optional(),
+    payoffEventId: z.string().min(1).nullable().optional(),
+    status: foreshadowingStatusSchema.optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "At least one foreshadowing field must be provided",
+  });
+
 const coreStoryFieldsSchema = z.object({
   antagonistForce: coreStoryTextFieldSchema,
   corePromise: coreStoryTextFieldSchema,
@@ -366,33 +422,18 @@ export const creativeCommandSchemas = {
   "storyEvent.create": projectIdPayloadSchema.extend({
     title: z.string().min(1),
     description: z.string().min(1),
-    eventType: z
-      .enum([
-        "decision",
-        "discovery",
-        "conflict",
-        "reveal",
-        "loss",
-        "victory",
-        "betrayal",
-        "travel",
-        "custom",
-      ])
-      .default("custom"),
+    eventType: storyEventTypeSchema,
+    status: storyEventStatusSchema,
     chapterId: z.string().min(1).optional(),
     sceneId: z.string().min(1).optional(),
     locationId: z.string().min(1).optional(),
     storyTime: z.string().optional(),
     outcome: z.string().optional(),
-    participants: z
-      .array(
-        z.object({
-          entityType: z.string().min(1),
-          entityId: z.string().min(1),
-          role: z.string().min(1).default("participant"),
-        }),
-      )
-      .default([]),
+    participants: z.array(storyEventParticipantSchema).default([]),
+  }),
+  "storyEvent.update": projectIdPayloadSchema.extend({
+    storyEventId: z.string().min(1),
+    patch: storyEventPatchSchema,
   }),
   "foreshadowing.list": projectIdPayloadSchema,
   "foreshadowing.create": projectIdPayloadSchema.extend({
@@ -402,6 +443,11 @@ export const creativeCommandSchemas = {
     importance: z.number().int().min(1).max(5).default(3),
     seedEventId: z.string().min(1).optional(),
     payoffEventId: z.string().min(1).optional(),
+    status: foreshadowingStatusSchema,
+  }),
+  "foreshadowing.update": projectIdPayloadSchema.extend({
+    foreshadowingId: z.string().min(1),
+    patch: foreshadowingPatchSchema,
   }),
   "foreshadowing.plan": projectIdPayloadSchema.extend({
     chapterId: z.string().min(1).optional(),

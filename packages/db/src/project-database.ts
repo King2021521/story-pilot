@@ -183,6 +183,12 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
     "related_story_event_ids_json text not null default '[]'",
   );
   ensureTableColumn(projectDatabase, "plotline_nodes", "chapter_hint", "chapter_hint text");
+  ensureTableColumn(
+    projectDatabase,
+    "foreshadowings",
+    "importance",
+    "importance integer not null default 3",
+  );
   projectDatabase.client.exec(CREATIVE_PATH_SCHEMA_SQL);
   projectDatabase.client.exec(WORLDBUILDING_PROFILE_SCHEMA_SQL);
 }

@@ -103,6 +103,11 @@ export interface PlotlineNodeElement {
 
 export interface ForeshadowingElement {
   readonly id: string;
+  readonly importance?: number;
+  readonly links?: readonly {
+    readonly eventId: string;
+    readonly role: "seed" | "payoff";
+  }[];
   readonly payoffText: string | null;
   readonly seedText: string | null;
   readonly status: string;
@@ -193,8 +198,13 @@ export interface CreateForeshadowingValues {
   readonly description: string;
   readonly importance: number;
   readonly payoffExpectation?: string;
+  readonly payoffEventId?: string;
+  readonly seedEventId?: string;
+  readonly status?: CommandPayload<"foreshadowing.create">["status"];
   readonly title: string;
 }
+
+export type UpdateForeshadowingValues = Omit<CommandPayload<"foreshadowing.update">, "projectId">;
 
 interface CandidateFormValues {
   readonly constraints?: string[];

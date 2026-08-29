@@ -7,9 +7,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createProjectDatabase, runProjectMigrations } from "../project-database.js";
 import {
   type CreatePlotlineRecordInput,
+  type ForeshadowingRecord,
   type PlotlineNodeRecord,
   type PlotlineRecord,
   PlotRepository,
+  type StoryEventRecord,
 } from "./plot.repository.js";
 import { ProjectRepository } from "./project.repository.js";
 
@@ -52,6 +54,81 @@ interface PlotRepositoryWithStorylineProfile {
     readonly relatedCharacterIds?: readonly string[];
     readonly status?: string;
   }): PlotlineRecord;
+}
+
+interface StoryEventWithWorkspaceFields extends StoryEventRecord {
+  readonly chapterId: string | null;
+  readonly sceneId: string | null;
+  readonly storyTime: string | null;
+}
+
+interface ForeshadowingWithWorkspaceFields extends ForeshadowingRecord {
+  readonly importance: number;
+}
+
+interface PlotRepositoryWithPlotNodeWorkspace {
+  createStoryEvent(input: {
+    readonly eventId: string;
+    readonly eventType: string;
+    readonly chapterId?: string;
+    readonly description: string;
+    readonly now?: number;
+    readonly participants: readonly {
+      readonly participantId: string;
+      readonly entityId: string;
+      readonly entityType: string;
+      readonly role: string;
+    }[];
+    readonly projectId: string;
+    readonly status?: string;
+    readonly storyTime?: string;
+    readonly title: string;
+  }): StoryEventWithWorkspaceFields;
+  updateStoryEvent(input: {
+    readonly chapterId?: string | null;
+    readonly description?: string;
+    readonly eventType?: string;
+    readonly now?: number;
+    readonly participants?: readonly {
+      readonly participantId: string;
+      readonly entityId: string;
+      readonly entityType: string;
+      readonly role: string;
+    }[];
+    readonly projectId: string;
+    readonly status?: string;
+    readonly storyEventId: string;
+    readonly storyTime?: string | null;
+    readonly title?: string;
+  }): StoryEventWithWorkspaceFields;
+  createForeshadowing(input: {
+    readonly description: string;
+    readonly foreshadowingId: string;
+    readonly importance?: number;
+    readonly now?: number;
+    readonly payoffExpectation?: string;
+    readonly projectId: string;
+    readonly seedEventId?: string;
+    readonly seedEventLinkId?: string;
+    readonly status?: string;
+    readonly title: string;
+  }): ForeshadowingWithWorkspaceFields;
+  updateForeshadowing(input: {
+    readonly description?: string;
+    readonly foreshadowingId: string;
+    readonly importance?: number;
+    readonly now?: number;
+    readonly payoffEventId?: string | null;
+    readonly payoffEventLinkId?: string;
+    readonly payoffExpectation?: string | null;
+    readonly projectId: string;
+    readonly seedEventId?: string | null;
+    readonly seedEventLinkId?: string;
+    readonly status?: string;
+    readonly title?: string;
+  }): ForeshadowingWithWorkspaceFields;
+  listForeshadowings(projectId: string): ForeshadowingWithWorkspaceFields[];
+  listStoryEvents(projectId: string): StoryEventWithWorkspaceFields[];
 }
 
 describe("PlotRepository", () => {
@@ -166,6 +243,131 @@ describe("PlotRepository", () => {
         payoffPlan: "第 20 章揭示寄信人并改变主角目标。",
         relatedCharacterIds: [],
         status: "active",
+      });
+    } finally {
+      projectDatabase.close();
+    }
+  });
+
+  it("persists editable plot node and foreshadowing workspace fields", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "story-pilot-plot-nodes-"));
+    tempDirs.push(tempDir);
+    const projectDatabase = createProjectDatabase(join(tempDir, "project.sqlite"));
+
+    try {
+      await runProjectMigrations(projectDatabase);
+      new ProjectRepository(projectDatabase).createProject({
+        defaultVolumeId: "volume_1",
+        genre: "权谋",
+        projectId: "project_1",
+        rootPath: tempDir,
+        title: "布衣天子",
+        workId: "work_1",
+      });
+
+      const repository = new PlotRepository(projectDatabase) as PlotRepositoryWithPlotNodeWorkspace;
+      const seedEvent = repository.createStoryEvent({
+        description: "秦钰收到带水印的旧信。",
+        eventId: "event_seed",
+        eventType: "discovery",
+        now: 1,
+        participants: [],
+        projectId: "project_1",
+        status: "draft",
+        storyTime: "第 1 章夜雨",
+        title: "旧信出现",
+      });
+      repository.createStoryEvent({
+        description: "秦钰在公堂指出档案被调包。",
+        eventId: "event_payoff",
+        eventType: "reveal",
+        now: 2,
+        participants: [],
+        projectId: "project_1",
+        title: "档案调包真相",
+      });
+
+      expect(seedEvent).toMatchObject({
+        status: "draft",
+        storyTime: "第 1 章夜雨",
+      });
+
+      const updatedEvent = repository.updateStoryEvent({
+        description: "秦钰确认旧信水印来自官府档案纸。",
+        eventType: "reveal",
+        now: 3,
+        participants: [
+          {
+            entityId: "character_qinyu",
+            entityType: "character",
+            participantId: "participant_1",
+            role: "actor",
+          },
+        ],
+        projectId: "project_1",
+        status: "canon",
+        storyEventId: "event_seed",
+        storyTime: "第 3 章公堂前",
+        title: "水印来源暴露",
+      });
+
+      expect(updatedEvent).toMatchObject({
+        eventType: "reveal",
+        participants: [expect.objectContaining({ entityId: "character_qinyu", role: "actor" })],
+        status: "canon",
+        storyTime: "第 3 章公堂前",
+        summary: "秦钰确认旧信水印来自官府档案纸。",
+        title: "水印来源暴露",
+      });
+
+      const createdForeshadowing = repository.createForeshadowing({
+        description: "信纸水印第一次出现，暂不解释来源。",
+        foreshadowingId: "foreshadowing_1",
+        importance: 4,
+        now: 4,
+        projectId: "project_1",
+        seedEventId: "event_seed",
+        seedEventLinkId: "seed_link_1",
+        status: "seeded",
+        title: "信纸水印",
+      });
+
+      expect(createdForeshadowing).toMatchObject({
+        importance: 4,
+        links: [expect.objectContaining({ eventId: "event_seed", role: "seed" })],
+        status: "seeded",
+      });
+
+      const updatedForeshadowing = repository.updateForeshadowing({
+        description: "水印像是普通纸纹，实则是官府档案纸暗纹。",
+        foreshadowingId: "foreshadowing_1",
+        importance: 5,
+        now: 5,
+        payoffEventId: "event_payoff",
+        payoffEventLinkId: "payoff_link_1",
+        payoffExpectation: "第 20 章揭示水印证明档案调包。",
+        projectId: "project_1",
+        status: "payoff_ready",
+        title: "档案纸水印",
+      });
+
+      expect(updatedForeshadowing).toMatchObject({
+        importance: 5,
+        links: expect.arrayContaining([
+          expect.objectContaining({ eventId: "event_seed", role: "seed" }),
+          expect.objectContaining({ eventId: "event_payoff", role: "payoff" }),
+        ]),
+        payoffText: "第 20 章揭示水印证明档案调包。",
+        seedText: "水印像是普通纸纹，实则是官府档案纸暗纹。",
+        status: "payoff_ready",
+        title: "档案纸水印",
+      });
+      expect(repository.listForeshadowings("project_1")).toEqual([
+        expect.objectContaining({ importance: 5, title: "档案纸水印" }),
+      ]);
+      expect(repository.listStoryEvents("project_1")[0]).toMatchObject({
+        storyTime: "第 3 章公堂前",
+        title: "水印来源暴露",
       });
     } finally {
       projectDatabase.close();
