@@ -6,6 +6,7 @@ import {
   type CountPresetValue,
   type ElementTypePresetValue,
 } from "@story-pilot/presets";
+import type { CommandPayload } from "@story-pilot/contracts";
 import {
   Button,
   Checkbox,
@@ -66,11 +67,38 @@ export interface WorldElement {
 }
 
 export interface PlotlineElement {
+  readonly centralQuestion?: string | null;
+  readonly driver?: string | null;
+  readonly emotionalPromise?: string | null;
   readonly id: string;
+  readonly importance?: PlotlineImportanceValue | null;
+  readonly midEscalation?: string | null;
   readonly name: string;
+  readonly narrativeRole?: PlotlineNarrativeRoleValue | null;
+  readonly nodes?: readonly PlotlineNodeElement[];
+  readonly payoffPlan?: string | null;
   readonly priority: number;
+  readonly relatedCharacterIds?: readonly string[];
+  readonly relatedForeshadowingIds?: readonly string[];
+  readonly relatedStoryEventIds?: readonly string[];
+  readonly relatedWorldRuleIds?: readonly string[];
+  readonly startState?: string | null;
+  readonly status?: PlotlineStatusValue | null;
   readonly summary: string | null;
-  readonly type: string;
+  readonly type: PlotlineKindValue;
+}
+
+export interface PlotlineNodeElement {
+  readonly chapterHint?: string | null;
+  readonly description: string | null;
+  readonly id: string;
+  readonly kind: PlotlineNodeKindValue;
+  readonly plotlineId: string;
+  readonly position: number;
+  readonly projectId: string;
+  readonly status: PlotlineNodeStatusValue;
+  readonly targetChapterId: string | null;
+  readonly title: string;
 }
 
 export interface ForeshadowingElement {
@@ -149,12 +177,17 @@ export interface CreateWorldRuleValues {
   readonly title: string;
 }
 
-export interface CreatePlotlineValues {
-  readonly kind: "main" | "branch" | "romance" | "mystery" | "growth" | "world";
-  readonly priority: number;
-  readonly summary?: string;
-  readonly title: string;
-}
+export type PlotlineKindValue = CommandPayload<"plotline.create">["kind"];
+export type PlotlineNarrativeRoleValue = CommandPayload<"plotline.create">["narrativeRole"];
+export type PlotlineImportanceValue = CommandPayload<"plotline.create">["importance"];
+export type PlotlineStatusValue = CommandPayload<"plotline.create">["status"];
+export type PlotlineNodeKindValue = CommandPayload<"plotline.createNode">["kind"];
+export type PlotlineNodeStatusValue = CommandPayload<"plotline.createNode">["status"];
+
+export type CreatePlotlineValues = Omit<CommandPayload<"plotline.create">, "projectId">;
+export type UpdatePlotlineValues = Omit<CommandPayload<"plotline.update">, "projectId">;
+export type CreatePlotlineNodeValues = Omit<CommandPayload<"plotline.createNode">, "projectId">;
+export type UpdatePlotlineNodeValues = Omit<CommandPayload<"plotline.updateNode">, "projectId">;
 
 export interface CreateForeshadowingValues {
   readonly description: string;

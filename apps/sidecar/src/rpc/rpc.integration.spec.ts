@@ -1883,7 +1883,7 @@ describe("RpcService MVP command integration", () => {
           },
         }),
       );
-      await expectRpcOk(
+      const worldRule = await expectRpcOk(
         rpcService.handle({
           command: "worldRule.create",
           id: "world_rule_create",
@@ -1900,11 +1900,61 @@ describe("RpcService MVP command integration", () => {
           command: "plotline.create",
           id: "plotline_create",
           payload: {
+            centralQuestion: "旧信到底是谁寄出的？",
+            driver: "每三章投放一条线索，并用一次误导制造新的问题。",
+            emotionalPromise: "持续解谜、反转和真相逼近。",
+            importance: "core",
             kind: "mystery",
+            narrativeRole: "secret_reveal",
             priority: 5,
             projectId: getString(project, "id"),
+            relatedCharacterIds: [],
+            relatedForeshadowingIds: [],
+            relatedStoryEventIds: [],
+            relatedWorldRuleIds: [getString(worldRule, "id")],
             summary: "围绕旧信来源展开。",
             title: "旧信谜团",
+          },
+        }),
+      );
+      const plotlineList = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.list",
+          id: "plotline_list_for_node",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const plotline = getRecordArray(plotlineList, "items")[0];
+      if (!plotline) {
+        throw new Error("Expected plotline created through RPC");
+      }
+      const updatedPlotline = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.update",
+          id: "plotline_update",
+          payload: {
+            patch: {
+              payoffPlan: "卷末揭示寄信人，同时回收信纸水印伏笔。",
+              status: "active",
+            },
+            plotlineId: getString(plotline, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const plotlineNode = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.createNode",
+          id: "plotline_node_create",
+          payload: {
+            chapterHint: "第 3 章",
+            description: "信纸水印第一次出现，但暂时不解释来源。",
+            kind: "seed",
+            plotlineId: getString(plotline, "id"),
+            position: 1,
+            projectId: getString(project, "id"),
+            status: "planned",
+            title: "信纸水印出现",
           },
         }),
       );
@@ -1932,8 +1982,26 @@ describe("RpcService MVP command integration", () => {
       expect(board).toMatchObject({
         characters: [expect.objectContaining({ name: "林鸢" })],
         foreshadowings: [expect.objectContaining({ title: "水印伏笔" })],
-        plotlines: [expect.objectContaining({ name: "旧信谜团" })],
+        plotlines: [
+          expect.objectContaining({
+            centralQuestion: "旧信到底是谁寄出的？",
+            name: "旧信谜团",
+            nodes: [
+              expect.objectContaining({
+                chapterHint: "第 3 章",
+                id: getString(plotlineNode, "id"),
+                title: "信纸水印出现",
+              }),
+            ],
+            payoffPlan: "卷末揭示寄信人，同时回收信纸水印伏笔。",
+            status: "active",
+          }),
+        ],
         worldRules: [expect.objectContaining({ title: "旧城区治理" })],
+      });
+      expect(updatedPlotline).toMatchObject({
+        payoffPlan: "卷末揭示寄信人，同时回收信纸水印伏笔。",
+        status: "active",
       });
     } finally {
       await moduleRef.close();

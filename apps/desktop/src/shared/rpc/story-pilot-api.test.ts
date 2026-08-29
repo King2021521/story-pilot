@@ -150,9 +150,19 @@ describe("StoryPilotApiClient", () => {
       title: "旧城区治理",
     });
     await api.createPlotline({
+      centralQuestion: "旧信到底是谁寄出的？",
+      driver: "每三章投放一条线索。",
+      emotionalPromise: "持续悬疑和真相逼近。",
+      importance: "core",
       kind: "mystery",
+      narrativeRole: "secret_reveal",
       priority: 5,
       projectId: "project_1",
+      relatedCharacterIds: [],
+      relatedForeshadowingIds: [],
+      relatedStoryEventIds: [],
+      relatedWorldRuleIds: [],
+      status: "planning",
       summary: "围绕旧信来源展开。",
       title: "旧信谜团",
     });

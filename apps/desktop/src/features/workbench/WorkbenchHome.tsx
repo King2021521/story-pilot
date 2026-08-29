@@ -56,13 +56,17 @@ import {
   type CharacterNarrativeFunctionValue,
   type CreateCharacterValues,
   type CreateForeshadowingValues,
+  type CreatePlotlineNodeValues,
   type CreatePlotlineValues,
   type CreateWorldRuleValues,
   type ElementCandidateItem,
   type ForeshadowingElement,
   type GenerateElementCandidatesResult,
   type GenerateElementCandidatesValues,
+  type PlotlineNodeElement,
   type PlotlineElement,
+  type UpdatePlotlineNodeValues,
+  type UpdatePlotlineValues,
   type WorldElement,
   type WorldRuleElement,
 } from "../creative/CreativeElementsPanel";
@@ -171,6 +175,130 @@ const CHARACTER_FORM_DEFAULTS = {
   narrativeFunction: "driver",
   role: "support",
 } satisfies Pick<CreateCharacterValues, "importance" | "narrativeFunction" | "role">;
+
+const PLOTLINE_KIND_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: CreatePlotlineValues["kind"];
+}> = [
+  { label: "支线", value: "branch" },
+  { label: "主线", value: "main" },
+  { label: "悬疑线", value: "mystery" },
+  { label: "成长线", value: "growth" },
+  { label: "感情线", value: "romance" },
+  { label: "反派线", value: "antagonist" },
+  { label: "世界线", value: "world" },
+];
+
+const PLOTLINE_NARRATIVE_ROLE_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: CreatePlotlineValues["narrativeRole"];
+}> = [
+  { label: "主线驱动", value: "main_drive" },
+  { label: "制造阻力", value: "obstacle" },
+  { label: "揭示秘密", value: "secret_reveal" },
+  { label: "关系拉扯", value: "relationship_tension" },
+  { label: "情绪奖励", value: "emotional_reward" },
+  { label: "世界观展开", value: "worldbuilding" },
+  { label: "对照映衬", value: "contrast" },
+  { label: "自定义", value: "custom" },
+];
+
+const PLOTLINE_IMPORTANCE_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: CreatePlotlineValues["importance"];
+}> = [
+  { label: "核心线", value: "core" },
+  { label: "重要线", value: "major" },
+  { label: "辅助线", value: "minor" },
+  { label: "背景线", value: "background" },
+];
+
+const PLOTLINE_STATUS_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: CreatePlotlineValues["status"];
+}> = [
+  { label: "构思中", value: "idea" },
+  { label: "规划中", value: "planning" },
+  { label: "推进中", value: "active" },
+  { label: "已回收", value: "resolved" },
+  { label: "归档", value: "archived" },
+];
+
+const PLOTLINE_NODE_KIND_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: CreatePlotlineNodeValues["kind"];
+}> = [
+  { label: "铺垫", value: "seed" },
+  { label: "推进", value: "advance" },
+  { label: "误导", value: "mislead" },
+  { label: "转折", value: "turn" },
+  { label: "揭示", value: "reveal" },
+  { label: "高潮", value: "climax" },
+  { label: "回收", value: "payoff" },
+];
+
+const PLOTLINE_NODE_STATUS_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: CreatePlotlineNodeValues["status"];
+}> = [
+  { label: "已规划", value: "planned" },
+  { label: "已写入", value: "drafted" },
+  { label: "已使用", value: "used" },
+  { label: "已回收", value: "resolved" },
+  { label: "裁剪", value: "cut" },
+];
+
+const PLOTLINE_KIND_LABELS = Object.fromEntries(
+  PLOTLINE_KIND_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<CreatePlotlineValues["kind"], string>;
+
+const PLOTLINE_NARRATIVE_ROLE_LABELS = Object.fromEntries(
+  PLOTLINE_NARRATIVE_ROLE_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<CreatePlotlineValues["narrativeRole"], string>;
+
+const PLOTLINE_IMPORTANCE_LABELS = Object.fromEntries(
+  PLOTLINE_IMPORTANCE_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<CreatePlotlineValues["importance"], string>;
+
+const PLOTLINE_STATUS_LABELS = Object.fromEntries(
+  PLOTLINE_STATUS_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<CreatePlotlineValues["status"], string>;
+
+const PLOTLINE_NODE_KIND_LABELS = Object.fromEntries(
+  PLOTLINE_NODE_KIND_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<CreatePlotlineNodeValues["kind"], string>;
+
+const PLOTLINE_NODE_STATUS_LABELS = Object.fromEntries(
+  PLOTLINE_NODE_STATUS_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<CreatePlotlineNodeValues["status"], string>;
+
+const PLOTLINE_FORM_DEFAULTS = {
+  importance: "major",
+  kind: "branch",
+  narrativeRole: "main_drive",
+  priority: 0,
+  relatedCharacterIds: [],
+  relatedForeshadowingIds: [],
+  relatedStoryEventIds: [],
+  relatedWorldRuleIds: [],
+  status: "planning",
+} satisfies Pick<
+  CreatePlotlineValues,
+  | "importance"
+  | "kind"
+  | "narrativeRole"
+  | "priority"
+  | "relatedCharacterIds"
+  | "relatedForeshadowingIds"
+  | "relatedStoryEventIds"
+  | "relatedWorldRuleIds"
+  | "status"
+>;
+
+const PLOTLINE_NODE_FORM_DEFAULTS = {
+  kind: "seed",
+  status: "planned",
+} satisfies Pick<CreatePlotlineNodeValues, "kind" | "status">;
 
 const WORLD_DIMENSIONS = [
   {
@@ -450,6 +578,7 @@ export interface WorkbenchHomeProps {
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
+  onCreatePlotlineNode(input: CreatePlotlineNodeValues): Promise<void> | void;
   onCreateStoryEvent(input: CreateStoryEventValues): Promise<void> | void;
   onCreateWorldRule(input: CreateWorldRuleValues): Promise<void> | void;
   onCompleteCoreStoryFields(input: {
@@ -495,6 +624,8 @@ export interface WorkbenchHomeProps {
   }): Promise<void> | void;
   onSaveBrief(input: SaveBriefValues): Promise<void> | void;
   onUpdateCharacter(input: UpdateCharacterValues): Promise<void> | void;
+  onUpdatePlotline(input: UpdatePlotlineValues): Promise<void> | void;
+  onUpdatePlotlineNode(input: UpdatePlotlineNodeValues): Promise<void> | void;
   onSkipStage(input: {
     readonly stageKey: CreativeStageKey;
     readonly reason: string;
@@ -528,6 +659,7 @@ export function WorkbenchHome({
   onCreateCharacter,
   onCreateForeshadowing,
   onCreatePlotline,
+  onCreatePlotlineNode,
   onCreateStoryEvent,
   onCreateWorldRule,
   onCompleteCoreStoryFields,
@@ -549,6 +681,8 @@ export function WorkbenchHome({
   onSaveWorldbuildingFields,
   onSelectChapter,
   onUpdateCharacter,
+  onUpdatePlotline,
+  onUpdatePlotlineNode,
   savingChapter = false,
   selectedChapterId,
 }: WorkbenchHomeProps) {
@@ -593,6 +727,7 @@ export function WorkbenchHome({
           onCreateCharacter,
           onCreateForeshadowing,
           onCreatePlotline,
+          onCreatePlotlineNode,
           onCreateStoryEvent,
           onCreateWorldRule,
           onCompleteCoreStoryFields,
@@ -614,6 +749,8 @@ export function WorkbenchHome({
           onSaveWorldbuildingFields,
           onSelectChapter,
           onUpdateCharacter,
+          onUpdatePlotline,
+          onUpdatePlotlineNode,
           savingChapter,
           selectedChapter,
         })}
@@ -649,6 +786,7 @@ function renderModule(input: {
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
+  onCreatePlotlineNode(input: CreatePlotlineNodeValues): Promise<void> | void;
   onCreateStoryEvent(input: CreateStoryEventValues): Promise<void> | void;
   onCreateWorldRule(input: CreateWorldRuleValues): Promise<void> | void;
   onCompleteCoreStoryFields(input: {
@@ -693,6 +831,8 @@ function renderModule(input: {
   onSaveWorldbuildingFields(input: { readonly fields: WorldbuildingFields }): Promise<void> | void;
   onSelectChapter(chapterId: string): void;
   onUpdateCharacter(input: UpdateCharacterValues): Promise<void> | void;
+  onUpdatePlotline(input: UpdatePlotlineValues): Promise<void> | void;
+  onUpdatePlotlineNode(input: UpdatePlotlineNodeValues): Promise<void> | void;
 }) {
   switch (input.activeModuleKey) {
     case "basic":
@@ -739,7 +879,14 @@ function renderModule(input: {
         <StorylinesModule
           onAdvanceStage={input.onAdvanceStage}
           onCreatePlotline={input.onCreatePlotline}
+          onCreatePlotlineNode={input.onCreatePlotlineNode}
+          onUpdatePlotline={input.onUpdatePlotline}
+          onUpdatePlotlineNode={input.onUpdatePlotlineNode}
           plotlines={input.board.plotlines ?? []}
+          characters={input.board.characters ?? []}
+          foreshadowings={input.board.foreshadowings ?? []}
+          storyEvents={input.board.storyEvents ?? []}
+          worldRules={input.board.worldRules ?? []}
         />
       );
     case "book-outline":
@@ -1793,107 +1940,524 @@ function CharactersModule({
 }
 
 function StorylinesModule({
+  characters,
+  foreshadowings,
   onAdvanceStage,
   onCreatePlotline,
+  onCreatePlotlineNode,
+  onUpdatePlotline,
+  onUpdatePlotlineNode,
   plotlines,
+  storyEvents,
+  worldRules,
 }: {
+  readonly characters: readonly CharacterElement[];
+  readonly foreshadowings: readonly ForeshadowingElement[];
   readonly plotlines: readonly PlotlineElement[];
+  readonly storyEvents: readonly StoryEventElement[];
+  readonly worldRules: readonly WorldRuleElement[];
   onAdvanceStage(input: {
     readonly stageKey: CreativeStageKey;
     readonly mode: "strict" | "force";
   }): Promise<void> | void;
+  onCreatePlotlineNode(input: CreatePlotlineNodeValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
+  onUpdatePlotline(input: UpdatePlotlineValues): Promise<void> | void;
+  onUpdatePlotlineNode(input: UpdatePlotlineNodeValues): Promise<void> | void;
 }) {
-  const [form] = Form.useForm<CreatePlotlineValues>();
+  const [plotlineForm] = Form.useForm<CreatePlotlineValues>();
+  const [nodeForm] = Form.useForm<Omit<CreatePlotlineNodeValues, "plotlineId">>();
+  const [selectedPlotlineId, setSelectedPlotlineId] = useState<string | null>(
+    () => plotlines[0]?.id ?? null,
+  );
+  const selectedPlotline =
+    selectedPlotlineId === null
+      ? null
+      : (plotlines.find((plotline) => plotline.id === selectedPlotlineId) ?? null);
+  const isEditingPlotline = selectedPlotline !== null;
+  const selectedPlotlineNodes = selectedPlotline?.nodes ?? [];
+  const characterOptions = useMemo(
+    () => characters.map((character) => ({ label: character.name, value: character.id })),
+    [characters],
+  );
+  const worldRuleOptions = useMemo(
+    () => worldRules.map((rule) => ({ label: rule.title, value: rule.id })),
+    [worldRules],
+  );
+  const foreshadowingOptions = useMemo(
+    () =>
+      foreshadowings.map((foreshadowing) => ({
+        label: foreshadowing.title,
+        value: foreshadowing.id,
+      })),
+    [foreshadowings],
+  );
+  const storyEventOptions = useMemo(
+    () => storyEvents.map((event) => ({ label: event.title, value: event.id })),
+    [storyEvents],
+  );
+
+  useEffect(() => {
+    if (selectedPlotline) {
+      plotlineForm.setFieldsValue(plotlineToFormValues(selectedPlotline));
+      return;
+    }
+
+    plotlineForm.resetFields();
+    plotlineForm.setFieldsValue(PLOTLINE_FORM_DEFAULTS);
+  }, [plotlineForm, selectedPlotline]);
+
+  useEffect(() => {
+    nodeForm.resetFields();
+    nodeForm.setFieldsValue(PLOTLINE_NODE_FORM_DEFAULTS);
+  }, [nodeForm, selectedPlotlineId]);
+
+  const resetPlotlineForm = () => {
+    setSelectedPlotlineId(null);
+    plotlineForm.resetFields();
+    plotlineForm.setFieldsValue(PLOTLINE_FORM_DEFAULTS);
+  };
 
   return (
     <div className="module-stack">
       <ModuleHeader eyebrow="5 / 9" title="故事线设计" />
-      <ModuleSection title="新增故事线">
-        <Form
-          form={form}
-          initialValues={{ kind: "branch", priority: 0 }}
-          layout="vertical"
-          onFinish={async (values) => {
-            const summary = values.summary?.trim();
+      <div className="storyline-design-workspace">
+        <div className="storyline-design-primary">
+          <section
+            aria-label="故事线列表面板"
+            className="storyline-design-pane storyline-design-list"
+          >
+            <header className="storyline-design-pane__header">
+              <Title level={5}>故事线列表</Title>
+              <Text type="secondary">{plotlines.length} 条线</Text>
+            </header>
+            <StorylineRoster
+              plotlines={plotlines}
+              selectedPlotlineId={selectedPlotlineId}
+              onSelectPlotline={setSelectedPlotlineId}
+            />
+          </section>
 
-            await onCreatePlotline({
-              kind: values.kind,
-              priority: values.priority,
-              title: values.title.trim(),
-              ...(summary ? { summary } : {}),
-            });
-            form.resetFields();
-            form.setFieldsValue({ kind: "branch", priority: 0 });
-          }}
-        >
-          <Row gutter={[14, 0]}>
-            <Col lg={8} xs={24}>
-              <Form.Item
-                label="故事线标题"
-                name="title"
-                rules={[{ required: true, message: "请输入故事线标题" }]}
-              >
-                <Input aria-label="故事线标题" />
-              </Form.Item>
-            </Col>
-            <Col lg={8} xs={24}>
-              <Form.Item label="故事线类型" name="kind">
-                <Select
-                  aria-label="故事线类型"
-                  options={[
-                    { label: "主线", value: "main" },
-                    { label: "支线", value: "branch" },
-                    { label: "悬疑", value: "mystery" },
-                    { label: "成长", value: "growth" },
-                    { label: "感情", value: "romance" },
-                    { label: "世界线", value: "world" },
+          <section
+            aria-label="故事线档案表单"
+            className="storyline-design-pane storyline-design-form"
+          >
+            <header className="storyline-design-pane__header">
+              <Title level={5}>故事线档案</Title>
+              <Text type="secondary">先确定追问、阻力、情绪承诺和回收方式，再落到章节节点。</Text>
+            </header>
+            <Form
+              form={plotlineForm}
+              initialValues={PLOTLINE_FORM_DEFAULTS}
+              layout="vertical"
+              name="storylineProfileForm"
+              onFinish={async (values) => {
+                const normalizedValues = normalizePlotlineValues(values);
+                if (isEditingPlotline) {
+                  await onUpdatePlotline({
+                    patch: normalizedValues,
+                    plotlineId: selectedPlotline.id,
+                  });
+                  return;
+                }
+
+                await onCreatePlotline(normalizedValues);
+                resetPlotlineForm();
+              }}
+            >
+              <div className="storyline-form-grid">
+                <Form.Item
+                  label={characterFieldLabel(
+                    "故事线名称",
+                    "用短名称帮助作者和 AI 识别这条线，例如旧信谜团、师徒裂痕、王都夺权。",
+                  )}
+                  name="title"
+                  rules={[
+                    { required: true, message: "请输入故事线名称" },
+                    { max: 80, message: "故事线名称最多 80 字" },
                   ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col lg={8} xs={24}>
-              <Form.Item label="优先级" name="priority">
-                <InputNumber aria-label="故事线优先级" min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item label="故事线摘要" name="summary">
-                <Input.TextArea aria-label="故事线摘要" autoSize={{ maxRows: 4, minRows: 2 }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Space wrap>
-            <Button
-              aria-label="创建故事线"
-              htmlType="submit"
-              icon={<PlusOutlined />}
-              type="primary"
-            >
-              创建故事线
-            </Button>
-            <Button
-              aria-label="完成故事线设计"
-              icon={<CheckCircleOutlined />}
-              onClick={() => onAdvanceStage({ mode: "strict", stageKey: "plot_arcs" })}
-            >
-              完成故事线设计
-            </Button>
-          </Space>
-        </Form>
-      </ModuleSection>
-      <ModuleSection title="故事线列表">
-        <CompactList
-          emptyText="暂无故事线"
-          items={plotlines.map((plotline) => ({
-            description: plotline.summary ?? undefined,
-            id: plotline.id,
-            label: plotline.name,
-            tags: [plotline.type, `P${plotline.priority}`],
-          }))}
-        />
-      </ModuleSection>
+                >
+                  <Input aria-label="故事线名称" placeholder="如：旧信谜团" />
+                </Form.Item>
+                <Form.Item label="故事线类型" name="kind">
+                  <Select aria-label="故事线类型" options={[...PLOTLINE_KIND_OPTIONS]} />
+                </Form.Item>
+                <Form.Item label="叙事作用" name="narrativeRole">
+                  <Select aria-label="叙事作用" options={[...PLOTLINE_NARRATIVE_ROLE_OPTIONS]} />
+                </Form.Item>
+                <Form.Item label="重要程度" name="importance">
+                  <Select aria-label="重要程度" options={[...PLOTLINE_IMPORTANCE_OPTIONS]} />
+                </Form.Item>
+                <Form.Item label="状态" name="status">
+                  <Select aria-label="状态" options={[...PLOTLINE_STATUS_OPTIONS]} />
+                </Form.Item>
+                <Form.Item label="排序权重" name="priority">
+                  <InputNumber aria-label="排序权重" min={0} style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item
+                  className="storyline-form-grid__wide"
+                  label={characterFieldLabel(
+                    "故事线摘要",
+                    "一句话说明这条线的范围，不需要写成完整大纲。",
+                  )}
+                  name="summary"
+                  rules={[{ max: 500, message: "故事线摘要最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="故事线摘要"
+                    autoSize={{ maxRows: 5, minRows: 3 }}
+                    maxLength={500}
+                    placeholder="如：围绕旧信来源展开的调查线。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "核心问题",
+                    "读者会持续追问的问题。悬疑线是谜面，成长线是人物能否改变，权谋线是谁会赢。",
+                  )}
+                  name="centralQuestion"
+                  rules={[{ max: 500, message: "核心问题最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="核心问题"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：旧信到底是谁寄出的？"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "推进机制",
+                    "这条线靠什么持续前进：线索投放、目标受阻、关系变化、资源争夺或规则升级。",
+                  )}
+                  name="driver"
+                  rules={[{ max: 500, message: "推进机制最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="推进机制"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：每三章投放一条可验证线索，并用一次误导制造新的问题。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "起点状态",
+                    "这条线开始时，人物知道什么、不知道什么，局面停在哪个不稳定状态。",
+                  )}
+                  name="startState"
+                  rules={[{ max: 500, message: "起点状态最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="起点状态"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：主角只知道旧信存在，不知道背后牵连旧案。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "中段升级",
+                    "中段必须扩大的阻力或信息量，避免故事线停留在同一种重复事件里。",
+                  )}
+                  name="midEscalation"
+                  rules={[{ max: 500, message: "中段升级最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="中段升级"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：线索从旧信转向档案伪造和证人追杀。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "回收方式",
+                    "说明这条线最终如何兑现：揭示真相、改变关系、造成代价或打开更大矛盾。",
+                  )}
+                  name="payoffPlan"
+                  rules={[{ max: 500, message: "回收方式最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="回收方式"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：卷末揭示寄信人身份，并回收信纸水印伏笔。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  className="storyline-form-grid__wide"
+                  label={characterFieldLabel(
+                    "情绪承诺",
+                    "这条线给读者的追读奖励，例如解谜、反转、甜虐、热血、压迫感或成长满足。",
+                  )}
+                  name="emotionalPromise"
+                  rules={[{ max: 500, message: "情绪承诺最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="情绪承诺"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：持续解谜、反转和真相逼近。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item label="关联角色" name="relatedCharacterIds">
+                  <Select
+                    allowClear
+                    aria-label="关联角色"
+                    mode="multiple"
+                    options={characterOptions}
+                    placeholder="选择和这条线强相关的人物"
+                  />
+                </Form.Item>
+                <Form.Item label="关联世界观" name="relatedWorldRuleIds">
+                  <Select
+                    allowClear
+                    aria-label="关联世界观"
+                    mode="multiple"
+                    options={worldRuleOptions}
+                    placeholder="选择支撑这条线的规则"
+                  />
+                </Form.Item>
+                <Form.Item label="关联伏笔" name="relatedForeshadowingIds">
+                  <Select
+                    allowClear
+                    aria-label="关联伏笔"
+                    mode="multiple"
+                    options={foreshadowingOptions}
+                    placeholder="选择要投放或回收的伏笔"
+                  />
+                </Form.Item>
+                <Form.Item label="关联剧情节点" name="relatedStoryEventIds">
+                  <Select
+                    allowClear
+                    aria-label="关联剧情节点"
+                    mode="multiple"
+                    options={storyEventOptions}
+                    placeholder="选择已经存在的关键事件"
+                  />
+                </Form.Item>
+              </div>
+              <Space className="storyline-form-actions" wrap>
+                <Button
+                  aria-label={isEditingPlotline ? "保存修改" : "创建故事线"}
+                  htmlType="submit"
+                  icon={isEditingPlotline ? <SaveOutlined /> : <PlusOutlined />}
+                  type="primary"
+                >
+                  {isEditingPlotline ? "保存修改" : "创建故事线"}
+                </Button>
+                {isEditingPlotline ? (
+                  <Button aria-label="新建故事线" onClick={resetPlotlineForm}>
+                    新建故事线
+                  </Button>
+                ) : null}
+                <Button
+                  aria-label="完成故事线设计"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => onAdvanceStage({ mode: "strict", stageKey: "plot_arcs" })}
+                >
+                  完成故事线设计
+                </Button>
+              </Space>
+            </Form>
+          </section>
+        </div>
+
+        <section aria-label="故事线节点编排" className="storyline-design-pane storyline-node-panel">
+          <header className="storyline-design-pane__header">
+            <Title level={5}>节点编排</Title>
+            <Text type="secondary">
+              {selectedPlotline ? `正在编辑：${selectedPlotline.name}` : "先选择或创建一条故事线"}
+            </Text>
+          </header>
+          {selectedPlotline ? (
+            <>
+              <Form
+                form={nodeForm}
+                initialValues={PLOTLINE_NODE_FORM_DEFAULTS}
+                layout="vertical"
+                name="storylineNodeForm"
+                onFinish={async (values) => {
+                  await onCreatePlotlineNode(
+                    normalizePlotlineNodeValues(values, selectedPlotline.id),
+                  );
+                  nodeForm.resetFields();
+                  nodeForm.setFieldsValue(PLOTLINE_NODE_FORM_DEFAULTS);
+                }}
+              >
+                <div className="storyline-node-form-grid">
+                  <Form.Item
+                    label={characterFieldLabel(
+                      "节点标题",
+                      "写清这一步对故事线的作用，例如水印出现、证人翻供、反派反将一军。",
+                    )}
+                    name="title"
+                    rules={[
+                      { required: true, message: "请输入节点标题" },
+                      { max: 80, message: "节点标题最多 80 字" },
+                    ]}
+                  >
+                    <Input aria-label="节点标题" placeholder="如：信纸水印出现" />
+                  </Form.Item>
+                  <Form.Item label="节点类型" name="kind">
+                    <Select aria-label="节点类型" options={[...PLOTLINE_NODE_KIND_OPTIONS]} />
+                  </Form.Item>
+                  <Form.Item label="节点状态" name="status">
+                    <Select aria-label="节点状态" options={[...PLOTLINE_NODE_STATUS_OPTIONS]} />
+                  </Form.Item>
+                  <Form.Item
+                    label={characterFieldLabel(
+                      "章节提示",
+                      "先写预计章节、卷名或阶段，用来帮助后续章节规划承接这条线。",
+                    )}
+                    name="chapterHint"
+                    rules={[{ max: 80, message: "章节提示最多 80 字" }]}
+                  >
+                    <Input aria-label="章节提示" placeholder="如：第 3 章" />
+                  </Form.Item>
+                  <Form.Item
+                    className="storyline-node-form-grid__wide"
+                    label={characterFieldLabel(
+                      "节点说明",
+                      "说明该节点带来的信息增量、人物选择、阻力变化或伏笔回收。",
+                    )}
+                    name="description"
+                    rules={[{ max: 500, message: "节点说明最多 500 字" }]}
+                  >
+                    <Input.TextArea
+                      aria-label="节点说明"
+                      autoSize={{ maxRows: 4, minRows: 2 }}
+                      maxLength={500}
+                      placeholder="如：让读者看到信纸水印，但暂时不解释来源。"
+                      showCount
+                    />
+                  </Form.Item>
+                </div>
+                <Button
+                  aria-label="添加节点"
+                  htmlType="submit"
+                  icon={<PlusOutlined />}
+                  type="primary"
+                >
+                  添加节点
+                </Button>
+              </Form>
+              <StorylineNodeList
+                nodes={selectedPlotlineNodes}
+                onResolveNode={(nodeId) =>
+                  onUpdatePlotlineNode({
+                    patch: { status: "resolved" },
+                    plotlineNodeId: nodeId,
+                  })
+                }
+              />
+            </>
+          ) : (
+            <Empty description="暂无可编排的故事线" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </section>
+      </div>
     </div>
+  );
+}
+
+function StorylineRoster({
+  onSelectPlotline,
+  plotlines,
+  selectedPlotlineId,
+}: {
+  readonly plotlines: readonly PlotlineElement[];
+  readonly selectedPlotlineId: string | null;
+  onSelectPlotline(plotlineId: string): void;
+}) {
+  if (plotlines.length === 0) {
+    return <Empty description="暂无故事线" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <ul className="storyline-roster">
+      {plotlines.map((plotline) => (
+        <li key={plotline.id}>
+          <button
+            aria-label={`编辑故事线 ${plotline.name}`}
+            className={`storyline-roster__item${
+              selectedPlotlineId === plotline.id ? " storyline-roster__item--selected" : ""
+            }`}
+            onClick={() => onSelectPlotline(plotline.id)}
+            type="button"
+          >
+            <span className="storyline-roster__title-row">
+              <strong>{plotline.name}</strong>
+              <span>{plotline.nodes?.length ?? 0} 节点</span>
+            </span>
+            <Space size={[6, 4]} wrap>
+              <Tag>{getPlotlineKindLabel(plotline.type)}</Tag>
+              <Tag>{getPlotlineNarrativeRoleLabel(plotline.narrativeRole)}</Tag>
+              <Tag>{getPlotlineImportanceLabel(plotline.importance)}</Tag>
+              <Tag>{getPlotlineStatusLabel(plotline.status)}</Tag>
+            </Space>
+            {plotline.centralQuestion ? (
+              <Text type="secondary">{plotline.centralQuestion}</Text>
+            ) : plotline.summary ? (
+              <Text type="secondary">{plotline.summary}</Text>
+            ) : null}
+            <span
+              aria-label={`${plotline.name} 完成度 ${getPlotlineCompletionScore(plotline)}%`}
+              className="storyline-roster__progress"
+            >
+              <span style={{ width: `${getPlotlineCompletionScore(plotline)}%` }} />
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function StorylineNodeList({
+  nodes,
+  onResolveNode,
+}: {
+  readonly nodes: readonly PlotlineNodeElement[];
+  onResolveNode(nodeId: string): Promise<void> | void;
+}) {
+  if (nodes.length === 0) {
+    return <Empty description="暂无节点" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <ul className="storyline-node-list">
+      {nodes.map((node) => (
+        <li className="storyline-node-list__item" key={node.id}>
+          <div className="storyline-node-list__main">
+            <span className="storyline-node-list__title-row">
+              <strong>{node.title}</strong>
+              {node.chapterHint ? <Text type="secondary">{node.chapterHint}</Text> : null}
+            </span>
+            <Space size={[6, 4]} wrap>
+              <Tag>{getPlotlineNodeKindLabel(node.kind)}</Tag>
+              <Tag>{getPlotlineNodeStatusLabel(node.status)}</Tag>
+            </Space>
+            {node.description ? <Text type="secondary">{node.description}</Text> : null}
+          </div>
+          <Button
+            aria-label={`标记节点已回收 ${node.title}`}
+            disabled={node.status === "resolved"}
+            onClick={() => onResolveNode(node.id)}
+          >
+            标记回收
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -2761,6 +3325,149 @@ function characterFieldLabel(title: string, help: string): ReactNode {
       </Tooltip>
     </span>
   );
+}
+
+function plotlineToFormValues(plotline: PlotlineElement): CreatePlotlineValues {
+  return {
+    centralQuestion: plotline.centralQuestion ?? "",
+    driver: plotline.driver ?? "",
+    emotionalPromise: plotline.emotionalPromise ?? "",
+    importance: getPlotlineImportanceValue(plotline.importance),
+    kind: getPlotlineKindValue(plotline.type),
+    midEscalation: plotline.midEscalation ?? "",
+    narrativeRole: getPlotlineNarrativeRoleValue(plotline.narrativeRole),
+    payoffPlan: plotline.payoffPlan ?? "",
+    priority: plotline.priority,
+    relatedCharacterIds: [...(plotline.relatedCharacterIds ?? [])],
+    relatedForeshadowingIds: [...(plotline.relatedForeshadowingIds ?? [])],
+    relatedStoryEventIds: [...(plotline.relatedStoryEventIds ?? [])],
+    relatedWorldRuleIds: [...(plotline.relatedWorldRuleIds ?? [])],
+    startState: plotline.startState ?? "",
+    status: getPlotlineStatusValue(plotline.status),
+    summary: plotline.summary ?? "",
+    title: plotline.name,
+  };
+}
+
+function normalizePlotlineValues(values: CreatePlotlineValues): CreatePlotlineValues {
+  return {
+    centralQuestion: trimOptionalText(values.centralQuestion) ?? "",
+    driver: trimOptionalText(values.driver) ?? "",
+    emotionalPromise: trimOptionalText(values.emotionalPromise) ?? "",
+    importance: getPlotlineImportanceValue(values.importance),
+    kind: getPlotlineKindValue(values.kind),
+    midEscalation: trimOptionalText(values.midEscalation) ?? "",
+    narrativeRole: getPlotlineNarrativeRoleValue(values.narrativeRole),
+    payoffPlan: trimOptionalText(values.payoffPlan) ?? "",
+    priority:
+      typeof values.priority === "number" && Number.isFinite(values.priority) ? values.priority : 0,
+    relatedCharacterIds: normalizeStringList(values.relatedCharacterIds),
+    relatedForeshadowingIds: normalizeStringList(values.relatedForeshadowingIds),
+    relatedStoryEventIds: normalizeStringList(values.relatedStoryEventIds),
+    relatedWorldRuleIds: normalizeStringList(values.relatedWorldRuleIds),
+    startState: trimOptionalText(values.startState) ?? "",
+    status: getPlotlineStatusValue(values.status),
+    summary: trimOptionalText(values.summary) ?? "",
+    title: values.title.trim(),
+  };
+}
+
+function normalizePlotlineNodeValues(
+  values: Omit<CreatePlotlineNodeValues, "plotlineId">,
+  plotlineId: string,
+): CreatePlotlineNodeValues {
+  return {
+    chapterHint: trimOptionalText(values.chapterHint) ?? "",
+    description: trimOptionalText(values.description) ?? "",
+    kind: getPlotlineNodeKindValue(values.kind),
+    plotlineId,
+    status: getPlotlineNodeStatusValue(values.status),
+    title: values.title.trim(),
+  };
+}
+
+function getPlotlineCompletionScore(plotline: PlotlineElement): number {
+  const fields = [
+    plotline.name,
+    plotline.summary,
+    plotline.centralQuestion,
+    plotline.driver,
+    plotline.startState,
+    plotline.midEscalation,
+    plotline.payoffPlan,
+    plotline.emotionalPromise,
+  ];
+  const filledCount = fields.filter((field) => field?.trim()).length;
+  return Math.round((filledCount / fields.length) * 100);
+}
+
+function getPlotlineKindLabel(value: string | null | undefined): string {
+  return PLOTLINE_KIND_LABELS[getPlotlineKindValue(value)];
+}
+
+function getPlotlineNarrativeRoleLabel(value: string | null | undefined): string {
+  return PLOTLINE_NARRATIVE_ROLE_LABELS[getPlotlineNarrativeRoleValue(value)];
+}
+
+function getPlotlineImportanceLabel(value: string | null | undefined): string {
+  return PLOTLINE_IMPORTANCE_LABELS[getPlotlineImportanceValue(value)];
+}
+
+function getPlotlineStatusLabel(value: string | null | undefined): string {
+  return PLOTLINE_STATUS_LABELS[getPlotlineStatusValue(value)];
+}
+
+function getPlotlineNodeKindLabel(value: string | null | undefined): string {
+  return PLOTLINE_NODE_KIND_LABELS[getPlotlineNodeKindValue(value)];
+}
+
+function getPlotlineNodeStatusLabel(value: string | null | undefined): string {
+  return PLOTLINE_NODE_STATUS_LABELS[getPlotlineNodeStatusValue(value)];
+}
+
+function getPlotlineKindValue(value: string | null | undefined): CreatePlotlineValues["kind"] {
+  return isKeyOf(PLOTLINE_KIND_LABELS, value) ? value : PLOTLINE_FORM_DEFAULTS.kind;
+}
+
+function getPlotlineNarrativeRoleValue(
+  value: string | null | undefined,
+): CreatePlotlineValues["narrativeRole"] {
+  return isKeyOf(PLOTLINE_NARRATIVE_ROLE_LABELS, value)
+    ? value
+    : PLOTLINE_FORM_DEFAULTS.narrativeRole;
+}
+
+function getPlotlineImportanceValue(
+  value: string | null | undefined,
+): CreatePlotlineValues["importance"] {
+  return isKeyOf(PLOTLINE_IMPORTANCE_LABELS, value) ? value : PLOTLINE_FORM_DEFAULTS.importance;
+}
+
+function getPlotlineStatusValue(value: string | null | undefined): CreatePlotlineValues["status"] {
+  return isKeyOf(PLOTLINE_STATUS_LABELS, value) ? value : PLOTLINE_FORM_DEFAULTS.status;
+}
+
+function getPlotlineNodeKindValue(
+  value: string | null | undefined,
+): CreatePlotlineNodeValues["kind"] {
+  return isKeyOf(PLOTLINE_NODE_KIND_LABELS, value) ? value : PLOTLINE_NODE_FORM_DEFAULTS.kind;
+}
+
+function getPlotlineNodeStatusValue(
+  value: string | null | undefined,
+): CreatePlotlineNodeValues["status"] {
+  return isKeyOf(PLOTLINE_NODE_STATUS_LABELS, value) ? value : PLOTLINE_NODE_FORM_DEFAULTS.status;
+}
+
+function normalizeStringList(value: readonly string[] | undefined): string[] {
+  return Array.from(new Set((value ?? []).map((item) => item.trim()).filter(Boolean)));
+}
+
+function isKeyOf<T extends Record<string, unknown>>(
+  record: T,
+  value: string | null | undefined,
+): value is Extract<keyof T, string> {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(record, value);
 }
 
 function normalizeCharacterValues(values: CreateCharacterValues): CreateCharacterValues {

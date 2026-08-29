@@ -593,6 +593,66 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const updatePlotline = useCallback(
+    async (input: Omit<CommandPayload<"plotline.update">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updatePlotline({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const createPlotlineNode = useCallback(
+    async (input: Omit<CommandPayload<"plotline.createNode">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createPlotlineNode({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线节点已添加");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const updatePlotlineNode = useCallback(
+    async (input: Omit<CommandPayload<"plotline.updateNode">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updatePlotlineNode({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线节点已更新");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const createForeshadowing = useCallback(
     async (input: Omit<CommandPayload<"foreshadowing.create">, "projectId">) => {
       if (!activeProject) {
@@ -1240,6 +1300,7 @@ export function ShellLayout() {
           onCreateCharacter={createCharacter}
           onCreateForeshadowing={createForeshadowing}
           onCreatePlotline={createPlotline}
+          onCreatePlotlineNode={createPlotlineNode}
           onCreateStoryEvent={createStoryEvent}
           onCreateWorldRule={createWorldRule}
           onEvaluateStageGate={evaluateStageGate}
@@ -1262,6 +1323,8 @@ export function ShellLayout() {
           onSelectChapter={selectChapter}
           onSkipStage={skipStage}
           onUpdateCharacter={updateCharacter}
+          onUpdatePlotline={updatePlotline}
+          onUpdatePlotlineNode={updatePlotlineNode}
           savingChapter={savingChapter}
           selectedChapterId={selectedChapterId}
         />

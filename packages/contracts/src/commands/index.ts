@@ -71,6 +71,8 @@ export const MVP_COMMAND_NAMES = [
   "worldbuilding.completeFields",
   "plotline.list",
   "plotline.create",
+  "plotline.update",
+  "plotline.createNode",
   "plotline.updateNode",
   "storyEvent.list",
   "storyEvent.create",

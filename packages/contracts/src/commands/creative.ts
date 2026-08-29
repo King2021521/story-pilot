@@ -71,6 +71,40 @@ const characterNarrativeFunctionSchema = z
   ])
   .default("driver");
 
+const plotlineKindSchema = z
+  .enum(["main", "branch", "romance", "mystery", "growth", "world", "antagonist"])
+  .default("branch");
+
+const plotlineNarrativeRoleSchema = z
+  .enum([
+    "main_drive",
+    "obstacle",
+    "secret_reveal",
+    "relationship_tension",
+    "emotional_reward",
+    "worldbuilding",
+    "contrast",
+    "custom",
+  ])
+  .default("main_drive");
+
+const plotlineImportanceSchema = z.enum(["core", "major", "minor", "background"]).default("major");
+
+const plotlineStatusSchema = z
+  .enum(["idea", "planning", "active", "resolved", "archived"])
+  .default("planning");
+
+const plotlineNodeKindSchema = z
+  .enum(["seed", "advance", "mislead", "turn", "reveal", "climax", "payoff"])
+  .default("advance");
+
+const plotlineNodeStatusSchema = z
+  .enum(["planned", "drafted", "used", "resolved", "cut"])
+  .default("planned");
+
+const plotlineTextFieldSchema = z.string().max(500).optional();
+const plotlineRelationIdsSchema = z.array(z.string().min(1)).default([]);
+
 const coreStoryFieldsSchema = z.object({
   antagonistForce: coreStoryTextFieldSchema,
   corePromise: coreStoryTextFieldSchema,
@@ -253,9 +287,36 @@ export const creativeCommandSchemas = {
   "plotline.list": projectIdPayloadSchema,
   "plotline.create": projectIdPayloadSchema.extend({
     title: z.string().min(1),
-    kind: z.enum(["main", "branch", "romance", "mystery", "growth", "world"]).default("branch"),
-    summary: z.string().optional(),
+    kind: plotlineKindSchema,
+    narrativeRole: plotlineNarrativeRoleSchema,
+    importance: plotlineImportanceSchema,
+    status: plotlineStatusSchema,
+    centralQuestion: plotlineTextFieldSchema,
+    driver: plotlineTextFieldSchema,
+    startState: plotlineTextFieldSchema,
+    midEscalation: plotlineTextFieldSchema,
+    payoffPlan: plotlineTextFieldSchema,
+    emotionalPromise: plotlineTextFieldSchema,
+    relatedCharacterIds: plotlineRelationIdsSchema,
+    relatedWorldRuleIds: plotlineRelationIdsSchema,
+    relatedForeshadowingIds: plotlineRelationIdsSchema,
+    relatedStoryEventIds: plotlineRelationIdsSchema,
+    summary: z.string().max(500).optional(),
     priority: z.number().int().nonnegative().default(0),
+  }),
+  "plotline.update": projectIdPayloadSchema.extend({
+    plotlineId: z.string().min(1),
+    patch: z.record(z.string(), z.unknown()),
+  }),
+  "plotline.createNode": projectIdPayloadSchema.extend({
+    plotlineId: z.string().min(1),
+    title: z.string().min(1),
+    kind: plotlineNodeKindSchema,
+    status: plotlineNodeStatusSchema,
+    description: plotlineTextFieldSchema,
+    chapterHint: z.string().max(80).optional(),
+    targetChapterId: z.string().min(1).optional(),
+    position: z.number().int().nonnegative().optional(),
   }),
   "plotline.updateNode": projectIdPayloadSchema.extend({
     plotlineNodeId: z.string().min(1),

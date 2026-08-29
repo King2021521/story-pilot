@@ -67,6 +67,8 @@ describe("command registry", () => {
       "worldbuilding.completeFields",
       "plotline.list",
       "plotline.create",
+      "plotline.update",
+      "plotline.createNode",
       "plotline.updateNode",
       "storyEvent.list",
       "storyEvent.create",
@@ -207,6 +209,86 @@ describe("command registry", () => {
         importance: "decorative",
         name: "林鸢",
         projectId: "proj_1",
+      }),
+    ).toThrow();
+  });
+
+  it("parses plotline profile and node payloads with narrative design fields", () => {
+    expect(
+      parseCommandPayload("plotline.create", {
+        centralQuestion: "旧信到底是谁寄出的？",
+        driver: "每三章投放一条可验证线索，并用一次误导制造新问题。",
+        emotionalPromise: "持续悬疑、逼近真相和人物承担代价的爽感。",
+        importance: "core",
+        kind: "mystery",
+        midEscalation: "线索从旧信转向档案伪造和证人追杀。",
+        narrativeRole: "secret_reveal",
+        payoffPlan: "在卷末揭示寄信人身份，并回收信纸水印伏笔。",
+        priority: 5,
+        projectId: "proj_1",
+        relatedCharacterIds: ["character_1"],
+        relatedForeshadowingIds: ["foreshadowing_1"],
+        relatedStoryEventIds: ["event_1"],
+        relatedWorldRuleIds: ["world_rule_1"],
+        startState: "主角只知道旧信存在，不知道背后牵连旧案。",
+        status: "planning",
+        summary: "围绕旧信来源展开的调查线。",
+        title: "旧信谜团",
+      }),
+    ).toMatchObject({
+      centralQuestion: "旧信到底是谁寄出的？",
+      importance: "core",
+      kind: "mystery",
+      narrativeRole: "secret_reveal",
+      relatedCharacterIds: ["character_1"],
+      status: "planning",
+      title: "旧信谜团",
+    });
+
+    expect(
+      parseCommandPayload("plotline.update", {
+        patch: {
+          payoffPlan: "第 20 章揭示寄信人并改变主角目标。",
+          relatedCharacterIds: [],
+          status: "active",
+        },
+        plotlineId: "plotline_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      patch: {
+        payoffPlan: "第 20 章揭示寄信人并改变主角目标。",
+        relatedCharacterIds: [],
+        status: "active",
+      },
+      plotlineId: "plotline_1",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("plotline.createNode", {
+        chapterHint: "第 3 章",
+        description: "让读者看到信纸水印，但暂时不解释来源。",
+        kind: "seed",
+        plotlineId: "plotline_1",
+        position: 1,
+        projectId: "proj_1",
+        status: "planned",
+        title: "信纸水印出现",
+      }),
+    ).toMatchObject({
+      chapterHint: "第 3 章",
+      kind: "seed",
+      plotlineId: "plotline_1",
+      status: "planned",
+      title: "信纸水印出现",
+    });
+
+    expect(() =>
+      parseCommandPayload("plotline.create", {
+        importance: "decorative",
+        projectId: "proj_1",
+        title: "无效故事线",
       }),
     ).toThrow();
   });

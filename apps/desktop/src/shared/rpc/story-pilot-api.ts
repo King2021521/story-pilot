@@ -322,6 +322,14 @@ export class StoryPilotApiClient {
     return this.send("plotline.create", input);
   }
 
+  updatePlotline(input: CommandPayload<"plotline.update">) {
+    return this.send("plotline.update", input);
+  }
+
+  createPlotlineNode(input: CommandPayload<"plotline.createNode">) {
+    return this.send("plotline.createNode", input);
+  }
+
   updatePlotlineNode(input: CommandPayload<"plotline.updateNode">) {
     return this.send("plotline.updateNode", input);
   }

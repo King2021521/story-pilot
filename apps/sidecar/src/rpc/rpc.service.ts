@@ -609,9 +609,26 @@ export class RpcService {
       case "plotline.create": {
         const parsed = payload as CommandPayload<"plotline.create">;
         const input: CreatePlotlineInput = {
+          ...(parsed.centralQuestion === undefined
+            ? {}
+            : { centralQuestion: parsed.centralQuestion }),
+          ...(parsed.driver === undefined ? {} : { driver: parsed.driver }),
+          ...(parsed.emotionalPromise === undefined
+            ? {}
+            : { emotionalPromise: parsed.emotionalPromise }),
+          importance: parsed.importance,
           kind: parsed.kind,
+          ...(parsed.midEscalation === undefined ? {} : { midEscalation: parsed.midEscalation }),
+          narrativeRole: parsed.narrativeRole,
+          ...(parsed.payoffPlan === undefined ? {} : { payoffPlan: parsed.payoffPlan }),
           priority: parsed.priority,
           projectId: parsed.projectId,
+          relatedCharacterIds: parsed.relatedCharacterIds,
+          relatedForeshadowingIds: parsed.relatedForeshadowingIds,
+          relatedStoryEventIds: parsed.relatedStoryEventIds,
+          relatedWorldRuleIds: parsed.relatedWorldRuleIds,
+          ...(parsed.startState === undefined ? {} : { startState: parsed.startState }),
+          status: parsed.status,
           title: parsed.title,
           ...(parsed.summary === undefined ? {} : { summary: parsed.summary }),
         };
@@ -620,6 +637,25 @@ export class RpcService {
       case "plotline.list": {
         const parsed = payload as CommandPayload<"plotline.list">;
         return { items: await this.plotlineService.listPlotlines(parsed.projectId) };
+      }
+      case "plotline.update": {
+        return this.plotlineService.updatePlotline(payload as CommandPayload<"plotline.update">);
+      }
+      case "plotline.createNode": {
+        const parsed = payload as CommandPayload<"plotline.createNode">;
+        return this.plotlineService.createNode({
+          kind: parsed.kind,
+          plotlineId: parsed.plotlineId,
+          projectId: parsed.projectId,
+          status: parsed.status,
+          title: parsed.title,
+          ...(parsed.chapterHint === undefined ? {} : { chapterHint: parsed.chapterHint }),
+          ...(parsed.description === undefined ? {} : { description: parsed.description }),
+          ...(parsed.position === undefined ? {} : { position: parsed.position }),
+          ...(parsed.targetChapterId === undefined
+            ? {}
+            : { targetChapterId: parsed.targetChapterId }),
+        });
       }
       case "plotline.updateNode": {
         return this.plotlineService.updateNode(payload as CommandPayload<"plotline.updateNode">);

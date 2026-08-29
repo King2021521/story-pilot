@@ -140,6 +140,49 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
     "estimated_chapter_count",
     "estimated_chapter_count integer",
   );
+  ensureTableColumn(
+    projectDatabase,
+    "plotlines",
+    "narrative_role",
+    "narrative_role text not null default 'main_drive'",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "plotlines",
+    "importance",
+    "importance text not null default 'major'",
+  );
+  ensureTableColumn(projectDatabase, "plotlines", "central_question", "central_question text");
+  ensureTableColumn(projectDatabase, "plotlines", "driver", "driver text");
+  ensureTableColumn(projectDatabase, "plotlines", "start_state", "start_state text");
+  ensureTableColumn(projectDatabase, "plotlines", "mid_escalation", "mid_escalation text");
+  ensureTableColumn(projectDatabase, "plotlines", "payoff_plan", "payoff_plan text");
+  ensureTableColumn(projectDatabase, "plotlines", "emotional_promise", "emotional_promise text");
+  ensureTableColumn(
+    projectDatabase,
+    "plotlines",
+    "related_character_ids_json",
+    "related_character_ids_json text not null default '[]'",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "plotlines",
+    "related_world_rule_ids_json",
+    "related_world_rule_ids_json text not null default '[]'",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "plotlines",
+    "related_foreshadowing_ids_json",
+    "related_foreshadowing_ids_json text not null default '[]'",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "plotlines",
+    "related_story_event_ids_json",
+    "related_story_event_ids_json text not null default '[]'",
+  );
+  ensureTableColumn(projectDatabase, "plotline_nodes", "chapter_hint", "chapter_hint text");
   projectDatabase.client.exec(CREATIVE_PATH_SCHEMA_SQL);
   projectDatabase.client.exec(WORLDBUILDING_PROFILE_SCHEMA_SQL);
 }

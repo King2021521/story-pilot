@@ -1077,6 +1077,28 @@ describe("ShellLayout", () => {
 
   it("sends creative object creation actions through typed RPC commands", async () => {
     const project = createProject();
+    const plotlines: Array<Record<string, unknown>> = [
+      {
+        centralQuestion: "旧案真凶是谁？",
+        driver: "每三章给出一条线索。",
+        emotionalPromise: "持续悬疑和真相逼近。",
+        id: "plotline_existing",
+        importance: "core",
+        name: "旧案主线",
+        narrativeRole: "main_drive",
+        nodes: [],
+        payoffPlan: "卷末回收旧案真相。",
+        priority: 10,
+        relatedCharacterIds: ["character_existing"],
+        relatedForeshadowingIds: [],
+        relatedStoryEventIds: [],
+        relatedWorldRuleIds: [],
+        startState: "主角收到旧信。",
+        status: "planning",
+        summary: "围绕旧案调查推进。",
+        type: "main",
+      },
+    ];
 
     invokeMock.mockImplementation(async (_tauriCommand, args) => {
       const request = getRpcRequest(args);
@@ -1105,8 +1127,9 @@ describe("ShellLayout", () => {
             locations: [],
             memoryCandidates: [],
             organizations: [],
-            plotlines: [],
+            plotlines,
             project,
+            storyEvents: [],
             workOrders: [],
             worldRules: [],
           });
@@ -1137,6 +1160,43 @@ describe("ShellLayout", () => {
           return rpcSuccess(request.id, {
             fields: request.payload.fields,
           });
+        case "plotline.create": {
+          const plotline = {
+            ...request.payload,
+            id: "plotline_created",
+            name: request.payload.title,
+            nodes: [],
+            status: request.payload.status ?? "planning",
+            type: request.payload.kind,
+          };
+          plotlines.push(plotline);
+          return rpcSuccess(request.id, plotline);
+        }
+        case "plotline.update": {
+          const target = plotlines.find((plotline) => plotline.id === request.payload.plotlineId);
+          const patch = request.payload.patch as Record<string, unknown>;
+          if (target) {
+            Object.assign(target, patch);
+            if (typeof patch.title === "string") {
+              target.name = patch.title;
+            }
+          }
+          return rpcSuccess(request.id, target ?? null);
+        }
+        case "plotline.createNode": {
+          const node = {
+            ...request.payload,
+            id: "plotline_node_created",
+          };
+          const target = plotlines.find((plotline) => plotline.id === request.payload.plotlineId);
+          if (target) {
+            target.nodes = [
+              ...((target.nodes as Record<string, unknown>[] | undefined) ?? []),
+              node,
+            ];
+          }
+          return rpcSuccess(request.id, node);
+        }
         default:
           return rpcSuccess(request.id, { id: `${request.command}:result` });
       }
@@ -1276,16 +1336,78 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "5. 故事线设计" }));
-    fireEvent.change(screen.getByLabelText("故事线标题"), { target: { value: "旧信谜团" } });
+    expect(await screen.findByRole("heading", { name: "故事线档案" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "节点编排" })).toBeInTheDocument();
+    expect(screen.getByText("旧案主线")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑故事线 旧案主线" }));
+    fireEvent.change(screen.getByLabelText("核心问题"), {
+      target: { value: "旧案真凶是否还在操控旧城？" },
+    });
+    fireEvent.change(screen.getByLabelText("回收方式"), {
+      target: { value: "第 20 章揭示寄信人身份，并回收旧案关键证据。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => {
+      expect(rpcPayload("plotline.update")).toMatchObject({
+        patch: {
+          centralQuestion: "旧案真凶是否还在操控旧城？",
+          payoffPlan: "第 20 章揭示寄信人身份，并回收旧案关键证据。",
+          title: "旧案主线",
+        },
+        plotlineId: "plotline_existing",
+        projectId: "project_1",
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("节点标题"), { target: { value: "信纸水印出现" } });
+    fireEvent.change(screen.getByLabelText("章节提示"), { target: { value: "第 3 章" } });
+    fireEvent.change(screen.getByLabelText("节点说明"), {
+      target: { value: "让读者看到信纸水印，但暂时不解释来源。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "添加节点" }));
+    await waitFor(() => {
+      expect(rpcPayload("plotline.createNode")).toMatchObject({
+        chapterHint: "第 3 章",
+        description: "让读者看到信纸水印，但暂时不解释来源。",
+        kind: "seed",
+        plotlineId: "plotline_existing",
+        projectId: "project_1",
+        status: "planned",
+        title: "信纸水印出现",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "新建故事线" }));
+    fireEvent.change(screen.getByLabelText("故事线名称"), { target: { value: "旧信谜团" } });
     fireEvent.change(screen.getByLabelText("故事线摘要"), {
       target: { value: "围绕旧信来源展开。" },
+    });
+    fireEvent.change(screen.getByLabelText("核心问题"), {
+      target: { value: "旧信到底是谁寄出的？" },
+    });
+    fireEvent.change(screen.getByLabelText("推进机制"), {
+      target: { value: "每三章投放一条可验证线索，并用一次误导制造新的问题。" },
+    });
+    fireEvent.change(screen.getByLabelText("情绪承诺"), {
+      target: { value: "持续解谜、反转和真相逼近。" },
     });
     fireEvent.click(screen.getByRole("button", { name: "创建故事线" }));
     await waitFor(() => {
       expect(rpcPayload("plotline.create")).toMatchObject({
+        centralQuestion: "旧信到底是谁寄出的？",
+        driver: "每三章投放一条可验证线索，并用一次误导制造新的问题。",
+        emotionalPromise: "持续解谜、反转和真相逼近。",
+        importance: "major",
         kind: "branch",
+        narrativeRole: "main_drive",
         priority: 0,
         projectId: "project_1",
+        relatedCharacterIds: [],
+        relatedForeshadowingIds: [],
+        relatedStoryEventIds: [],
+        relatedWorldRuleIds: [],
+        status: "planning",
         summary: "围绕旧信来源展开。",
         title: "旧信谜团",
       });
@@ -1306,7 +1428,7 @@ describe("ShellLayout", () => {
         title: "水印伏笔",
       });
     });
-  });
+  }, 10_000);
 
   it("keeps character AI assistance below the primary editing row", async () => {
     const project = createProject();

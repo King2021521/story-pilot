@@ -8,6 +8,12 @@ import {
   type RpcResponse,
 } from "@story-pilot/contracts";
 
+declare global {
+  interface Window {
+    __STORY_PILOT_E2E_RPC__?: (request: RpcRequest) => Promise<RpcResponse> | RpcResponse;
+  }
+}
+
 export interface RpcClient {
   send<TCommand extends CommandName>(
     command: TCommand,
@@ -43,10 +49,18 @@ export class TauriRpcClient implements RpcClient {
 export class WebPreviewRpcClient implements RpcClient {
   async send<TCommand extends CommandName>(
     command: TCommand,
-    _payload: CommandPayload<TCommand>,
+    payload: CommandPayload<TCommand>,
   ): Promise<RpcResponse> {
-    void _payload;
     const requestId = crypto.randomUUID();
+    const request: RpcRequest = {
+      command,
+      id: requestId,
+      payload,
+    };
+    const e2eRpc = typeof window === "undefined" ? undefined : window.__STORY_PILOT_E2E_RPC__;
+    if (e2eRpc) {
+      return await e2eRpc(request);
+    }
 
     if (command === "app.health") {
       return createRpcSuccess(requestId, {
