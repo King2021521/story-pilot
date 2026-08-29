@@ -1458,313 +1458,324 @@ function CharactersModule({
     <div className="module-stack">
       <ModuleHeader eyebrow="4 / 9" title="角色设计" />
       <div className="character-design-workspace">
-        <section aria-label="角色列表面板" className="character-design-pane character-design-list">
-          <header className="character-design-pane__header">
-            <Title level={5}>角色列表</Title>
-            <Text type="secondary">{characters.length} 个角色</Text>
-          </header>
-          <CharacterRoster
-            characters={characters}
-            selectedCharacterId={selectedCharacterId}
-            onSelectCharacter={setSelectedCharacterId}
-          />
-        </section>
-
-        <section aria-label="角色档案表单" className="character-design-pane character-design-form">
-          <header className="character-design-pane__header">
-            <Title level={5}>角色档案</Title>
-            <Text type="secondary">先确定人物在故事里的作用，再补外形、弧线和声音。</Text>
-          </header>
-          <Form
-            form={form}
-            initialValues={CHARACTER_FORM_DEFAULTS}
-            layout="vertical"
-            onFinish={async (values) => {
-              if (isEditingCharacter) {
-                await onUpdateCharacter({
-                  characterId: selectedCharacterId,
-                  patch: normalizeCharacterPatchValues(values),
-                });
-                return;
-              }
-
-              await onCreateCharacter(normalizeCharacterValues(values));
-              resetCharacterForm();
-            }}
+        <div className="character-design-primary">
+          <section
+            aria-label="角色列表面板"
+            className="character-design-pane character-design-list"
           >
-            <div className="character-form-grid">
-              <Form.Item
-                label={characterFieldLabel(
-                  "人物名称",
-                  "读者识别人物的第一入口。名称要和题材、时代、阵营气质一致。",
-                )}
-                name="name"
-                rules={[
-                  { required: true, message: "请输入人物名称" },
-                  { max: 80, message: "人物名称最多 80 字" },
-                ]}
-              >
-                <Input aria-label="人物名称" placeholder="如：林鸢" />
-              </Form.Item>
-              <Form.Item label="人物定位" name="role">
-                <Select aria-label="人物定位" options={[...CHARACTER_ROLE_OPTIONS]} />
-              </Form.Item>
-              <Form.Item label="重要程度" name="importance">
-                <Select aria-label="重要程度" options={[...CHARACTER_IMPORTANCE_OPTIONS]} />
-              </Form.Item>
-              <Form.Item label="叙事功能" name="narrativeFunction">
-                <Select aria-label="叙事功能" options={[...CHARACTER_NARRATIVE_FUNCTION_OPTIONS]} />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "年龄/身份",
-                  "写清年龄段、社会身份、当前处境，帮助后续判断行为可信度。",
-                )}
-                name="genderAge"
-                rules={[{ max: 80, message: "年龄/身份最多 80 字" }]}
-              >
-                <Input aria-label="年龄/身份" placeholder="如：女，27 岁，前刑警" />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "首次登场",
-                  "记录角色第一次出现的位置或场景，方便大纲阶段安排铺垫。",
-                )}
-                name="firstAppearance"
-                rules={[{ max: 80, message: "首次登场最多 80 字" }]}
-              >
-                <Input aria-label="首次登场" placeholder="如：第 1 章，钟楼旧档案室" />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "原型标签",
-                  "用一句话概括角色类型，不等于人设全文，例如离队调查者、沉默继承人。",
-                )}
-                name="archetype"
-                rules={[{ max: 80, message: "原型标签最多 80 字" }]}
-              >
-                <Input aria-label="原型标签" placeholder="如：离队调查者" />
-              </Form.Item>
-              <Form.Item
-                className="character-form-grid__wide"
-                label={characterFieldLabel(
-                  "剧情任务",
-                  "这个人物必须为主线制造什么信息、选择、冲突或代价。没有剧情任务的角色容易变成装饰。",
-                )}
-                name="storyTask"
-                rules={[{ max: 500, message: "剧情任务最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="剧情任务"
-                  autoSize={{ maxRows: 5, minRows: 3 }}
-                  maxLength={500}
-                  placeholder="如：把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "外在目标",
-                  "角色主动追求的可见目标，最好能被阻拦、被误导、被迫付出代价。",
-                )}
-                name="goal"
-                rules={[{ max: 500, message: "外在目标最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="外在目标"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：查清旧信来源"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "内在需求",
-                  "角色真正需要补上的心理缺口，通常决定人物弧线是否成立。",
-                )}
-                name="need"
-                rules={[{ max: 500, message: "内在需求最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="内在需求"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：重新学会信任他人"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "致命缺陷",
-                  "会反复让角色做错选择的弱点，用来生成冲突而不是贴标签。",
-                )}
-                name="flaw"
-                rules={[{ max: 500, message: "致命缺陷最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="致命缺陷"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：过度自责，遇到关键证据时会先怀疑自己"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "秘密",
-                  "角色隐瞒的信息、罪责、身份或误会，应该能在剧情中产生揭示价值。",
-                )}
-                name="secret"
-                rules={[{ max: 500, message: "秘密最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="秘密"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：十年前曾到过案发现场"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                className="character-form-grid__wide"
-                label={characterFieldLabel(
-                  "关系钩子",
-                  "说明这个人物和主角、反派、组织或核心秘密之间的可持续牵引。",
-                )}
-                name="relationshipHook"
-                rules={[{ max: 500, message: "关系钩子最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="关系钩子"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：与钟楼守档人互相试探，既需要合作又互相防备。"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "初始状态",
-                  "故事开始时人物相信什么、害怕什么、困在哪里。",
-                )}
-                name="arcStart"
-                rules={[{ max: 500, message: "初始状态最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="初始状态"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：逃避旧案，只想离开旧城。"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "关键转折",
-                  "人物被迫改变的决定性节点，用来指导中段剧情。",
-                )}
-                name="arcTurn"
-                rules={[{ max: 500, message: "关键转折最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="关键转折"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：发现证人仍被追杀后决定回头。"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "结局状态",
-                  "经历故事后人物成为怎样的人，或者为什么无法改变。",
-                )}
-                name="arcEnd"
-                rules={[{ max: 500, message: "结局状态最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="结局状态"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：愿意公开旧案证据并承担代价。"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "说话风格",
-                  "句式、词汇、节奏和回避话题的习惯，帮助正文保持人物声音稳定。",
-                )}
-                name="voiceProfile"
-                rules={[{ max: 500, message: "说话风格最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="说话风格"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：克制、短句、偏观察细节。"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                label={characterFieldLabel(
-                  "外形记忆点",
-                  "少量高辨识度视觉细节，便于读者记住角色，不需要堆砌外貌描写。",
-                )}
-                name="appearance"
-                rules={[{ max: 500, message: "外形记忆点最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="外形记忆点"
-                  autoSize={{ maxRows: 4, minRows: 2 }}
-                  maxLength={500}
-                  placeholder="如：旧风衣、随身旧笔记本，观察时会按住袖口。"
-                  showCount
-                />
-              </Form.Item>
-              <Form.Item
-                className="character-form-grid__wide"
-                label={characterFieldLabel(
-                  "人物小传",
-                  "只写影响当前剧情的履历和伤痕，避免把小传写成百科。",
-                )}
-                name="biography"
-                rules={[{ max: 500, message: "人物小传最多 500 字" }]}
-              >
-                <Input.TextArea
-                  aria-label="人物小传"
-                  autoSize={{ maxRows: 5, minRows: 3 }}
-                  maxLength={500}
-                  placeholder="如：前刑警，因十年前钟楼案离队。"
-                  showCount
-                />
-              </Form.Item>
-            </div>
-            <Space className="character-form-actions" wrap>
-              <Button
-                aria-label={isEditingCharacter ? "保存修改" : "创建人物"}
-                htmlType="submit"
-                icon={isEditingCharacter ? <SaveOutlined /> : <PlusOutlined />}
-                type="primary"
-              >
-                {isEditingCharacter ? "保存修改" : "创建人物"}
-              </Button>
-              {isEditingCharacter ? (
-                <Button aria-label="新建角色" onClick={resetCharacterForm}>
-                  新建角色
+            <header className="character-design-pane__header">
+              <Title level={5}>角色列表</Title>
+              <Text type="secondary">{characters.length} 个角色</Text>
+            </header>
+            <CharacterRoster
+              characters={characters}
+              selectedCharacterId={selectedCharacterId}
+              onSelectCharacter={setSelectedCharacterId}
+            />
+          </section>
+
+          <section
+            aria-label="角色档案表单"
+            className="character-design-pane character-design-form"
+          >
+            <header className="character-design-pane__header">
+              <Title level={5}>角色档案</Title>
+              <Text type="secondary">先确定人物在故事里的作用，再补外形、弧线和声音。</Text>
+            </header>
+            <Form
+              form={form}
+              initialValues={CHARACTER_FORM_DEFAULTS}
+              layout="vertical"
+              onFinish={async (values) => {
+                if (isEditingCharacter) {
+                  await onUpdateCharacter({
+                    characterId: selectedCharacterId,
+                    patch: normalizeCharacterPatchValues(values),
+                  });
+                  return;
+                }
+
+                await onCreateCharacter(normalizeCharacterValues(values));
+                resetCharacterForm();
+              }}
+            >
+              <div className="character-form-grid">
+                <Form.Item
+                  label={characterFieldLabel(
+                    "人物名称",
+                    "读者识别人物的第一入口。名称要和题材、时代、阵营气质一致。",
+                  )}
+                  name="name"
+                  rules={[
+                    { required: true, message: "请输入人物名称" },
+                    { max: 80, message: "人物名称最多 80 字" },
+                  ]}
+                >
+                  <Input aria-label="人物名称" placeholder="如：林鸢" />
+                </Form.Item>
+                <Form.Item label="人物定位" name="role">
+                  <Select aria-label="人物定位" options={[...CHARACTER_ROLE_OPTIONS]} />
+                </Form.Item>
+                <Form.Item label="重要程度" name="importance">
+                  <Select aria-label="重要程度" options={[...CHARACTER_IMPORTANCE_OPTIONS]} />
+                </Form.Item>
+                <Form.Item label="叙事功能" name="narrativeFunction">
+                  <Select
+                    aria-label="叙事功能"
+                    options={[...CHARACTER_NARRATIVE_FUNCTION_OPTIONS]}
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "年龄/身份",
+                    "写清年龄段、社会身份、当前处境，帮助后续判断行为可信度。",
+                  )}
+                  name="genderAge"
+                  rules={[{ max: 80, message: "年龄/身份最多 80 字" }]}
+                >
+                  <Input aria-label="年龄/身份" placeholder="如：女，27 岁，前刑警" />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "首次登场",
+                    "记录角色第一次出现的位置或场景，方便大纲阶段安排铺垫。",
+                  )}
+                  name="firstAppearance"
+                  rules={[{ max: 80, message: "首次登场最多 80 字" }]}
+                >
+                  <Input aria-label="首次登场" placeholder="如：第 1 章，钟楼旧档案室" />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "原型标签",
+                    "用一句话概括角色类型，不等于人设全文，例如离队调查者、沉默继承人。",
+                  )}
+                  name="archetype"
+                  rules={[{ max: 80, message: "原型标签最多 80 字" }]}
+                >
+                  <Input aria-label="原型标签" placeholder="如：离队调查者" />
+                </Form.Item>
+                <Form.Item
+                  className="character-form-grid__wide"
+                  label={characterFieldLabel(
+                    "剧情任务",
+                    "这个人物必须为主线制造什么信息、选择、冲突或代价。没有剧情任务的角色容易变成装饰。",
+                  )}
+                  name="storyTask"
+                  rules={[{ max: 500, message: "剧情任务最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="剧情任务"
+                    autoSize={{ maxRows: 5, minRows: 3 }}
+                    maxLength={500}
+                    placeholder="如：把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "外在目标",
+                    "角色主动追求的可见目标，最好能被阻拦、被误导、被迫付出代价。",
+                  )}
+                  name="goal"
+                  rules={[{ max: 500, message: "外在目标最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="外在目标"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：查清旧信来源"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "内在需求",
+                    "角色真正需要补上的心理缺口，通常决定人物弧线是否成立。",
+                  )}
+                  name="need"
+                  rules={[{ max: 500, message: "内在需求最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="内在需求"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：重新学会信任他人"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "致命缺陷",
+                    "会反复让角色做错选择的弱点，用来生成冲突而不是贴标签。",
+                  )}
+                  name="flaw"
+                  rules={[{ max: 500, message: "致命缺陷最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="致命缺陷"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：过度自责，遇到关键证据时会先怀疑自己"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "秘密",
+                    "角色隐瞒的信息、罪责、身份或误会，应该能在剧情中产生揭示价值。",
+                  )}
+                  name="secret"
+                  rules={[{ max: 500, message: "秘密最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="秘密"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：十年前曾到过案发现场"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  className="character-form-grid__wide"
+                  label={characterFieldLabel(
+                    "关系钩子",
+                    "说明这个人物和主角、反派、组织或核心秘密之间的可持续牵引。",
+                  )}
+                  name="relationshipHook"
+                  rules={[{ max: 500, message: "关系钩子最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="关系钩子"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：与钟楼守档人互相试探，既需要合作又互相防备。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "初始状态",
+                    "故事开始时人物相信什么、害怕什么、困在哪里。",
+                  )}
+                  name="arcStart"
+                  rules={[{ max: 500, message: "初始状态最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="初始状态"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：逃避旧案，只想离开旧城。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "关键转折",
+                    "人物被迫改变的决定性节点，用来指导中段剧情。",
+                  )}
+                  name="arcTurn"
+                  rules={[{ max: 500, message: "关键转折最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="关键转折"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：发现证人仍被追杀后决定回头。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "结局状态",
+                    "经历故事后人物成为怎样的人，或者为什么无法改变。",
+                  )}
+                  name="arcEnd"
+                  rules={[{ max: 500, message: "结局状态最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="结局状态"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：愿意公开旧案证据并承担代价。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "说话风格",
+                    "句式、词汇、节奏和回避话题的习惯，帮助正文保持人物声音稳定。",
+                  )}
+                  name="voiceProfile"
+                  rules={[{ max: 500, message: "说话风格最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="说话风格"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：克制、短句、偏观察细节。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={characterFieldLabel(
+                    "外形记忆点",
+                    "少量高辨识度视觉细节，便于读者记住角色，不需要堆砌外貌描写。",
+                  )}
+                  name="appearance"
+                  rules={[{ max: 500, message: "外形记忆点最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="外形记忆点"
+                    autoSize={{ maxRows: 4, minRows: 2 }}
+                    maxLength={500}
+                    placeholder="如：旧风衣、随身旧笔记本，观察时会按住袖口。"
+                    showCount
+                  />
+                </Form.Item>
+                <Form.Item
+                  className="character-form-grid__wide"
+                  label={characterFieldLabel(
+                    "人物小传",
+                    "只写影响当前剧情的履历和伤痕，避免把小传写成百科。",
+                  )}
+                  name="biography"
+                  rules={[{ max: 500, message: "人物小传最多 500 字" }]}
+                >
+                  <Input.TextArea
+                    aria-label="人物小传"
+                    autoSize={{ maxRows: 5, minRows: 3 }}
+                    maxLength={500}
+                    placeholder="如：前刑警，因十年前钟楼案离队。"
+                    showCount
+                  />
+                </Form.Item>
+              </div>
+              <Space className="character-form-actions" wrap>
+                <Button
+                  aria-label={isEditingCharacter ? "保存修改" : "创建人物"}
+                  htmlType="submit"
+                  icon={isEditingCharacter ? <SaveOutlined /> : <PlusOutlined />}
+                  type="primary"
+                >
+                  {isEditingCharacter ? "保存修改" : "创建人物"}
                 </Button>
-              ) : null}
-              <Button
-                aria-label="完成角色设计"
-                icon={<CheckCircleOutlined />}
-                onClick={() => onAdvanceStage({ mode: "strict", stageKey: "characters" })}
-              >
-                完成角色设计
-              </Button>
-            </Space>
-          </Form>
-        </section>
+                {isEditingCharacter ? (
+                  <Button aria-label="新建角色" onClick={resetCharacterForm}>
+                    新建角色
+                  </Button>
+                ) : null}
+                <Button
+                  aria-label="完成角色设计"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => onAdvanceStage({ mode: "strict", stageKey: "characters" })}
+                >
+                  完成角色设计
+                </Button>
+              </Space>
+            </Form>
+          </section>
+        </div>
 
         <ElementCandidateSection
           className="character-design-candidate"

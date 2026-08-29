@@ -1308,6 +1308,59 @@ describe("ShellLayout", () => {
     });
   });
 
+  it("keeps character AI assistance below the primary editing row", async () => {
+    const project = createProject();
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            characters: [],
+            foreshadowings: [],
+            items: [],
+            locations: [],
+            memoryCandidates: [],
+            organizations: [],
+            plotlines: [],
+            project,
+            workOrders: [],
+            worldRules: [],
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    const { container } = render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "4. 角色设计" }));
+    expect(await screen.findByRole("heading", { name: "角色档案" })).toBeInTheDocument();
+
+    const workspace = container.querySelector(".character-design-workspace");
+    const primaryRow = workspace?.querySelector(":scope > .character-design-primary");
+    const assistant = workspace?.querySelector(":scope > .character-design-candidate");
+    const listPane = screen.getByRole("region", { name: "角色列表面板" });
+    const formPane = screen.getByRole("region", { name: "角色档案表单" });
+
+    expect(primaryRow).toBeInstanceOf(HTMLElement);
+    expect(assistant).toBeInstanceOf(HTMLElement);
+    expect(primaryRow).toContainElement(listPane);
+    expect(primaryRow).toContainElement(formPane);
+    expect(primaryRow?.children).toHaveLength(2);
+    expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 辅助" }));
+  });
+
   it("creates chapters, restores chapter versions, and reviews AI artifacts", async () => {
     const project = createProject();
     const chapter = {
