@@ -33,6 +33,8 @@ describe("command registry", () => {
       "brief.save",
       "brief.confirm",
       "blueprint.generate",
+      "blueprint.saveForm",
+      "blueprint.completeForm",
       "blueprint.apply",
       "outline.generate",
       "outline.approveChapterOutline",
@@ -61,6 +63,8 @@ describe("command registry", () => {
       "worldRule.list",
       "worldRule.create",
       "worldRule.update",
+      "worldbuilding.saveFields",
+      "worldbuilding.completeFields",
       "plotline.list",
       "plotline.create",
       "plotline.updateNode",
@@ -162,6 +166,49 @@ describe("command registry", () => {
       baseUrl: "https://api.example.test/v1",
       model: "gpt-test",
     });
+  });
+
+  it("parses character profile payloads with narrative design fields", () => {
+    expect(
+      parseCommandPayload("character.create", {
+        appearance: "旧风衣、随身旧笔记本，观察时会按住袖口。",
+        arcEnd: "愿意公开旧案证据并承担代价。",
+        arcStart: "逃避旧案，只想离开旧城。",
+        arcTurn: "发现证人仍被追杀后决定回头。",
+        archetype: "离队调查者",
+        biography: "前刑警，因十年前钟楼案离队。",
+        firstAppearance: "第 1 章",
+        flaw: "过度自责",
+        genderAge: "女，27 岁",
+        goal: "查清旧信来源",
+        importance: "core",
+        name: "林鸢",
+        narrativeFunction: "viewpoint",
+        need: "重新学会信任他人",
+        projectId: "proj_1",
+        relationshipHook: "与钟楼守档人互相试探。",
+        role: "protagonist",
+        secret: "十年前曾到过案发现场",
+        storyTask: "把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。",
+        voiceProfile: "克制、短句、偏观察细节。",
+      }),
+    ).toMatchObject({
+      firstAppearance: "第 1 章",
+      genderAge: "女，27 岁",
+      importance: "core",
+      name: "林鸢",
+      narrativeFunction: "viewpoint",
+      role: "protagonist",
+      storyTask: "把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。",
+    });
+
+    expect(() =>
+      parseCommandPayload("character.create", {
+        importance: "decorative",
+        name: "林鸢",
+        projectId: "proj_1",
+      }),
+    ).toThrow();
   });
 
   it("parses AI workflow payloads", () => {
@@ -280,6 +327,89 @@ describe("command registry", () => {
     });
   });
 
+  it("parses fixed worldbuilding form fields with 500 character limits", () => {
+    expect(
+      parseCommandPayload("worldbuilding.saveFields", {
+        fields: {
+          geography: "旧城围绕钟楼扩散。",
+          powerSystem: "角色依靠档案解读和人情网络推进调查。",
+          worldBase: "近现代旧城悬疑世界。",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      fields: {
+        coreConflict: "",
+        culture: "",
+        economy: "",
+        factions: "",
+        geography: "旧城围绕钟楼扩散。",
+        history: "",
+        powerOrder: "",
+        powerSystem: "角色依靠档案解读和人情网络推进调查。",
+        rules: "",
+        socialStructure: "",
+        specialMechanism: "",
+        worldBase: "近现代旧城悬疑世界。",
+      },
+      projectId: "proj_1",
+    });
+
+    expect(() =>
+      parseCommandPayload("worldbuilding.completeFields", {
+        fields: {
+          worldBase: "超".repeat(501),
+        },
+        projectId: "proj_1",
+      }),
+    ).toThrow();
+  });
+
+  it("parses editable core story form fields with bounded long text and option fields", () => {
+    expect(
+      parseCommandPayload("blueprint.saveForm", {
+        fields: {
+          corePromise: "每个单元都给出硬线索和情绪反转。",
+          differentiators: ["旧信谜题和人物成长绑定"],
+          emotionalAxes: ["悬疑", "反转"],
+          logline: "雨夜旧信把主角拖回十年前钟楼旧案。",
+          mainConflict: "主角追查真相时不断触碰旧城秩序。",
+          mainGoal: "找出钟楼火灾真相并保护仍被旧案威胁的人。",
+          premise: "旧城钟楼火灾十年后，主角收到一封不该存在的旧信。",
+          risks: ["线索密度不足会削弱追读"],
+          stakes: "失败会让旧案幸存者再次被清算。",
+          storyDriver: "mystery",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      fields: {
+        antagonistForce: "",
+        corePromise: "每个单元都给出硬线索和情绪反转。",
+        differentiators: ["旧信谜题和人物成长绑定"],
+        emotionalAxes: ["悬疑", "反转"],
+        logline: "雨夜旧信把主角拖回十年前钟楼旧案。",
+        mainConflict: "主角追查真相时不断触碰旧城秩序。",
+        mainGoal: "找出钟楼火灾真相并保护仍被旧案威胁的人。",
+        premise: "旧城钟楼火灾十年后，主角收到一封不该存在的旧信。",
+        protagonistArc: "",
+        risks: ["线索密度不足会削弱追读"],
+        stakes: "失败会让旧案幸存者再次被清算。",
+        storyDriver: "mystery",
+      },
+      projectId: "proj_1",
+    });
+
+    expect(() =>
+      parseCommandPayload("blueprint.completeForm", {
+        fields: {
+          premise: "故".repeat(801),
+        },
+        projectId: "proj_1",
+      }),
+    ).toThrow();
+  });
+
   it("parses longform planning payloads", () => {
     expect(
       parseCommandPayload("plot.generateBookPlan", {
@@ -348,6 +478,8 @@ describe("command registry", () => {
     expect(
       parseCommandPayload("brief.save", {
         emotionalRewards: ["爽点", "悬疑"],
+        estimatedChapterCount: 260,
+        estimatedWordCount: 800_000,
         forbiddenDirections: ["不要系统流"],
         genre: "玄幻",
         initialIdea: "少年发现旧都遗物。",
@@ -359,11 +491,22 @@ describe("command registry", () => {
         targetAudience: "男频爽文",
       }),
     ).toMatchObject({
+      estimatedChapterCount: 260,
+      estimatedWordCount: 800_000,
       genre: "玄幻",
       initialIdea: "少年发现旧都遗物。",
       subgenres: ["废柴逆袭"],
       targetAudience: "男频爽文",
     });
+
+    expect(() =>
+      parseCommandPayload("brief.save", {
+        estimatedChapterCount: 0,
+        estimatedWordCount: 9_999,
+        genre: "玄幻",
+        projectId: "proj_1",
+      }),
+    ).toThrow();
 
     expect(
       parseCommandPayload("outline.generate", {

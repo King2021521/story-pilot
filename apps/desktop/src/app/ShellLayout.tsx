@@ -51,11 +51,21 @@ import {
   type RuntimeSettingsView,
 } from "../features/settings/SettingsDrawer";
 import {
+  getWorkspaceModuleTitle,
+  type WorkspaceModuleKey,
+} from "../features/workbench/workspaceModules";
+import {
   WorkbenchHome,
+  type CompleteCoreStoryFieldsResult,
+  type CoreStoryFields,
+  type CreateStoryEventValues,
+  type SaveCoreStoryFieldsResult,
+  type UpdateCharacterValues,
   type WorkbenchBoard,
   type WorkbenchChapter,
   type WorkbenchProject,
 } from "../features/workbench/WorkbenchHome";
+import { formatUserError } from "../shared/errors/error-message";
 import { useStoryPilotApi } from "../shared/rpc/useStoryPilotApi";
 
 const { Content, Sider } = Layout;
@@ -72,6 +82,7 @@ export function ShellLayout() {
   const { message } = AntApp.useApp();
   const storyPilotApi = useStoryPilotApi();
   const [activeProject, setActiveProject] = useState<WorkbenchProject | undefined>();
+  const [activeModuleKey, setActiveModuleKey] = useState<WorkspaceModuleKey>("dashboard");
   const [board, setBoard] = useState<WorkbenchBoard | undefined>();
   const [boardOpen, setBoardOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
@@ -89,6 +100,7 @@ export function ShellLayout() {
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettingsView | undefined>();
   const [diagnosticsHealth, setDiagnosticsHealth] = useState<DiagnosticsHealthView | undefined>();
   const [loadingSettings, setLoadingSettings] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [createProjectForm] = Form.useForm<CreateProjectFormValues>();
 
   const selectChapter = useCallback((chapterId: string) => {
@@ -140,6 +152,7 @@ export function ShellLayout() {
       const project = (await storyPilotApi.openProject({ projectId })) as WorkbenchProject;
       setActiveProject(project);
       setProjects((currentProjects) => upsertProject(currentProjects, project));
+      setActiveModuleKey("dashboard");
       await refreshBoard(project.id);
     },
     [refreshBoard, storyPilotApi],
@@ -178,6 +191,7 @@ export function ShellLayout() {
         setActiveProject(project);
         setBoard(nextBoard);
         setProjects((currentProjects) => upsertProject(currentProjects, project));
+        setActiveModuleKey("dashboard");
         setSelectedChapterId(nextBoard.chapters[0]?.id);
         setChapterVersions([]);
       } catch (error) {
@@ -206,6 +220,7 @@ export function ShellLayout() {
           createProjectPayload(values),
         )) as WorkbenchProject;
         setProjects((currentProjects) => upsertProject(currentProjects, project));
+        setActiveModuleKey("dashboard");
         await refreshBoard(project.id);
         setCreateProjectOpen(false);
         createProjectForm.resetFields();
@@ -474,6 +489,27 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const updateCharacter = useCallback(
+    async (input: UpdateCharacterValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updateCharacter({
+          characterId: input.characterId,
+          patch: input.patch,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("人物已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const createWorldRule = useCallback(
     async (input: Omit<CommandPayload<"worldRule.create">, "projectId">) => {
       if (!activeProject) {
@@ -492,6 +528,49 @@ export function ShellLayout() {
       }
     },
     [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const saveWorldbuildingFields = useCallback(
+    async (input: Omit<CommandPayload<"worldbuilding.saveFields">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveWorldbuildingFields({
+          fields: input.fields,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("世界观已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const completeWorldbuildingFields = useCallback(
+    async (
+      input: Omit<CommandPayload<"worldbuilding.completeFields">, "projectId">,
+    ): Promise<{ readonly fields: CommandPayload<"worldbuilding.completeFields">["fields"] }> => {
+      if (!activeProject) {
+        return { fields: input.fields };
+      }
+
+      try {
+        const result = (await storyPilotApi.completeWorldbuildingFields({
+          fields: input.fields,
+          projectId: activeProject.id,
+        })) as { readonly fields: CommandPayload<"worldbuilding.completeFields">["fields"] };
+        message.success("AI 已补全世界观");
+        return result;
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        return { fields: input.fields };
+      }
+    },
+    [activeProject, message, storyPilotApi],
   );
 
   const createPlotline = useCallback(
@@ -527,6 +606,30 @@ export function ShellLayout() {
         });
         await refreshBoard(activeProject.id);
         message.success("伏笔已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const createStoryEvent = useCallback(
+    async (input: CreateStoryEventValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createStoryEvent({
+          description: input.description,
+          eventType: input.eventType,
+          participants: [],
+          projectId: activeProject.id,
+          title: input.title,
+          ...optionalText("storyTime", input.storyTime),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("剧情节点已创建");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -602,6 +705,8 @@ export function ShellLayout() {
           genre: input.genre,
           projectId: activeProject.id,
           subgenres: [...input.subgenres],
+          ...optionalNumber("estimatedChapterCount", input.estimatedChapterCount),
+          ...optionalNumber("estimatedWordCount", input.estimatedWordCount),
           ...optionalText("targetAudience", input.targetAudience),
           ...optionalText("platformProfile", input.platformProfile),
           ...optionalText("lengthProfile", input.lengthProfile),
@@ -766,6 +871,49 @@ export function ShellLayout() {
     }
   }, [activeProject, message, refreshBoard, storyPilotApi]);
 
+  const saveCoreStoryFields = useCallback(
+    async (input: { readonly fields: CoreStoryFields }): Promise<SaveCoreStoryFieldsResult> => {
+      if (!activeProject) {
+        throw new Error("未打开作品");
+      }
+
+      try {
+        const result = (await storyPilotApi.saveBlueprintForm({
+          fields: input.fields,
+          projectId: activeProject.id,
+        })) as SaveCoreStoryFieldsResult;
+        await refreshBoard(activeProject.id);
+        message.success("核心故事草稿已保存");
+        return result;
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        throw error;
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const completeCoreStoryFields = useCallback(
+    async (input: { readonly fields: CoreStoryFields }): Promise<CompleteCoreStoryFieldsResult> => {
+      if (!activeProject) {
+        return { fields: input.fields };
+      }
+
+      try {
+        const result = (await storyPilotApi.completeBlueprintForm({
+          fields: input.fields,
+          projectId: activeProject.id,
+        })) as CompleteCoreStoryFieldsResult;
+        message.success("AI 已补全核心故事");
+        return result;
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        return { fields: input.fields };
+      }
+    },
+    [activeProject, message, storyPilotApi],
+  );
+
   const applyBlueprint = useCallback(
     async (input: { readonly blueprintId: string }) => {
       if (!activeProject) {
@@ -778,7 +926,7 @@ export function ShellLayout() {
           projectId: activeProject.id,
         });
         await refreshBoard(activeProject.id);
-        message.success("创作蓝图已应用");
+        message.success("核心故事已确认");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -980,6 +1128,7 @@ export function ShellLayout() {
           readonly errorCode?: string;
           readonly missingFields?: readonly string[];
           readonly ok: boolean;
+          readonly statusCode?: number;
         };
         if (result.ok) {
           message.success("模型校验通过");
@@ -987,7 +1136,13 @@ export function ShellLayout() {
           message.warning(
             result.missingFields?.length
               ? `模型配置缺失：${result.missingFields.join(", ")}`
-              : (result.errorCode ?? "模型校验失败"),
+              : getErrorMessage(
+                  new Error(
+                    result.statusCode
+                      ? `OPENAI_COMPATIBLE_HTTP_ERROR: ${result.statusCode}`
+                      : (result.errorCode ?? "模型校验失败"),
+                  ),
+                ),
           );
         }
         await loadRuntimeSettings();
@@ -1012,10 +1167,18 @@ export function ShellLayout() {
 
   return (
     <Layout className="story-shell">
-      <Sider aria-label="作品管理区" className="story-shell__sidebar" width={292}>
+      <Sider
+        aria-label="作品管理区"
+        className="story-shell__sidebar"
+        collapsed={sidebarCollapsed}
+        collapsedWidth={76}
+        trigger={null}
+        width={292}
+      >
         <ProjectSidebar
           activeProjectId={activeProject?.id}
           chapters={board?.chapters ?? []}
+          collapsed={sidebarCollapsed}
           onCreateProject={() => setCreateProjectOpen(true)}
           onOpenProject={(projectId) => {
             void openProject(projectId).catch((error: unknown) => {
@@ -1023,8 +1186,11 @@ export function ShellLayout() {
             });
           }}
           onOpenSettings={openSettings}
+          onSelectModule={setActiveModuleKey}
           onSelectChapter={selectChapter}
+          onToggleCollapsed={setSidebarCollapsed}
           projects={projects}
+          activeModuleKey={activeModuleKey}
           selectedChapterId={selectedChapterId}
         />
       </Sider>
@@ -1032,7 +1198,7 @@ export function ShellLayout() {
       <Content aria-label="工作台" className="story-shell__content">
         <header className="story-toolbar">
           <div>
-            <Text className="story-eyebrow">工作台</Text>
+            <Text className="story-eyebrow">{getWorkspaceModuleTitle(activeModuleKey)}</Text>
             <Title level={3}>{activeProject?.title ?? "Story Pilot"}</Title>
           </div>
           <Space wrap>
@@ -1055,6 +1221,7 @@ export function ShellLayout() {
         </header>
 
         <WorkbenchHome
+          activeModuleKey={activeModuleKey}
           board={board}
           chapterVersions={chapterVersions}
           loadingChapterVersions={loadingChapterVersions}
@@ -1066,11 +1233,14 @@ export function ShellLayout() {
           onCompleteStage={completeStage}
           onConfirmBrief={confirmBrief}
           onConfirmMemory={confirmMemory}
+          onCompleteCoreStoryFields={completeCoreStoryFields}
+          onCompleteWorldbuildingFields={completeWorldbuildingFields}
           onAcceptElementCandidates={acceptElementCandidates}
           onCreateChapter={createChapter}
           onCreateCharacter={createCharacter}
           onCreateForeshadowing={createForeshadowing}
           onCreatePlotline={createPlotline}
+          onCreateStoryEvent={createStoryEvent}
           onCreateWorldRule={createWorldRule}
           onEvaluateStageGate={evaluateStageGate}
           onGenerateBlueprint={generateBlueprint}
@@ -1087,8 +1257,11 @@ export function ShellLayout() {
           onRestoreChapterVersion={restoreChapterVersion}
           onSaveChapter={saveChapter}
           onSaveBrief={saveBrief}
+          onSaveCoreStoryFields={saveCoreStoryFields}
+          onSaveWorldbuildingFields={saveWorldbuildingFields}
           onSelectChapter={selectChapter}
           onSkipStage={skipStage}
+          onUpdateCharacter={updateCharacter}
           savingChapter={savingChapter}
           selectedChapterId={selectedChapterId}
         />
@@ -1262,6 +1435,15 @@ function optionalText<TKey extends string>(
   return trimmed ? ({ [key]: trimmed } as Record<TKey, string>) : {};
 }
 
+function optionalNumber<TKey extends string>(
+  key: TKey,
+  value: number | null | undefined,
+): Partial<Record<TKey, number>> {
+  return typeof value === "number" && Number.isFinite(value)
+    ? ({ [key]: Math.trunc(value) } as Record<TKey, number>)
+    : {};
+}
+
 function upsertProject(
   currentProjects: readonly ProjectSidebarProject[],
   project: ProjectSidebarProject,
@@ -1308,9 +1490,5 @@ function resolveMemoryDecisionMessage(decision: MemoryCandidateDecisionInput["de
 }
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "操作失败";
+  return formatUserError(error);
 }

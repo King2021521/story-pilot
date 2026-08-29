@@ -7,6 +7,7 @@ import {
   type CharacterRecord,
   type CreateCharacterTraitInput,
   type EntityRelationRecord,
+  type UpdateCharacterTraitInput,
 } from "@story-pilot/db";
 
 import { ProjectStorageService } from "../storage/project-storage.service.js";
@@ -16,12 +17,32 @@ export interface CreateCharacterInput {
   readonly name: string;
   readonly role: "protagonist" | "antagonist" | "support" | "cameo";
   readonly archetype?: string;
+  readonly genderAge?: string;
+  readonly importance?: "core" | "major" | "minor" | "cameo";
+  readonly firstAppearance?: string;
+  readonly narrativeFunction?:
+    | "viewpoint"
+    | "driver"
+    | "opposition"
+    | "ally"
+    | "mentor"
+    | "foil"
+    | "love_interest"
+    | "comic_relief"
+    | "information_source"
+    | "custom";
+  readonly storyTask?: string;
+  readonly relationshipHook?: string;
   readonly goal?: string;
   readonly need?: string;
   readonly flaw?: string;
   readonly secret?: string;
   readonly voiceProfile?: string;
   readonly biography?: string;
+  readonly appearance?: string;
+  readonly arcStart?: string;
+  readonly arcTurn?: string;
+  readonly arcEnd?: string;
 }
 
 export interface CreateEntityRelationInput {
@@ -63,9 +84,23 @@ export class CharacterService {
         name: input.name,
         role: input.role,
         traits: buildCharacterTraits(input),
+        ...(input.appearance === undefined ? {} : { appearance: input.appearance }),
+        ...(input.arcEnd === undefined ? {} : { arcEnd: input.arcEnd }),
+        ...(input.arcStart === undefined ? {} : { arcStart: input.arcStart }),
+        ...(input.arcTurn === undefined ? {} : { arcTurn: input.arcTurn }),
         ...(input.archetype === undefined ? {} : { archetype: input.archetype }),
         ...(input.biography === undefined ? {} : { biography: input.biography }),
+        ...(input.firstAppearance === undefined ? {} : { firstAppearance: input.firstAppearance }),
+        ...(input.genderAge === undefined ? {} : { genderAge: input.genderAge }),
         ...(input.goal === undefined ? {} : { motivation: input.goal }),
+        ...(input.importance === undefined ? {} : { importance: input.importance }),
+        ...(input.narrativeFunction === undefined
+          ? {}
+          : { narrativeFunction: input.narrativeFunction }),
+        ...(input.relationshipHook === undefined
+          ? {}
+          : { relationshipHook: input.relationshipHook }),
+        ...(input.storyTask === undefined ? {} : { storyTask: input.storyTask }),
       });
 
       new DomainEventRepository(projectDatabase).append({
@@ -140,19 +175,44 @@ export class CharacterService {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       const repository = new CharacterRepository(projectDatabase);
+      const appearance = getStringPatch(input.patch, "appearance");
+      const arcEnd = getStringPatch(input.patch, "arcEnd");
+      const arcStart = getStringPatch(input.patch, "arcStart");
+      const arcTurn = getStringPatch(input.patch, "arcTurn");
       const archetype = getStringPatch(input.patch, "archetype");
       const biography = getStringPatch(input.patch, "biography");
+      const firstAppearance = getStringPatch(input.patch, "firstAppearance");
+      const flaw = getStringPatch(input.patch, "flaw");
+      const genderAge = getStringPatch(input.patch, "genderAge");
       const goal = getStringPatch(input.patch, "goal");
+      const importance = getStringPatch(input.patch, "importance");
       const name = getStringPatch(input.patch, "name");
+      const narrativeFunction = getStringPatch(input.patch, "narrativeFunction");
+      const need = getStringPatch(input.patch, "need");
+      const relationshipHook = getStringPatch(input.patch, "relationshipHook");
       const role = getStringPatch(input.patch, "role");
+      const secret = getStringPatch(input.patch, "secret");
+      const storyTask = getStringPatch(input.patch, "storyTask");
+      const voiceProfile = getStringPatch(input.patch, "voiceProfile");
       const character = repository.updateCharacter({
         characterId: input.characterId,
         projectId: input.projectId,
+        traits: buildCharacterPatchTraits({ flaw, goal, need, secret, voiceProfile }),
+        ...(appearance === undefined ? {} : { appearance }),
+        ...(arcEnd === undefined ? {} : { arcEnd }),
+        ...(arcStart === undefined ? {} : { arcStart }),
+        ...(arcTurn === undefined ? {} : { arcTurn }),
         ...(archetype === undefined ? {} : { archetype }),
         ...(biography === undefined ? {} : { biography }),
+        ...(firstAppearance === undefined ? {} : { firstAppearance }),
+        ...(genderAge === undefined ? {} : { genderAge }),
         ...(goal === undefined ? {} : { motivation: goal }),
+        ...(importance === undefined ? {} : { importance }),
         ...(name === undefined ? {} : { name }),
+        ...(narrativeFunction === undefined ? {} : { narrativeFunction }),
+        ...(relationshipHook === undefined ? {} : { relationshipHook }),
         ...(role === undefined ? {} : { role }),
+        ...(storyTask === undefined ? {} : { storyTask }),
       });
 
       new DomainEventRepository(projectDatabase).append({
@@ -218,7 +278,35 @@ function buildCharacterTraits(input: CreateCharacterInput): CreateCharacterTrait
   return traits;
 }
 
+function buildCharacterPatchTraits(input: {
+  readonly flaw: string | undefined;
+  readonly goal: string | undefined;
+  readonly need: string | undefined;
+  readonly secret: string | undefined;
+  readonly voiceProfile: string | undefined;
+}): UpdateCharacterTraitInput[] {
+  const traits: UpdateCharacterTraitInput[] = [];
+
+  if (input.goal !== undefined) {
+    traits.push({ traitId: randomUUID(), name: "goal", value: input.goal });
+  }
+  if (input.need !== undefined) {
+    traits.push({ traitId: randomUUID(), name: "need", value: input.need });
+  }
+  if (input.flaw !== undefined) {
+    traits.push({ traitId: randomUUID(), name: "flaw", value: input.flaw });
+  }
+  if (input.secret !== undefined) {
+    traits.push({ traitId: randomUUID(), name: "secret", value: input.secret });
+  }
+  if (input.voiceProfile !== undefined) {
+    traits.push({ traitId: randomUUID(), name: "voice_profile", value: input.voiceProfile });
+  }
+
+  return traits;
+}
+
 function getStringPatch(patch: Record<string, unknown>, key: string): string | undefined {
   const value = patch[key];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  return typeof value === "string" ? value.trim() : undefined;
 }

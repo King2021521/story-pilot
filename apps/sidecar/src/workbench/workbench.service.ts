@@ -11,6 +11,7 @@ import {
   ProjectRepository,
   ReviewIssueRepository,
   WorkflowRepository,
+  WorldbuildingRepository,
   WorldRepository,
 } from "@story-pilot/db";
 
@@ -44,6 +45,8 @@ export interface WorkbenchBoard {
   readonly organizations: readonly unknown[];
   readonly plotlines: readonly unknown[];
   readonly worldRules: readonly unknown[];
+  readonly worldbuildingProfile: unknown;
+  readonly storyEvents: readonly unknown[];
   readonly workOrders: readonly unknown[];
 }
 
@@ -101,6 +104,8 @@ export class WorkbenchService {
         creativePathRepository.initializePath(projectId);
       }
       const creativePath = creativePathRepository.getPath(projectId);
+      const plotRepository = new PlotRepository(projectDatabase);
+
       return {
         artifacts: new ArtifactRepository(projectDatabase).listByProject({ projectId }),
         chapters: new ChapterRepository(projectDatabase).listChapters({ projectId }),
@@ -119,14 +124,16 @@ export class WorkbenchService {
           scenePlans: longformPlanRepository.listScenePlans(projectId),
           volumePlans: longformPlanRepository.listVolumePlans(projectId),
         },
-        foreshadowings: new PlotRepository(projectDatabase).listForeshadowings(projectId),
+        foreshadowings: plotRepository.listForeshadowings(projectId),
         items: worldRepository.listItems(projectId),
         locations: worldRepository.listLocations(projectId),
         memoryCandidates: new MemoryRepository(projectDatabase).listCandidates({ projectId }),
         organizations: worldRepository.listOrganizations(projectId),
-        plotlines: new PlotRepository(projectDatabase).listPlotlines(projectId),
+        plotlines: plotRepository.listPlotlines(projectId),
         project: getProjectOrThrow(new ProjectRepository(projectDatabase), projectId),
+        storyEvents: plotRepository.listStoryEvents(projectId),
         worldRules: worldRepository.listWorldRules(projectId),
+        worldbuildingProfile: new WorldbuildingRepository(projectDatabase).getProfile(projectId),
         workOrders: new WorkflowRepository(projectDatabase).listWorkOrders({ projectId }),
       };
     } finally {

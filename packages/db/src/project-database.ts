@@ -5,6 +5,7 @@ import {
   CREATIVE_PATH_SCHEMA_SQL,
   INITIAL_PROJECT_SCHEMA_MIGRATION_ID,
   INITIAL_PROJECT_SCHEMA_SQL,
+  WORLDBUILDING_PROFILE_SCHEMA_SQL,
 } from "./migrations/project-schema-v1.js";
 import { projectSchema } from "./schema/index.js";
 
@@ -93,7 +94,54 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
     "contradiction_group_id text",
   );
   ensureTableColumn(projectDatabase, "memories", "embedding_ref", "embedding_ref text");
+  ensureTableColumn(projectDatabase, "characters", "gender_age", "gender_age text");
+  ensureTableColumn(projectDatabase, "characters", "importance", "importance text");
+  ensureTableColumn(projectDatabase, "characters", "first_appearance", "first_appearance text");
+  ensureTableColumn(projectDatabase, "characters", "narrative_function", "narrative_function text");
+  ensureTableColumn(projectDatabase, "characters", "story_task", "story_task text");
+  ensureTableColumn(projectDatabase, "characters", "relationship_hook", "relationship_hook text");
+  ensureTableColumn(projectDatabase, "characters", "appearance", "appearance text");
+  ensureTableColumn(projectDatabase, "characters", "arc_start", "arc_start text");
+  ensureTableColumn(projectDatabase, "characters", "arc_turn", "arc_turn text");
+  ensureTableColumn(projectDatabase, "characters", "arc_end", "arc_end text");
+  ensureTableColumn(
+    projectDatabase,
+    "story_blueprints",
+    "main_goal",
+    "main_goal text not null default ''",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "story_blueprints",
+    "stakes",
+    "stakes text not null default ''",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "story_blueprints",
+    "story_driver",
+    "story_driver text not null default 'growth_reversal'",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "story_blueprints",
+    "emotional_axes_json",
+    "emotional_axes_json text not null default '[]'",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "project_briefs",
+    "estimated_word_count",
+    "estimated_word_count integer",
+  );
+  ensureTableColumn(
+    projectDatabase,
+    "project_briefs",
+    "estimated_chapter_count",
+    "estimated_chapter_count integer",
+  );
   projectDatabase.client.exec(CREATIVE_PATH_SCHEMA_SQL);
+  projectDatabase.client.exec(WORLDBUILDING_PROFILE_SCHEMA_SQL);
 }
 
 function ensureTableColumn(

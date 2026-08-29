@@ -108,6 +108,41 @@ describe("ModelGateway", () => {
     expect(result.modelCall.usage?.totalTokens).toBe(18);
   });
 
+  it("normalizes OpenAI-compatible API keys that include a bearer prefix", async () => {
+    let authorizationHeader: string | undefined;
+    const provider = new OpenAICompatibleProvider({
+      apiKey: "Bearer test-key",
+      baseUrl: "https://llm.example.test/v1",
+      fetch: async (_url, init) => {
+        authorizationHeader = (init?.headers as Record<string, string> | undefined)?.authorization;
+
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ ok: true }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      },
+      model: "gpt-5.5",
+    });
+    const gateway = new ModelGateway(provider);
+
+    await gateway.generateObject({
+      messages: [{ role: "user", content: "ping" }],
+      purpose: "test",
+      schema: z.object({ ok: z.boolean() }),
+      schemaName: "Ping",
+    });
+
+    expect(authorizationHeader).toBe("Bearer test-key");
+  });
+
   it("streams text and embeddings through the configured provider", async () => {
     const gateway = new ModelGateway(
       new FakeModelProvider({

@@ -35,6 +35,11 @@ describe("ShellLayout", () => {
     expect(screen.getByLabelText("工作台")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "项目看板" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "AI 任务" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "收起侧栏" }));
+    expect(screen.getByRole("button", { name: "展开侧栏" })).toBeInTheDocument();
+    expect(screen.queryByText("小说创作工作台")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }));
+    expect(screen.getByText("小说创作工作台")).toBeInTheDocument();
   });
 
   it("opens settings, saves model config, validates model, and exports diagnostics", async () => {
@@ -201,6 +206,202 @@ describe("ShellLayout", () => {
     expect(await screen.findByRole("heading", { name: "雾都案卷" })).toBeInTheDocument();
   });
 
+  it("opens an active work as a modular novel workspace", async () => {
+    const project = createProject();
+    const creativePath = createCreativePathBoard({
+      blueprint: {
+        antagonistForce: "旧城钟楼背后的既得利益者。",
+        corePromise: "每三章给出一条硬线索和一次反转。",
+        differentiators: ["旧信谜题与人物成长绑定。"],
+        id: "blueprint_1",
+        logline: "旧信把主角拖回十年前的钟楼旧案。",
+        mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+        premise: "雨夜旧信揭开旧城钟楼案。",
+        protagonistArc: "从逃避旧案到主动承担代价。",
+        risks: ["线索密度不足会削弱悬疑感。"],
+        status: "applied",
+      },
+      chapterPlans: [
+        {
+          chapterGoal: "用雨夜旧信建立开局钩子。",
+          chapterIndex: 1,
+          id: "chapter_plan_1",
+          status: "draft",
+          title: "第 1 章：开局钩子",
+        },
+      ],
+      volumePlans: [
+        {
+          bookPlanId: "book_plan_1",
+          id: "volume_plan_1",
+          title: "第一卷 旧城来信",
+          volumeIndex: 1,
+        },
+      ],
+    });
+    const chapter = {
+      content: "雨夜里，林鸢发现门缝下有一封旧信。",
+      id: "chapter_1",
+      title: "第一章 雨夜来信",
+      version: 1,
+    };
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [chapter],
+            characters: [],
+            creativePath,
+            foreshadowings: [],
+            items: [],
+            locations: [],
+            memoryCandidates: [],
+            organizations: [],
+            plotlines: [],
+            project,
+            storyEvents: [],
+            workOrders: [],
+            worldRules: [],
+          });
+        case "worldbuilding.saveFields":
+          return rpcSuccess(request.id, {
+            fields: request.payload.fields,
+          });
+        case "worldbuilding.completeFields":
+          return rpcSuccess(request.id, {
+            fields: {
+              coreConflict:
+                "旧信牵出十年前钟楼案，主角必须在追查真相和保护旧城普通人之间持续取舍。",
+              culture: "旧城居民相信钟楼报时代表秩序延续，公开质疑钟楼会被视为背叛共同体。",
+              economy: "档案、路引和钟楼通行资格是最稀缺资源，掌握资源的人能决定线索是否流通。",
+              factions: "钟楼议会、旧警署残部和地下信使互相制衡，任何一方都不能公开撕破秩序。",
+              geography:
+                "旧城围绕钟楼向外扩散，内圈保存档案，中圈居住旧案相关家族，外圈负责消息交换。",
+              history: "十年前钟楼火灾改变了旧城权力结构，幸存者用沉默换来表面稳定。",
+              powerOrder: "钟楼议会拥有名义裁决权，真正执行依赖旧警署和地下信使的默契。",
+              powerSystem: "没有超自然力量，角色变强依靠档案解读、关系交换和对旧城规矩的熟悉。",
+              rules: "任何人不得私自带走钟楼档案；破坏规则会失去通行资格并被所有势力追查。",
+              socialStructure:
+                "旧城按是否拥有钟楼通行资格分层，普通人只能依附家族或信使网络获得保护。",
+              specialMechanism:
+                "每封旧信都会对应一段被删改的档案，信件出现意味着旧秩序主动暴露裂缝。",
+              worldBase:
+                "近现代旧城悬疑世界，钟楼、档案和旧信构成核心舞台，现实规则下隐藏长期权力交易。",
+            },
+          });
+        case "storyEvent.create":
+          return rpcSuccess(request.id, {
+            id: "event_1",
+            title: request.payload.title,
+          });
+        case "plot.generateRollingOutline":
+          return rpcSuccess(request.id, {
+            artifact: { id: "artifact_rolling_1", status: "pending" },
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "作品总控台" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1. 基本信息" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "9. 正文创作" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "2. 世界观设计" }));
+    expect(await screen.findByRole("heading", { name: "世界观设计" })).toBeInTheDocument();
+    expect(screen.getByLabelText("世界基底")).toBeInTheDocument();
+    expect(screen.getByLabelText("超自然 / 特殊机制")).toBeInTheDocument();
+    expect(screen.queryByText("这是一个什么世界？")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("时代、文明程度、现实或架空、世界规模、基本类型。"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("世界要素批量生成")).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByLabelText("说明：世界基底"));
+    expect(await screen.findByText("这是一个什么世界？")).toBeInTheDocument();
+    expect(
+      await screen.findByText("时代、文明程度、现实或架空、世界规模、基本类型。"),
+    ).toBeInTheDocument();
+    fireEvent.mouseLeave(screen.getByLabelText("说明：世界基底"));
+
+    fireEvent.change(screen.getByLabelText("世界基底"), {
+      target: { value: "近现代旧城悬疑世界，核心舞台是钟楼和旧档案。" },
+    });
+    fireEvent.change(screen.getByLabelText("力量体系"), {
+      target: { value: "角色依靠线索、关系和档案解读能力推进调查。" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 辅助补全" }));
+    await waitFor(() => {
+      expect(rpcPayload("worldbuilding.completeFields")).toMatchObject({
+        fields: {
+          powerSystem: "角色依靠线索、关系和档案解读能力推进调查。",
+          worldBase: "近现代旧城悬疑世界，核心舞台是钟楼和旧档案。",
+        },
+        projectId: "project_1",
+      });
+    });
+    expect(screen.getByLabelText("空间地理")).toHaveValue(
+      "旧城围绕钟楼向外扩散，内圈保存档案，中圈居住旧案相关家族，外圈负责消息交换。",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(rpcPayload("worldbuilding.saveFields")).toMatchObject({
+        fields: {
+          geography: "旧城围绕钟楼向外扩散，内圈保存档案，中圈居住旧案相关家族，外圈负责消息交换。",
+          worldBase:
+            "近现代旧城悬疑世界，钟楼、档案和旧信构成核心舞台，现实规则下隐藏长期权力交易。",
+        },
+        projectId: "project_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "7. 剧情节点" }));
+    expect(await screen.findByRole("heading", { name: "剧情节点设计" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("节点标题"), { target: { value: "旧信出现" } });
+    fireEvent.change(screen.getByLabelText("节点描述"), {
+      target: { value: "主角收到旧信，被迫回到十年前的旧案。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "创建剧情节点" }));
+    await waitFor(() => {
+      expect(rpcPayload("storyEvent.create")).toMatchObject({
+        description: "主角收到旧信，被迫回到十年前的旧案。",
+        eventType: "discovery",
+        projectId: "project_1",
+        title: "旧信出现",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "8. 章节规划" }));
+    expect(await screen.findByRole("heading", { name: "章节规划" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "生成未来 10 章章纲" }));
+    await waitFor(() => {
+      expect(rpcPayload("plot.generateRollingOutline")).toMatchObject({
+        chapterCount: 10,
+        projectId: "project_1",
+        startChapterIndex: 2,
+        volumePlanId: "volume_plan_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "9. 正文创作" }));
+    expect(await screen.findByLabelText("章节正文")).toBeInTheDocument();
+  });
+
   it("drives the creative path from brief to outline-based draft commands", async () => {
     const project = createProject();
     const creativePath = createCreativePathBoard();
@@ -210,6 +411,20 @@ describe("ShellLayout", () => {
       title: string;
       version: number;
     }> = [];
+    const coreStoryFields = {
+      antagonistForce: "旧城钟楼背后的既得利益者。",
+      corePromise: "每三章给出一条硬线索和一次反转。",
+      differentiators: ["旧信谜题与人物成长绑定。"],
+      emotionalAxes: ["悬疑", "反转"],
+      logline: "旧信把主角拖回十年前的钟楼旧案。",
+      mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+      mainGoal: "查清钟楼旧案并公开被隐藏的档案。",
+      premise: "雨夜旧信揭开旧城钟楼案。",
+      protagonistArc: "从逃避旧案到主动承担代价。",
+      risks: ["线索密度不足会削弱悬疑感。"],
+      stakes: "失败会让旧案幸存者再次被清算。",
+      storyDriver: "mystery",
+    };
 
     invokeMock.mockImplementation(async (_tauriCommand, args) => {
       const request = getRpcRequest(args);
@@ -240,15 +455,8 @@ describe("ShellLayout", () => {
         case "ai.generate":
           if (request.payload.capability === "blueprint.generate") {
             creativePath.blueprint = {
-              antagonistForce: "旧城钟楼背后的既得利益者。",
-              corePromise: "每三章给出一条硬线索和一次反转。",
-              differentiators: ["旧信谜题与人物成长绑定。"],
+              ...coreStoryFields,
               id: "blueprint_1",
-              logline: "旧信把主角拖回十年前的钟楼旧案。",
-              mainConflict: "主角追查旧案时不断触碰旧城秩序。",
-              premise: "雨夜旧信揭开旧城钟楼案。",
-              protagonistArc: "从逃避旧案到主动承担代价。",
-              risks: ["线索密度不足会削弱悬疑感。"],
               status: "draft",
             };
             return rpcSuccess(request.id, {
@@ -291,21 +499,24 @@ describe("ShellLayout", () => {
           return rpcSuccess(request.id, null);
         case "blueprint.generate":
           creativePath.blueprint = {
-            antagonistForce: "旧城钟楼背后的既得利益者。",
-            corePromise: "每三章给出一条硬线索和一次反转。",
-            differentiators: ["旧信谜题与人物成长绑定。"],
+            ...coreStoryFields,
             id: "blueprint_1",
-            logline: "旧信把主角拖回十年前的钟楼旧案。",
-            mainConflict: "主角追查旧案时不断触碰旧城秩序。",
-            premise: "雨夜旧信揭开旧城钟楼案。",
-            protagonistArc: "从逃避旧案到主动承担代价。",
-            risks: ["线索密度不足会削弱悬疑感。"],
             status: "draft",
           };
           return rpcSuccess(request.id, {
             artifact: { id: "artifact_blueprint_1", status: "pending" },
             blueprint: creativePath.blueprint,
           });
+        case "blueprint.completeForm":
+          return rpcSuccess(request.id, { fields: coreStoryFields });
+        case "blueprint.saveForm":
+          creativePath.blueprint = {
+            ...coreStoryFields,
+            ...(request.payload.fields as Partial<typeof coreStoryFields>),
+            id: "blueprint_1",
+            status: "draft",
+          };
+          return rpcSuccess(request.id, creativePath.blueprint);
         case "blueprint.apply":
           creativePath.blueprint = { ...creativePath.blueprint!, status: "applied" };
           return rpcSuccess(request.id, creativePath.blueprint);
@@ -437,23 +648,33 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
-    expect(await screen.findByRole("tab", { name: "创作路径" })).toBeInTheDocument();
-    expect(screen.getAllByText("大纲设计").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "作品总控台" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "6. 全书大纲" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "保存立项" }));
+    fireEvent.click(screen.getByRole("button", { name: "1. 基本信息" }));
+    fireEvent.change(screen.getByLabelText("预计字数"), { target: { value: "900000" } });
+    fireEvent.change(screen.getByLabelText("预计章节数"), { target: { value: "300" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存基本信息" }));
     await waitFor(() => {
       expect(rpcPayload("brief.save")).toMatchObject({
+        estimatedChapterCount: 300,
+        estimatedWordCount: 900_000,
         genre: "悬疑",
         projectId: "project_1",
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "确认立项" }));
-    fireEvent.click(screen.getByRole("button", { name: "生成创作蓝图" }));
-    await screen.findByText("雨夜旧信揭开旧城钟楼案。");
-    fireEvent.click(screen.getByRole("button", { name: "应用蓝图" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认基本信息" }));
+    fireEvent.click(screen.getByRole("button", { name: "3. 核心故事" }));
+    fireEvent.click(screen.getByRole("button", { name: "AI 辅助补全" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("故事前提")).toHaveValue("雨夜旧信揭开旧城钟楼案。");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "确认核心故事" }));
+    fireEvent.click(screen.getByRole("button", { name: "6. 全书大纲" }));
     fireEvent.click(screen.getByRole("button", { name: "生成全书规划" }));
     await screen.findByText("星潮纪全书规划");
+    fireEvent.click(screen.getByRole("button", { name: "8. 章节规划" }));
     fireEvent.click(screen.getByRole("button", { name: "生成未来 10 章章纲" }));
     await waitFor(() => {
       expect(screen.getAllByText("第 1 章：开局钩子").length).toBeGreaterThan(0);
@@ -472,10 +693,18 @@ describe("ShellLayout", () => {
         briefId: "brief_1",
         projectId: "project_1",
       });
-      expect(rpcPayload("ai.generate")).toMatchObject({
-        capability: "blueprint.generate",
+      expect(rpcPayload("blueprint.completeForm")).toMatchObject({
+        fields: {
+          storyDriver: "growth_reversal",
+        },
         projectId: "project_1",
-        targetType: "project",
+      });
+      expect(rpcPayload("blueprint.saveForm")).toMatchObject({
+        fields: {
+          mainGoal: "查清钟楼旧案并公开被隐藏的档案。",
+          stakes: "失败会让旧案幸存者再次被清算。",
+        },
+        projectId: "project_1",
       });
       expect(rpcPayload("blueprint.apply")).toMatchObject({
         blueprintId: "blueprint_1",
@@ -496,7 +725,7 @@ describe("ShellLayout", () => {
         chapterPlanId: "chapter_plan_1",
         projectId: "project_1",
       });
-      expect(allRpcPayloads("ai.generate").at(1)).toMatchObject({
+      expect(allRpcPayloads("ai.generate").at(0)).toMatchObject({
         capability: "outline.generate",
         input: {
           chapterCount: 10,
@@ -515,6 +744,131 @@ describe("ShellLayout", () => {
       });
       expect(rpcPayload("chapter.generateDraftFromOutline")).toMatchObject({
         chapterOutlineId: "chapter_outline_1",
+        projectId: "project_1",
+      });
+    });
+  }, 10_000);
+
+  it("edits core story as an input-first form with AI field completion", async () => {
+    const project = createProject();
+    const creativePath = createCreativePathBoard({
+      blueprint: {
+        antagonistForce: "旧城钟楼背后的既得利益者。",
+        corePromise: "每三章给出一条硬线索和一次反转。",
+        differentiators: ["旧信谜题与人物成长绑定。"],
+        emotionalAxes: ["悬疑", "反转"],
+        id: "blueprint_1",
+        logline: "旧信把主角拖回十年前的钟楼旧案。",
+        mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+        mainGoal: "查清钟楼旧案。",
+        premise: "雨夜旧信揭开旧城钟楼案。",
+        protagonistArc: "从逃避旧案到主动承担代价。",
+        risks: ["线索密度不足会削弱悬疑感。"],
+        stakes: "失败会让旧案幸存者再次被清算。",
+        status: "draft",
+        storyDriver: "mystery",
+      },
+    });
+    const completedFields = {
+      antagonistForce: "旧警署、钟楼议会和被旧案保护的幸存者。",
+      corePromise: "每个单元都给出硬线索、人物反转和旧案真相推进。",
+      differentiators: ["旧信谜题和人物成长绑定", "钟楼档案构成连续线索网"],
+      emotionalAxes: ["悬疑", "压迫感"],
+      logline: "雨夜旧信把主角拖回十年前钟楼旧案。",
+      mainConflict: "主角追查真相时不断触碰旧城秩序。",
+      mainGoal: "找出钟楼火灾真相并迫使旧城公开档案。",
+      premise: "旧城钟楼火灾十年后，主角收到一封不该存在的旧信。",
+      protagonistArc: "从逃避旧案到主动承担代价。",
+      risks: ["旧案反转不能只靠隐瞒信息"],
+      stakes: "失败会让旧案幸存者再次被清算，主角也会失去替亲人翻案的机会。",
+      storyDriver: "mystery",
+    };
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            creativePath,
+            memoryCandidates: [],
+            project,
+            workOrders: [],
+          });
+        case "blueprint.completeForm":
+          return rpcSuccess(request.id, { fields: completedFields });
+        case "blueprint.saveForm":
+          creativePath.blueprint = {
+            ...completedFields,
+            id: "blueprint_1",
+            status: "draft",
+          };
+          return rpcSuccess(request.id, creativePath.blueprint);
+        case "blueprint.apply":
+          creativePath.blueprint = {
+            ...creativePath.blueprint!,
+            status: "confirmed",
+          };
+          return rpcSuccess(request.id, creativePath.blueprint);
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "作品总控台" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "3. 核心故事" }));
+    expect(await screen.findByRole("heading", { name: "核心故事设计" })).toBeInTheDocument();
+    expect(screen.getByLabelText("故事前提")).toHaveValue("雨夜旧信揭开旧城钟楼案。");
+    expect(screen.getByLabelText("主线目标")).toHaveValue("查清钟楼旧案。");
+    expect(screen.getByLabelText("失败代价")).toBeInTheDocument();
+    expect(screen.getByLabelText("故事驱动类型")).toHaveAttribute("role", "combobox");
+    expect(screen.queryByText("生成核心故事方案")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("主线目标"), {
+      target: { value: "查清钟楼火灾真相。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "AI 辅助补全" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("blueprint.completeForm")).toMatchObject({
+        fields: {
+          mainGoal: "查清钟楼火灾真相。",
+          storyDriver: "mystery",
+        },
+        projectId: "project_1",
+      });
+    });
+    expect(screen.getByLabelText("失败代价")).toHaveValue(
+      "失败会让旧案幸存者再次被清算，主角也会失去替亲人翻案的机会。",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+    await waitFor(() => {
+      expect(rpcPayload("blueprint.saveForm")).toMatchObject({
+        fields: {
+          mainGoal: "找出钟楼火灾真相并迫使旧城公开档案。",
+          stakes: "失败会让旧案幸存者再次被清算，主角也会失去替亲人翻案的机会。",
+        },
+        projectId: "project_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "确认核心故事" }));
+    await waitFor(() => {
+      expect(allRpcPayloads("blueprint.saveForm")).toHaveLength(2);
+      expect(rpcPayload("blueprint.apply")).toMatchObject({
+        blueprintId: "blueprint_1",
         projectId: "project_1",
       });
     });
@@ -579,19 +933,26 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
-    expect(await screen.findByRole("button", { name: "进入创作要素" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "完成世界观与要素" }));
+    expect(await screen.findByRole("heading", { name: "作品总控台" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "2. 世界观设计" }));
+    expect(await screen.findByRole("heading", { name: "世界观设计" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("世界基底"), {
+      target: { value: "旧城悬疑世界。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
-      expect(rpcPayload("creativeStage.advance")).toMatchObject({
-        mode: "strict",
+      expect(rpcPayload("worldbuilding.saveFields")).toMatchObject({
+        fields: {
+          worldBase: "旧城悬疑世界。",
+        },
         projectId: "project_1",
-        stageKey: "worldbuilding",
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "进入创作要素" }));
-    expect(await screen.findByText("AI 候选生成")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "4. 角色设计" }));
+    expect(await screen.findByRole("heading", { name: "角色档案" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI 辅助" })).toBeInTheDocument();
   });
 
   it("sends chapter and memory actions through typed RPC commands", async () => {
@@ -670,13 +1031,13 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
-    fireEvent.click(await screen.findByRole("tab", { name: "章节生产" }));
+    fireEvent.click(await screen.findByRole("button", { name: "9. 正文创作" }));
     fireEvent.change(await screen.findByLabelText("章节正文"), {
       target: { value: "更新后的章节正文。" },
     });
     fireEvent.click(screen.getByRole("button", { name: "保存章节" }));
     fireEvent.click(screen.getByRole("button", { name: "生成草稿" }));
-    fireEvent.click(screen.getByRole("tab", { name: "记忆确认" }));
+    fireEvent.click(screen.getByRole("button", { name: "记忆确认" }));
 
     const acceptedCandidate = screen.getByText("林鸢发现一封来历异常的旧信。").closest("li");
     expect(acceptedCandidate).not.toBeNull();
@@ -728,7 +1089,17 @@ describe("ShellLayout", () => {
           return rpcSuccess(request.id, {
             artifacts: [],
             chapters: [],
-            characters: [],
+            characters: [
+              {
+                id: "character_existing",
+                importance: "core",
+                name: "顾晏",
+                narrativeFunction: "opposition",
+                role: "antagonist",
+                storyTask: "制造旧案调查的主要阻力。",
+                traits: [{ name: "secret", value: "掌握档案原件。" }],
+              },
+            ],
             foreshadowings: [],
             items: [],
             locations: [],
@@ -762,6 +1133,10 @@ describe("ShellLayout", () => {
               },
             ],
           });
+        case "worldbuilding.saveFields":
+          return rpcSuccess(request.id, {
+            fields: request.payload.fields,
+          });
         default:
           return rpcSuccess(request.id, { id: `${request.command}:result` });
       }
@@ -773,13 +1148,56 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
-    fireEvent.click(await screen.findByRole("tab", { name: "创作要素" }));
+    fireEvent.click(await screen.findByRole("button", { name: "2. 世界观设计" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "批量生成候选" }));
+    fireEvent.change(screen.getByLabelText("世界基底"), {
+      target: { value: "旧城悬疑世界。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(rpcPayload("worldbuilding.saveFields")).toMatchObject({
+        fields: {
+          worldBase: "旧城悬疑世界。",
+        },
+        projectId: "project_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "4. 角色设计" }));
+    expect(await screen.findByRole("heading", { name: "角色档案" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "角色列表" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI 辅助" })).toBeInTheDocument();
+    expect(screen.getByText("顾晏")).toBeInTheDocument();
+    expect(screen.getByText("制造阻力")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑角色 顾晏" }));
+    expect(screen.getByDisplayValue("顾晏")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("制造旧案调查的主要阻力。")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("掌握档案原件。")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("剧情任务"), {
+      target: { value: "制造新的调查阻力，并逼出旧案档案伪造线。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => {
+      expect(rpcPayload("character.update")).toMatchObject({
+        characterId: "character_existing",
+        patch: {
+          name: "顾晏",
+          narrativeFunction: "opposition",
+          role: "antagonist",
+          secret: "掌握档案原件。",
+          storyTask: "制造新的调查阻力，并逼出旧案档案伪造线。",
+        },
+        projectId: "project_1",
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "新建角色" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "生成角色候选" }));
     await waitFor(() => {
       expect(rpcPayload("element.generateCandidates")).toMatchObject({
         count: 10,
-        elementType: "weapon",
+        elementType: "character_name",
         genre: "悬疑",
         projectId: "project_1",
         style: "悬疑推理",
@@ -796,30 +1214,68 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.change(screen.getByLabelText("人物名称"), { target: { value: "林鸢" } });
+    fireEvent.change(screen.getByLabelText("年龄/身份"), { target: { value: "女，27 岁" } });
+    fireEvent.change(screen.getByLabelText("首次登场"), { target: { value: "第 1 章" } });
+    fireEvent.change(screen.getByLabelText("原型标签"), { target: { value: "离队调查者" } });
+    fireEvent.change(screen.getByLabelText("剧情任务"), {
+      target: { value: "把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。" },
+    });
+    fireEvent.change(screen.getByLabelText("外在目标"), { target: { value: "查清旧信来源" } });
+    fireEvent.change(screen.getByLabelText("内在需求"), {
+      target: { value: "重新学会信任他人" },
+    });
+    fireEvent.change(screen.getByLabelText("致命缺陷"), { target: { value: "过度自责" } });
+    fireEvent.change(screen.getByLabelText("秘密"), {
+      target: { value: "十年前曾到过案发现场" },
+    });
+    fireEvent.change(screen.getByLabelText("关系钩子"), {
+      target: { value: "与钟楼守档人互相试探。" },
+    });
+    fireEvent.change(screen.getByLabelText("初始状态"), {
+      target: { value: "逃避旧案，只想离开旧城。" },
+    });
+    fireEvent.change(screen.getByLabelText("关键转折"), {
+      target: { value: "发现证人仍被追杀后决定回头。" },
+    });
+    fireEvent.change(screen.getByLabelText("结局状态"), {
+      target: { value: "愿意公开旧案证据并承担代价。" },
+    });
+    fireEvent.change(screen.getByLabelText("说话风格"), {
+      target: { value: "克制、短句、偏观察细节。" },
+    });
+    fireEvent.change(screen.getByLabelText("外形记忆点"), {
+      target: { value: "旧风衣、随身旧笔记本，观察时会按住袖口。" },
+    });
+    fireEvent.change(screen.getByLabelText("人物小传"), {
+      target: { value: "前刑警，因十年前钟楼案离队。" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "创建人物" }));
     await waitFor(() => {
       expect(rpcPayload("character.create")).toMatchObject({
+        appearance: "旧风衣、随身旧笔记本，观察时会按住袖口。",
+        arcEnd: "愿意公开旧案证据并承担代价。",
+        arcStart: "逃避旧案，只想离开旧城。",
+        arcTurn: "发现证人仍被追杀后决定回头。",
+        archetype: "离队调查者",
+        biography: "前刑警，因十年前钟楼案离队。",
+        firstAppearance: "第 1 章",
+        flaw: "过度自责",
+        genderAge: "女，27 岁",
+        goal: "查清旧信来源",
+        importance: "major",
         name: "林鸢",
+        narrativeFunction: "driver",
+        need: "重新学会信任他人",
         projectId: "project_1",
+        relationshipHook: "与钟楼守档人互相试探。",
         role: "support",
+        secret: "十年前曾到过案发现场",
+        storyTask: "把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。",
+        voiceProfile: "克制、短句、偏观察细节。",
       });
     });
 
-    fireEvent.change(screen.getByLabelText("规则标题"), { target: { value: "旧城区治理" } });
-    fireEvent.change(screen.getByLabelText("规则内容"), {
-      target: { value: "旧城区由钟楼议会管理。" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "创建规则" }));
-    await waitFor(() => {
-      expect(rpcPayload("worldRule.create")).toMatchObject({
-        category: "custom",
-        constraintLevel: "soft",
-        projectId: "project_1",
-        statement: "旧城区由钟楼议会管理。",
-        title: "旧城区治理",
-      });
-    });
-
+    fireEvent.click(screen.getByRole("button", { name: "5. 故事线设计" }));
     fireEvent.change(screen.getByLabelText("故事线标题"), { target: { value: "旧信谜团" } });
     fireEvent.change(screen.getByLabelText("故事线摘要"), {
       target: { value: "围绕旧信来源展开。" },
@@ -835,6 +1291,7 @@ describe("ShellLayout", () => {
       });
     });
 
+    fireEvent.click(screen.getByRole("button", { name: "7. 剧情节点" }));
     fireEvent.change(screen.getByLabelText("伏笔标题"), { target: { value: "水印伏笔" } });
     fireEvent.change(screen.getByLabelText("伏笔内容"), {
       target: { value: "信纸水印暗示十年前档案。" },
@@ -946,7 +1403,7 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
-    fireEvent.click(await screen.findByRole("tab", { name: "章节生产" }));
+    fireEvent.click(await screen.findByRole("button", { name: "9. 正文创作" }));
     await screen.findByLabelText("章节正文");
 
     fireEvent.click(screen.getByRole("button", { name: "新建章节" }));
@@ -1053,7 +1510,7 @@ describe("ShellLayout", () => {
       </AppProviders>,
     );
 
-    fireEvent.click(await screen.findByRole("tab", { name: "章节生产" }));
+    fireEvent.click(await screen.findByRole("button", { name: "9. 正文创作" }));
     await screen.findByLabelText("章节正文");
     fireEvent.click(screen.getByRole("button", { name: "项目看板" }));
     fireEvent.click(await screen.findByRole("tab", { name: /图谱/ }));
@@ -1085,6 +1542,8 @@ interface TestCreativePathBoard {
   }>;
   brief: {
     emotionalRewards: string[];
+    estimatedChapterCount: number | null;
+    estimatedWordCount: number | null;
     forbiddenDirections: string[];
     genre: string;
     id: string;
@@ -1100,13 +1559,17 @@ interface TestCreativePathBoard {
     antagonistForce: string;
     corePromise: string;
     differentiators: string[];
+    emotionalAxes?: string[];
     id: string;
     logline: string;
     mainConflict: string;
+    mainGoal?: string;
     premise: string;
     protagonistArc: string;
     risks: string[];
+    stakes?: string;
     status: string;
+    storyDriver?: string;
   };
   outlines: Array<{
     id: string;
@@ -1200,6 +1663,8 @@ function createCreativePathBoard(
     blueprint: null,
     brief: {
       emotionalRewards: ["悬疑", "反转"],
+      estimatedChapterCount: 260,
+      estimatedWordCount: 800_000,
       forbiddenDirections: [],
       genre: "悬疑",
       id: "brief_1",

@@ -13,7 +13,13 @@ export interface ModelValidationResult {
   readonly model: string;
   readonly checkedAt: string;
   readonly endpoint?: string;
-  readonly errorCode?: "AI_MODEL_NOT_CONFIGURED" | "AI_MODEL_ENDPOINT_INVALID";
+  readonly errorCode?:
+    | "AI_MODEL_NOT_CONFIGURED"
+    | "AI_MODEL_ENDPOINT_INVALID"
+    | "AI_MODEL_AUTH_FAILED"
+    | "AI_MODEL_HTTP_ERROR"
+    | "AI_MODEL_REQUEST_FAILED";
+  readonly statusCode?: number;
   readonly missingFields?: readonly string[];
 }
 
@@ -27,7 +33,9 @@ export class SettingsService {
     return updateRuntimeSettings(input).settings;
   }
 
-  validateModel(input: CommandPayload<"settings.validateModel">): ModelValidationResult {
+  async validateModel(
+    input: CommandPayload<"settings.validateModel">,
+  ): Promise<ModelValidationResult> {
     const settings = initializeRuntimeConfig().settings;
     const baseUrl = input.baseUrl ?? settings.model.baseUrl;
     const apiKey = input.apiKey ?? settings.model.apiKey;
@@ -55,6 +63,34 @@ export class SettingsService {
 
     try {
       const endpoint = new URL(baseUrl);
+      const response = await fetch(buildChatCompletionsUrl(endpoint), {
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "ping" }],
+          model,
+          stream: false,
+        }),
+        headers: {
+          authorization: `Bearer ${normalizeApiKey(apiKey)}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        return {
+          checkedAt,
+          endpoint: endpoint.toString(),
+          errorCode:
+            response.status === 401 || response.status === 403
+              ? "AI_MODEL_AUTH_FAILED"
+              : "AI_MODEL_HTTP_ERROR",
+          model,
+          ok: false,
+          provider: settings.model.provider,
+          statusCode: response.status,
+        };
+      }
+
       return {
         checkedAt,
         endpoint: endpoint.toString(),
@@ -65,11 +101,28 @@ export class SettingsService {
     } catch {
       return {
         checkedAt,
-        errorCode: "AI_MODEL_ENDPOINT_INVALID",
+        errorCode: isValidUrl(baseUrl) ? "AI_MODEL_REQUEST_FAILED" : "AI_MODEL_ENDPOINT_INVALID",
         model,
         ok: false,
         provider: settings.model.provider,
       };
     }
+  }
+}
+
+function buildChatCompletionsUrl(endpoint: URL): string {
+  return `${endpoint.toString().replace(/\/+$/u, "")}/chat/completions`;
+}
+
+function normalizeApiKey(apiKey: string): string {
+  return apiKey.trim().replace(/^Bearer\s+/iu, "");
+}
+
+function isValidUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
   }
 }

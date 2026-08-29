@@ -18,6 +18,7 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   Modal,
   Select,
   Space,
@@ -146,6 +147,8 @@ export interface ProjectBriefItem {
   readonly targetAudience: string | null;
   readonly platformProfile: string | null;
   readonly lengthProfile: string | null;
+  readonly estimatedWordCount: number | null;
+  readonly estimatedChapterCount: number | null;
   readonly narrativePov: string | null;
   readonly emotionalRewards: readonly string[];
   readonly initialIdea: string | null;
@@ -158,9 +161,13 @@ export interface StoryBlueprintItem {
   readonly premise: string;
   readonly logline: string;
   readonly corePromise: string;
+  readonly mainGoal?: string;
   readonly mainConflict: string;
   readonly protagonistArc: string | null;
   readonly antagonistForce: string | null;
+  readonly stakes?: string;
+  readonly storyDriver?: string;
+  readonly emotionalAxes?: readonly string[];
   readonly differentiators: readonly string[];
   readonly risks: readonly string[];
   readonly status: string;
@@ -237,6 +244,8 @@ export interface SaveBriefValues {
   readonly targetAudience?: string;
   readonly platformProfile?: string;
   readonly lengthProfile?: string;
+  readonly estimatedWordCount?: number | null;
+  readonly estimatedChapterCount?: number | null;
   readonly narrativePov?: string;
   readonly emotionalRewards: readonly string[];
   readonly initialIdea?: string;
@@ -339,6 +348,8 @@ export function CreativePathWorkbench({
             genre: board.brief?.genre ?? defaultGenre,
             initialIdea: board.brief?.initialIdea ?? "",
             lengthProfile: board.brief?.lengthProfile ?? "长篇连载",
+            estimatedWordCount: board.brief?.estimatedWordCount ?? 800_000,
+            estimatedChapterCount: board.brief?.estimatedChapterCount ?? 260,
             narrativePov: board.brief?.narrativePov ?? "第三人称",
             platformProfile: board.brief?.platformProfile ?? "男频",
             subgenres: board.brief?.subgenres.length ? board.brief.subgenres : ["废柴逆袭"],
@@ -361,6 +372,32 @@ export function CreativePathWorkbench({
             </Form.Item>
             <Form.Item label="篇幅目标" name="lengthProfile">
               <Select options={LENGTH_OPTIONS} />
+            </Form.Item>
+            <Form.Item
+              label="预计字数"
+              name="estimatedWordCount"
+              rules={[{ max: 20_000_000, min: 10_000, type: "number" }]}
+            >
+              <InputNumber
+                aria-label="预计字数"
+                max={20_000_000}
+                min={10_000}
+                step={10_000}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+            <Form.Item
+              label="预计章节数"
+              name="estimatedChapterCount"
+              rules={[{ max: 10_000, min: 1, type: "number" }]}
+            >
+              <InputNumber
+                aria-label="预计章节数"
+                max={10_000}
+                min={1}
+                step={10}
+                style={{ width: "100%" }}
+              />
             </Form.Item>
             <Form.Item label="叙事人称" name="narrativePov">
               <Select options={POV_OPTIONS} />

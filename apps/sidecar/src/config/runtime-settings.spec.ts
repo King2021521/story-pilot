@@ -89,6 +89,22 @@ describe("runtime settings", () => {
     expect(env.STORY_PILOT_LLM_MODEL).toBe("gpt-test");
   });
 
+  it("treats setting.json as authoritative over local LLM environment values", () => {
+    const homePath = createTempHome();
+    const env: NodeJS.ProcessEnv = {
+      STORY_PILOT_HOME: homePath,
+      STORY_PILOT_LLM_API_KEY: "env-api-key",
+      STORY_PILOT_LLM_BASE_URL: "https://api.env.test/v1",
+      STORY_PILOT_LLM_MODEL: "env-model",
+    };
+
+    initializeRuntimeConfig({ env });
+
+    expect(env.STORY_PILOT_LLM_API_KEY).toBeUndefined();
+    expect(env.STORY_PILOT_LLM_BASE_URL).toBeUndefined();
+    expect(env.STORY_PILOT_LLM_MODEL).toBe("gpt-5.5");
+  });
+
   it("renames invalid setting.json before recreating defaults", () => {
     const homePath = createTempHome();
     const env: NodeJS.ProcessEnv = { STORY_PILOT_HOME: homePath };

@@ -51,7 +51,7 @@ export function ChapterVersionDrawer({
         <Flex component="ul" gap={10} vertical>
           {versions.map((version) => (
             <li className="chapter-version-item" key={version.id}>
-              <Space direction="vertical" size={4}>
+              <Space orientation="vertical" size={4}>
                 <Text strong>
                   {version.title ? `${version.title} · v${version.version}` : `v${version.version}`}
                 </Text>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   ChapterDraftOutputSchema,
@@ -8,9 +8,16 @@ import {
   MemoryExtractOutputSchema,
 } from "@story-pilot/ai";
 
-import { createModelGatewayFromEnv } from "./model-gateway.provider.js";
+import { createModelGatewayFromEnv, modelGatewayProvider } from "./model-gateway.provider.js";
 
 describe("createModelGatewayFromEnv", () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
   it("rejects production model calls when local LLM settings are missing", async () => {
     const gateway = createModelGatewayFromEnv({});
 
@@ -131,5 +138,51 @@ describe("createModelGatewayFromEnv", () => {
       object: { ok: true },
     });
     expect(calls).toEqual(["https://api.example.test/v1/chat/completions"]);
+  });
+
+  it("provider gateway reads updated model environment after settings changes", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({ ok: true }),
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    process.env.STORY_PILOT_LLM_API_KEY = "first-key";
+    process.env.STORY_PILOT_LLM_BASE_URL = "https://api.first.test/v1";
+    process.env.STORY_PILOT_LLM_MODEL = "first-model";
+
+    const gateway = modelGatewayProvider.useFactory();
+    await gateway.generateObject({
+      messages: [{ role: "user", content: "ping" }],
+      purpose: "test",
+      schema: z.object({ ok: z.boolean() }),
+      schemaName: "Ping",
+    });
+
+    process.env.STORY_PILOT_LLM_API_KEY = "second-key";
+    process.env.STORY_PILOT_LLM_BASE_URL = "https://api.second.test/v1";
+    process.env.STORY_PILOT_LLM_MODEL = "second-model";
+
+    await gateway.generateObject({
+      messages: [{ role: "user", content: "ping" }],
+      purpose: "test",
+      schema: z.object({ ok: z.boolean() }),
+      schemaName: "Ping",
+    });
+
+    expect(calls).toEqual([
+      "https://api.first.test/v1/chat/completions",
+      "https://api.second.test/v1/chat/completions",
+    ]);
   });
 });

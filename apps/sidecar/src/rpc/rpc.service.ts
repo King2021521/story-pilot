@@ -38,6 +38,7 @@ import { ProjectService, type CreateProjectInput } from "../project/project.serv
 import { SettingsService } from "../settings/settings.service.js";
 import { WorkflowService, type RunWorkflowInput } from "../workflow/workflow.service.js";
 import { WorkbenchService } from "../workbench/workbench.service.js";
+import { WorldbuildingService } from "../world/worldbuilding.service.js";
 import { WorldRuleService } from "../world/world-rule.service.js";
 
 @Injectable()
@@ -62,6 +63,7 @@ export class RpcService {
     private readonly storyEventService: StoryEventService,
     private readonly workflowService: WorkflowService,
     private readonly workbenchService: WorkbenchService,
+    private readonly worldbuildingService: WorldbuildingService,
     private readonly worldRuleService: WorldRuleService,
   ) {}
 
@@ -224,6 +226,12 @@ export class RpcService {
           genre: parsed.genre,
           projectId: parsed.projectId,
           subgenres: parsed.subgenres,
+          ...(parsed.estimatedChapterCount === undefined
+            ? {}
+            : { estimatedChapterCount: parsed.estimatedChapterCount }),
+          ...(parsed.estimatedWordCount === undefined
+            ? {}
+            : { estimatedWordCount: parsed.estimatedWordCount }),
           ...(parsed.initialIdea === undefined ? {} : { initialIdea: parsed.initialIdea }),
           ...(parsed.lengthProfile === undefined ? {} : { lengthProfile: parsed.lengthProfile }),
           ...(parsed.narrativePov === undefined ? {} : { narrativePov: parsed.narrativePov }),
@@ -240,6 +248,14 @@ export class RpcService {
       case "blueprint.generate": {
         const parsed = payload as CommandPayload<"blueprint.generate">;
         return this.creativePathService.generateBlueprint(parsed);
+      }
+      case "blueprint.saveForm": {
+        const parsed = payload as CommandPayload<"blueprint.saveForm">;
+        return this.creativePathService.saveBlueprintForm(parsed);
+      }
+      case "blueprint.completeForm": {
+        const parsed = payload as CommandPayload<"blueprint.completeForm">;
+        return this.creativePathService.completeBlueprintForm(parsed);
       }
       case "blueprint.apply": {
         const parsed = payload as CommandPayload<"blueprint.apply">;
@@ -519,12 +535,28 @@ export class RpcService {
           name: parsed.name,
           projectId: parsed.projectId,
           role: parsed.role,
+          ...(parsed.appearance === undefined ? {} : { appearance: parsed.appearance }),
+          ...(parsed.arcEnd === undefined ? {} : { arcEnd: parsed.arcEnd }),
+          ...(parsed.arcStart === undefined ? {} : { arcStart: parsed.arcStart }),
+          ...(parsed.arcTurn === undefined ? {} : { arcTurn: parsed.arcTurn }),
           ...(parsed.archetype === undefined ? {} : { archetype: parsed.archetype }),
           ...(parsed.biography === undefined ? {} : { biography: parsed.biography }),
+          ...(parsed.firstAppearance === undefined
+            ? {}
+            : { firstAppearance: parsed.firstAppearance }),
           ...(parsed.flaw === undefined ? {} : { flaw: parsed.flaw }),
+          ...(parsed.genderAge === undefined ? {} : { genderAge: parsed.genderAge }),
           ...(parsed.goal === undefined ? {} : { goal: parsed.goal }),
+          ...(parsed.importance === undefined ? {} : { importance: parsed.importance }),
           ...(parsed.need === undefined ? {} : { need: parsed.need }),
+          ...(parsed.narrativeFunction === undefined
+            ? {}
+            : { narrativeFunction: parsed.narrativeFunction }),
+          ...(parsed.relationshipHook === undefined
+            ? {}
+            : { relationshipHook: parsed.relationshipHook }),
           ...(parsed.secret === undefined ? {} : { secret: parsed.secret }),
+          ...(parsed.storyTask === undefined ? {} : { storyTask: parsed.storyTask }),
           ...(parsed.voiceProfile === undefined ? {} : { voiceProfile: parsed.voiceProfile }),
         };
         return this.characterService.createCharacter(input);
@@ -563,6 +595,16 @@ export class RpcService {
       }
       case "worldRule.update": {
         return this.worldRuleService.updateWorldRule(payload as CommandPayload<"worldRule.update">);
+      }
+      case "worldbuilding.saveFields": {
+        return this.worldbuildingService.saveFields(
+          payload as CommandPayload<"worldbuilding.saveFields">,
+        );
+      }
+      case "worldbuilding.completeFields": {
+        return this.worldbuildingService.completeFields(
+          payload as CommandPayload<"worldbuilding.completeFields">,
+        );
       }
       case "plotline.create": {
         const parsed = payload as CommandPayload<"plotline.create">;

@@ -4,12 +4,36 @@ import { join } from "node:path";
 
 import { Test } from "@nestjs/testing";
 import { FakeModelProvider, ModelGateway } from "@story-pilot/ai";
-import { createProjectDatabase, PROJECT_DATABASE_FILE } from "@story-pilot/db";
+import {
+  createProjectDatabase,
+  PROJECT_DATABASE_FILE,
+  type WorldbuildingFields,
+} from "@story-pilot/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
 import { AppModule } from "../app.module.js";
 import { RpcService } from "./rpc.service.js";
+
+function completeWorldbuildingFields(
+  overrides: Partial<WorldbuildingFields> = {},
+): WorldbuildingFields {
+  return {
+    coreConflict: "旧秩序与新生力量围绕资源和合法性长期冲突。",
+    culture: "民众相信血脉、功绩与契约共同决定身份。",
+    economy: "土地、粮草、军械、情报和修行资源决定势力上限。",
+    factions: "王朝残部、地方豪强、边境军镇与民间盟会互相牵制。",
+    geography: "都城、边郡、河谷粮仓和山中秘境构成主要舞台。",
+    history: "旧王朝衰败后，各方借灾年和战乱重塑权力秩序。",
+    powerOrder: "皇权名义尚在，实际权力由军功、宗族与资源控制。",
+    powerSystem: "角色通过武学、军略、情报网络和资源调度获得优势。",
+    rules: "军令、盟约、宗法和地方潜规则共同约束行动。",
+    socialStructure: "士族、军户、商帮、流民与修行者拥有不同生存路径。",
+    specialMechanism: "星潮周期性影响修行效率和战略窗口。",
+    worldBase: "架空古代争霸世界，现实权谋与轻度超凡并存。",
+    ...overrides,
+  };
+}
 
 describe("RpcService MVP command integration", () => {
   const tempDirs: string[] = [];
@@ -741,6 +765,8 @@ describe("RpcService MVP command integration", () => {
           id: "req_path_brief_save",
           payload: {
             emotionalRewards: ["悬疑", "反转"],
+            estimatedChapterCount: 260,
+            estimatedWordCount: 800_000,
             genre: "悬疑",
             initialIdea: "雨夜旧信把主角拖回十年前的钟楼旧案。",
             lengthProfile: "长篇连载",
@@ -752,6 +778,10 @@ describe("RpcService MVP command integration", () => {
           },
         }),
       );
+      expect(savedBrief).toMatchObject({
+        estimatedChapterCount: 260,
+        estimatedWordCount: 800_000,
+      });
       const confirmedBrief = await expectRpcOk(
         rpcService.handle({
           command: "brief.confirm",
@@ -1026,7 +1056,7 @@ describe("RpcService MVP command integration", () => {
   });
 
   it("evaluates creative stage gates and supports strict advance, skip, and reopen", async () => {
-    const { moduleRef, rootDir, rpcService } = await createRpcHarness(tempDirs);
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
       const project = await expectRpcOk(
         rpcService.handle({
@@ -1105,9 +1135,9 @@ describe("RpcService MVP command integration", () => {
           requirements: expect.arrayContaining([
             expect.objectContaining({
               current: 0,
-              key: "world_rules",
+              key: "worldbuilding_fields",
               ok: false,
-              required: 3,
+              required: 12,
             }),
           ]),
           stageKey: "worldbuilding",
@@ -1129,18 +1159,14 @@ describe("RpcService MVP command integration", () => {
 
       await expectRpcOk(
         rpcService.handle({
-          command: "worldRule.create",
-          id: "req_gate_world_rule",
+          command: "worldbuilding.saveFields",
+          id: "req_gate_worldbuilding_profile",
           payload: {
-            category: "magic",
-            constraintLevel: "hard",
+            fields: completeWorldbuildingFields(),
             projectId,
-            statement: "星潮只在双月同天时增强。",
-            title: "星潮规则",
           },
         }),
       );
-      await createWorldbuildingAssets({ projectId, rootDir, rpcService });
       const advancedWorldbuilding = await expectRpcOk(
         rpcService.handle({
           command: "creativeStage.advance",
@@ -1216,8 +1242,8 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
-  it("requires complete worldbuilding assets before advancing a xuanhuan project", async () => {
-    const { moduleRef, rootDir, rpcService } = await createRpcHarness(tempDirs);
+  it("requires complete worldbuilding fields before advancing a xuanhuan project", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
       const project = await createConfirmedBriefAndBlueprint(rpcService, {
         genre: "玄幻",
@@ -1227,14 +1253,23 @@ describe("RpcService MVP command integration", () => {
 
       await expectRpcOk(
         rpcService.handle({
-          command: "worldRule.create",
-          id: "req_gate_world_only_rule",
+          command: "worldbuilding.saveFields",
+          id: "req_gate_world_partial_profile",
           payload: {
-            category: "magic",
-            constraintLevel: "hard",
+            fields: completeWorldbuildingFields({
+              coreConflict: "",
+              culture: "",
+              economy: "",
+              factions: "",
+              geography: "",
+              history: "",
+              powerOrder: "",
+              powerSystem: "",
+              rules: "",
+              socialStructure: "",
+              specialMechanism: "",
+            }),
             projectId,
-            statement: "星潮只在双月同天时增强。",
-            title: "星潮核心规则",
           },
         }),
       );
@@ -1267,31 +1302,13 @@ describe("RpcService MVP command integration", () => {
           requirements: expect.arrayContaining([
             expect.objectContaining({
               current: 1,
-              key: "world_rules",
+              key: "worldbuilding_fields",
               ok: false,
-              required: 3,
+              required: 12,
             }),
             expect.objectContaining({
               current: 0,
-              key: "locations",
-              ok: false,
-              required: 2,
-            }),
-            expect.objectContaining({
-              current: 0,
-              key: "organizations",
-              ok: false,
-              required: 1,
-            }),
-            expect.objectContaining({
-              current: 0,
-              key: "power_systems",
-              ok: false,
-              required: 1,
-            }),
-            expect.objectContaining({
-              current: 0,
-              key: "items",
+              key: "power_system",
               ok: false,
               required: 1,
             }),
@@ -1307,7 +1324,19 @@ describe("RpcService MVP command integration", () => {
         },
       });
 
-      await createWorldbuildingAssets({ projectId, rootDir, rpcService });
+      await expectRpcOk(
+        rpcService.handle({
+          command: "worldbuilding.saveFields",
+          id: "req_gate_world_complete_profile",
+          payload: {
+            fields: completeWorldbuildingFields({
+              powerSystem: "星潮修行按境界、资源和代价分层，越阶会损伤根基。",
+              worldBase: "玄幻星潮世界，宗门、王朝与边境军镇争夺天象资源。",
+            }),
+            projectId,
+          },
+        }),
+      );
 
       const advanced = await expectRpcOk(
         rpcService.handle({
@@ -1326,11 +1355,8 @@ describe("RpcService MVP command integration", () => {
         gateReport: {
           ok: true,
           requirements: expect.arrayContaining([
-            expect.objectContaining({ key: "world_rules", ok: true, required: 3 }),
-            expect.objectContaining({ key: "locations", ok: true, required: 2 }),
-            expect.objectContaining({ key: "organizations", ok: true, required: 1 }),
-            expect.objectContaining({ key: "power_systems", ok: true, required: 1 }),
-            expect.objectContaining({ key: "items", ok: true, required: 1 }),
+            expect.objectContaining({ key: "worldbuilding_fields", ok: true, required: 12 }),
+            expect.objectContaining({ key: "power_system", ok: true, required: 1 }),
           ]),
         },
         stage: {
@@ -1596,11 +1622,26 @@ describe("RpcService MVP command integration", () => {
           command: "character.create",
           id: "req_character_create",
           payload: {
+            appearance: "旧风衣、随身旧笔记本。",
+            arcEnd: "愿意公开旧案证据并承担代价。",
+            arcStart: "逃避旧案，只想离开旧城。",
+            arcTurn: "发现证人仍被追杀后决定回头。",
             archetype: "调查者",
+            biography: "前刑警，因旧案离队。",
+            firstAppearance: "第 1 章",
+            flaw: "过度自责",
+            genderAge: "女，27 岁",
             goal: "查清旧案",
+            importance: "core",
             name: "林鸢",
+            narrativeFunction: "viewpoint",
+            need: "重新学会信任他人",
             projectId: getString(project, "id"),
+            relationshipHook: "与钟楼守档人互相试探。",
             role: "protagonist",
+            secret: "十年前曾到过案发现场",
+            storyTask: "把旧信线索推进成主线调查。",
+            voiceProfile: "克制、短句、偏观察细节。",
           },
         }),
       );
@@ -1610,10 +1651,23 @@ describe("RpcService MVP command integration", () => {
           id: "req_character_update",
           payload: {
             characterId: getString(character, "id"),
-            patch: { goal: "保护证人", name: "林鸢" },
+            patch: {
+              arcEnd: "从逃避旧案的人，变成愿意公开档案的人。",
+              goal: "保护证人",
+              name: "林鸢",
+              need: "保护证人",
+              secret: "",
+              storyTask: "保护证人并揭开档案伪造链条。",
+            },
             projectId: getString(project, "id"),
           },
         }),
+      );
+      expect(getRecordArray(updatedCharacter, "traits")).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "need", value: "保护证人" })]),
+      );
+      expect(getRecordArray(updatedCharacter, "traits")).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "secret" })]),
       );
       const generatedNames = await expectRpcOk(
         rpcService.handle({
@@ -1765,7 +1819,11 @@ describe("RpcService MVP command integration", () => {
       );
       const boardCreativePath = getRecord(boardAfterReview, "creativePath");
 
-      expect(updatedCharacter).toMatchObject({ motivation: "保护证人" });
+      expect(updatedCharacter).toMatchObject({
+        arcEnd: "从逃避旧案的人，变成愿意公开档案的人。",
+        motivation: "保护证人",
+        storyTask: "保护证人并揭开档案伪造链条。",
+      });
       expect(getRecordArray(generatedNames, "items")).toHaveLength(3);
       expect(updatedWorldRule).toMatchObject({ content: "档案馆夜间只允许内部人员进入。" });
       expect(getRecordArray(characterList, "items")).toEqual([
@@ -2269,11 +2327,15 @@ async function createRpcHarness(tempDirs: string[]) {
               antagonistForce: "旧城钟楼背后的既得利益者。",
               corePromise: "每三章给出一条硬线索和一次反转。",
               differentiators: ["旧信谜题与人物成长绑定。"],
+              emotionalAxes: ["悬疑", "反转"],
               logline: "旧信把主角拖回十年前的钟楼旧案。",
               mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+              mainGoal: "查清钟楼旧案并保护仍被旧案威胁的人。",
               premise: "雨夜旧信揭开旧城钟楼案。",
               protagonistArc: "从逃避旧案到主动承担代价。",
               risks: ["线索密度不足会削弱悬疑感。"],
+              stakes: "失败会让旧案幸存者再次被清算。",
+              storyDriver: "mystery",
             },
             ChapterDraftOutput: {
               draft: {
@@ -2552,93 +2614,6 @@ async function createConfirmedBriefAndBlueprint(
   );
 
   return project;
-}
-
-async function createWorldbuildingAssets(input: {
-  readonly projectId: string;
-  readonly rootDir: string;
-  readonly rpcService: RpcService;
-}): Promise<void> {
-  for (const [index, rule] of [
-    ["限制代价", "借用星潮会损耗寿元，越阶越明显。"],
-    ["社会秩序", "司星阁垄断观星历法并控制修行资源。"],
-  ] as const) {
-    await expectRpcOk(
-      input.rpcService.handle({
-        command: "worldRule.create",
-        id: `req_gate_world_rule_${index}`,
-        payload: {
-          category: index === "限制代价" ? "magic" : "society",
-          constraintLevel: "hard",
-          projectId: input.projectId,
-          statement: rule,
-          title: index,
-        },
-      }),
-    );
-  }
-
-  await expectRpcOk(
-    input.rpcService.handle({
-      command: "element.acceptCandidates",
-      id: "req_gate_world_accept_assets",
-      payload: {
-        items: [
-          {
-            description: "主城，司星阁和各大世家争夺资源的中心。",
-            name: "照潮城",
-            tags: ["城市"],
-            type: "city",
-          },
-          {
-            description: "星潮最强时开启的古老试炼场。",
-            name: "落星台",
-            tags: ["地点"],
-            type: "location",
-          },
-          {
-            description: "垄断观星术与星潮资源的组织。",
-            name: "司星阁",
-            tags: ["组织"],
-            type: "organization",
-          },
-          {
-            description: "早期冲突中被争夺的关键武器。",
-            name: "潮汐断星刃",
-            tags: ["武器"],
-            type: "weapon",
-          },
-        ],
-        projectId: input.projectId,
-      },
-    }),
-  );
-
-  const projectDatabase = createProjectDatabase(
-    join(input.rootDir, "projects", input.projectId, PROJECT_DATABASE_FILE),
-  );
-  try {
-    projectDatabase.client
-      .prepare(
-        `
-        insert into power_systems (
-          id, project_id, name, kind, source, cost, levels_json, taboos_json,
-          conflict_hooks_json, status, created_at, updated_at
-        )
-        values (
-          'power_system_star_tide', @projectId, '星潮九转', 'cultivation',
-          '星潮', '寿元损耗', '["启星","凝潮","照命"]', '["无代价越阶"]',
-          '["司星阁封锁晋阶资源"]', 'canon', @now, @now
-        )
-        `,
-      )
-      .run({
-        now: Date.now(),
-        projectId: input.projectId,
-      });
-  } finally {
-    projectDatabase.close();
-  }
 }
 
 async function expectRpcOk(responsePromise: Promise<unknown>): Promise<Record<string, unknown>> {

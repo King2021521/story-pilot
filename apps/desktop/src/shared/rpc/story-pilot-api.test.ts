@@ -4,6 +4,45 @@ import { describe, expect, it, vi } from "vitest";
 import { StoryPilotApiClient } from "./story-pilot-api";
 import type { RpcClient } from "./rpc-client";
 
+type WorldbuildingFields = CommandPayload<"worldbuilding.saveFields">["fields"];
+type CoreStoryFields = CommandPayload<"blueprint.saveForm">["fields"];
+
+function worldbuildingFields(overrides: Partial<WorldbuildingFields>): WorldbuildingFields {
+  return {
+    coreConflict: "",
+    culture: "",
+    economy: "",
+    factions: "",
+    geography: "",
+    history: "",
+    powerOrder: "",
+    powerSystem: "",
+    rules: "",
+    socialStructure: "",
+    specialMechanism: "",
+    worldBase: "",
+    ...overrides,
+  };
+}
+
+function coreStoryFields(overrides: Partial<CoreStoryFields>): CoreStoryFields {
+  return {
+    antagonistForce: "",
+    corePromise: "",
+    differentiators: [],
+    emotionalAxes: [],
+    logline: "",
+    mainConflict: "",
+    mainGoal: "",
+    premise: "",
+    protagonistArc: "",
+    risks: [],
+    stakes: "",
+    storyDriver: "growth_reversal",
+    ...overrides,
+  };
+}
+
 describe("StoryPilotApiClient", () => {
   it("unwraps list responses returned by the sidecar RPC service", async () => {
     const rpcClient: RpcClient = {
@@ -243,6 +282,20 @@ describe("StoryPilotApiClient", () => {
       projectId: "project_1",
     });
     await api.generateCharacterNames({ constraints: ["悬疑"], count: 3, projectId: "project_1" });
+    await api.saveBlueprintForm({
+      fields: coreStoryFields({
+        mainGoal: "查清钟楼旧案。",
+        premise: "主角收到旧信。",
+        storyDriver: "mystery",
+      }),
+      projectId: "project_1",
+    });
+    await api.completeBlueprintForm({
+      fields: coreStoryFields({
+        mainGoal: "查清钟楼旧案。",
+      }),
+      projectId: "project_1",
+    });
     await api.generateElementCandidates({
       constraints: [],
       count: 5,
@@ -268,6 +321,19 @@ describe("StoryPilotApiClient", () => {
       patch: { title: "新规则" },
       projectId: "project_1",
       worldRuleId: "rule_1",
+    });
+    await api.saveWorldbuildingFields({
+      fields: worldbuildingFields({
+        geography: "旧城围绕钟楼扩散。",
+        worldBase: "近现代旧城悬疑世界。",
+      }),
+      projectId: "project_1",
+    });
+    await api.completeWorldbuildingFields({
+      fields: worldbuildingFields({
+        worldBase: "近现代旧城悬疑世界。",
+      }),
+      projectId: "project_1",
     });
     await api.listPlotlines({ projectId: "project_1" });
     await api.updatePlotlineNode({
@@ -322,10 +388,14 @@ describe("StoryPilotApiClient", () => {
       "character.list",
       "character.update",
       "character.generateNames",
+      "blueprint.saveForm",
+      "blueprint.completeForm",
       "element.generateCandidates",
       "element.acceptCandidates",
       "worldRule.list",
       "worldRule.update",
+      "worldbuilding.saveFields",
+      "worldbuilding.completeFields",
       "plotline.list",
       "plotline.updateNode",
       "storyEvent.list",

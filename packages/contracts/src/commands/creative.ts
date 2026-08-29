@@ -35,6 +35,72 @@ const creativeStageKeySchema = z.enum([
 
 const outlineImpactTargetSchema = z.enum(["book_plan", "volume_plan", "arc_plan", "chapter_plan"]);
 
+const worldbuildingTextFieldSchema = z.string().max(500).default("");
+
+const coreStoryTextFieldSchema = z.string().max(800).default("");
+const coreStoryLoglineFieldSchema = z.string().max(180).default("");
+const coreStoryListFieldSchema = z.array(z.string().min(1).max(120)).max(8).default([]);
+const coreStoryDriverSchema = z
+  .enum([
+    "growth_reversal",
+    "mystery",
+    "power_game",
+    "adventure",
+    "romance",
+    "ensemble_epic",
+    "survival",
+    "slice_of_life",
+    "custom",
+  ])
+  .default("growth_reversal");
+
+const characterImportanceSchema = z.enum(["core", "major", "minor", "cameo"]).default("major");
+
+const characterNarrativeFunctionSchema = z
+  .enum([
+    "viewpoint",
+    "driver",
+    "opposition",
+    "ally",
+    "mentor",
+    "foil",
+    "love_interest",
+    "comic_relief",
+    "information_source",
+    "custom",
+  ])
+  .default("driver");
+
+const coreStoryFieldsSchema = z.object({
+  antagonistForce: coreStoryTextFieldSchema,
+  corePromise: coreStoryTextFieldSchema,
+  differentiators: coreStoryListFieldSchema,
+  emotionalAxes: coreStoryListFieldSchema,
+  logline: coreStoryLoglineFieldSchema,
+  mainConflict: coreStoryTextFieldSchema,
+  mainGoal: coreStoryTextFieldSchema,
+  premise: coreStoryTextFieldSchema,
+  protagonistArc: coreStoryTextFieldSchema,
+  risks: coreStoryListFieldSchema,
+  stakes: coreStoryTextFieldSchema,
+  storyDriver: coreStoryDriverSchema,
+});
+
+const worldbuildingFieldsSchema = z.object({
+  coreConflict: worldbuildingTextFieldSchema,
+  culture: worldbuildingTextFieldSchema,
+  economy: worldbuildingTextFieldSchema,
+  factions: worldbuildingTextFieldSchema,
+  geography: worldbuildingTextFieldSchema,
+  history: worldbuildingTextFieldSchema,
+  powerOrder: worldbuildingTextFieldSchema,
+  powerSystem: worldbuildingTextFieldSchema,
+  rules: worldbuildingTextFieldSchema,
+  socialStructure: worldbuildingTextFieldSchema,
+  specialMechanism: worldbuildingTextFieldSchema,
+  worldBase: worldbuildingTextFieldSchema,
+});
+
 export const creativePathCommandSchemas = {
   "creativeStage.getPath": projectIdPayloadSchema,
   "creativeStage.evaluateGate": projectIdPayloadSchema.extend({
@@ -64,6 +130,8 @@ export const creativePathCommandSchemas = {
     ]),
   }),
   "brief.save": projectIdPayloadSchema.extend({
+    estimatedChapterCount: z.number().int().min(1).max(10_000).optional(),
+    estimatedWordCount: z.number().int().min(10_000).max(20_000_000).optional(),
     genre: z.string().min(1),
     subgenres: z.array(z.string().min(1)).default([]),
     targetAudience: z.string().min(1).optional(),
@@ -78,6 +146,12 @@ export const creativePathCommandSchemas = {
     briefId: z.string().min(1),
   }),
   "blueprint.generate": projectIdPayloadSchema,
+  "blueprint.saveForm": projectIdPayloadSchema.extend({
+    fields: coreStoryFieldsSchema,
+  }),
+  "blueprint.completeForm": projectIdPayloadSchema.extend({
+    fields: coreStoryFieldsSchema,
+  }),
   "blueprint.apply": projectIdPayloadSchema.extend({
     blueprintId: z.string().min(1),
   }),
@@ -120,13 +194,23 @@ export const creativeCommandSchemas = {
   "character.create": projectIdPayloadSchema.extend({
     name: z.string().min(1),
     role: z.enum(["protagonist", "antagonist", "support", "cameo"]).default("support"),
-    archetype: z.string().optional(),
-    goal: z.string().optional(),
-    need: z.string().optional(),
-    flaw: z.string().optional(),
-    secret: z.string().optional(),
-    voiceProfile: z.string().optional(),
-    biography: z.string().optional(),
+    archetype: z.string().max(80).optional(),
+    genderAge: z.string().max(80).optional(),
+    importance: characterImportanceSchema.optional(),
+    firstAppearance: z.string().max(80).optional(),
+    narrativeFunction: characterNarrativeFunctionSchema.optional(),
+    storyTask: z.string().max(500).optional(),
+    relationshipHook: z.string().max(500).optional(),
+    appearance: z.string().max(500).optional(),
+    arcStart: z.string().max(500).optional(),
+    arcTurn: z.string().max(500).optional(),
+    arcEnd: z.string().max(500).optional(),
+    goal: z.string().max(500).optional(),
+    need: z.string().max(500).optional(),
+    flaw: z.string().max(500).optional(),
+    secret: z.string().max(500).optional(),
+    voiceProfile: z.string().max(500).optional(),
+    biography: z.string().max(500).optional(),
   }),
   "character.update": projectIdPayloadSchema.extend({
     characterId: z.string().min(1),
@@ -159,6 +243,12 @@ export const creativeCommandSchemas = {
   "worldRule.update": projectIdPayloadSchema.extend({
     worldRuleId: z.string().min(1),
     patch: z.record(z.string(), z.unknown()),
+  }),
+  "worldbuilding.saveFields": projectIdPayloadSchema.extend({
+    fields: worldbuildingFieldsSchema,
+  }),
+  "worldbuilding.completeFields": projectIdPayloadSchema.extend({
+    fields: worldbuildingFieldsSchema,
   }),
   "plotline.list": projectIdPayloadSchema,
   "plotline.create": projectIdPayloadSchema.extend({

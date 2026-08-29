@@ -6,6 +6,7 @@ import type { ModelMessage } from "../model-gateway/types.js";
 export type PromptCapability =
   | "brief_refine"
   | "blueprint_generate"
+  | "core_story_complete"
   | "worldbuilding_generate"
   | "character_generate"
   | "relationship_generate"
@@ -44,6 +45,7 @@ const promptFiles = {
   chapter_draft: "./chapter-draft/system.v1.md",
   chapter_rewrite: "./chapter-rewrite/system.v1.md",
   continuity_review: "./continuity-review/system.v1.md",
+  core_story_complete: "./core-story-complete/system.v1.md",
   element_generate: "./element-generate/system.v1.md",
   foreshadowing_plan: "./foreshadowing-plan/system.v1.md",
   global_writer: "./shared/global-writer-system.v1.md",

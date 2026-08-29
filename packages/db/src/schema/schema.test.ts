@@ -15,6 +15,7 @@ describe("project schema", () => {
         "characters",
         "character_traits",
         "entity_relations",
+        "worldbuilding_profiles",
         "world_rules",
         "locations",
         "organizations",

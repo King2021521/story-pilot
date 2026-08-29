@@ -65,6 +65,8 @@ describe("CreativePathWorkbench", () => {
     await waitFor(() => {
       expect(onSaveBrief).toHaveBeenCalledWith(
         expect.objectContaining({
+          estimatedChapterCount: 260,
+          estimatedWordCount: 800_000,
           genre: "玄幻",
           subgenres: ["废柴逆袭"],
         }),
@@ -298,6 +300,8 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
     },
     brief: {
       emotionalRewards: ["爽点"],
+      estimatedChapterCount: 260,
+      estimatedWordCount: 800_000,
       forbiddenDirections: [],
       genre: "玄幻",
       id: "brief_1",

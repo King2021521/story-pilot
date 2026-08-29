@@ -35,6 +35,8 @@ export interface ProjectBriefRecord {
   readonly targetAudience: string | null;
   readonly platformProfile: string | null;
   readonly lengthProfile: string | null;
+  readonly estimatedWordCount: number | null;
+  readonly estimatedChapterCount: number | null;
   readonly narrativePov: string | null;
   readonly emotionalRewards: readonly string[];
   readonly initialIdea: string | null;
@@ -51,9 +53,13 @@ export interface StoryBlueprintRecord {
   readonly premise: string;
   readonly logline: string;
   readonly corePromise: string;
+  readonly mainGoal: string;
   readonly mainConflict: string;
   readonly protagonistArc: string | null;
   readonly antagonistForce: string | null;
+  readonly stakes: string;
+  readonly storyDriver: string;
+  readonly emotionalAxes: readonly string[];
   readonly differentiators: readonly string[];
   readonly risks: readonly string[];
   readonly status: string;
@@ -61,6 +67,21 @@ export interface StoryBlueprintRecord {
   readonly sourceArtifactId: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
+}
+
+export interface CoreStoryFormFields {
+  readonly premise: string;
+  readonly logline: string;
+  readonly corePromise: string;
+  readonly mainGoal: string;
+  readonly mainConflict: string;
+  readonly protagonistArc: string;
+  readonly antagonistForce: string;
+  readonly stakes: string;
+  readonly storyDriver: string;
+  readonly emotionalAxes: readonly string[];
+  readonly differentiators: readonly string[];
+  readonly risks: readonly string[];
 }
 
 export interface CreativePathRecord {
@@ -77,6 +98,8 @@ export interface SaveProjectBriefInput {
   readonly targetAudience?: string;
   readonly platformProfile?: string;
   readonly lengthProfile?: string;
+  readonly estimatedWordCount?: number;
+  readonly estimatedChapterCount?: number;
   readonly narrativePov?: string;
   readonly emotionalRewards?: readonly string[];
   readonly initialIdea?: string;
@@ -90,12 +113,23 @@ export interface SaveStoryBlueprintInput {
   readonly premise: string;
   readonly logline: string;
   readonly corePromise: string;
+  readonly mainGoal?: string;
   readonly mainConflict: string;
   readonly protagonistArc?: string;
   readonly antagonistForce?: string;
+  readonly stakes?: string;
+  readonly storyDriver?: string;
+  readonly emotionalAxes?: readonly string[];
   readonly differentiators?: readonly string[];
   readonly risks?: readonly string[];
   readonly sourceArtifactId?: string;
+  readonly now?: number;
+}
+
+export interface SaveStoryBlueprintFormInput {
+  readonly blueprintId?: string;
+  readonly projectId: string;
+  readonly fields: CoreStoryFormFields;
   readonly now?: number;
 }
 
@@ -130,6 +164,8 @@ interface ProjectBriefRow {
   readonly target_audience: string | null;
   readonly platform_profile: string | null;
   readonly length_profile: string | null;
+  readonly estimated_word_count: number | null;
+  readonly estimated_chapter_count: number | null;
   readonly narrative_pov: string | null;
   readonly emotional_rewards_json: string;
   readonly initial_idea: string | null;
@@ -146,9 +182,13 @@ interface StoryBlueprintRow {
   readonly premise: string;
   readonly logline: string;
   readonly core_promise: string;
+  readonly main_goal: string;
   readonly main_conflict: string;
   readonly protagonist_arc: string | null;
   readonly antagonist_force: string | null;
+  readonly stakes: string;
+  readonly story_driver: string;
+  readonly emotional_axes_json: string;
   readonly differentiators_json: string;
   readonly risks_json: string;
   readonly status: string;
@@ -221,12 +261,14 @@ export class CreativePathRepository {
         `
         insert into project_briefs (
           id, project_id, genre, subgenres_json, target_audience, platform_profile,
-          length_profile, narrative_pov, emotional_rewards_json, initial_idea,
+          length_profile, estimated_word_count, estimated_chapter_count, narrative_pov,
+          emotional_rewards_json, initial_idea,
           forbidden_directions_json, status, version, created_at, updated_at
         )
         values (
           @briefId, @projectId, @genre, @subgenresJson, @targetAudience, @platformProfile,
-          @lengthProfile, @narrativePov, @emotionalRewardsJson, @initialIdea,
+          @lengthProfile, @estimatedWordCount, @estimatedChapterCount, @narrativePov,
+          @emotionalRewardsJson, @initialIdea,
           @forbiddenDirectionsJson, 'draft', @version, @now, @now
         )
       `,
@@ -234,6 +276,8 @@ export class CreativePathRepository {
       .run({
         briefId: input.briefId,
         emotionalRewardsJson: JSON.stringify(input.emotionalRewards ?? []),
+        estimatedChapterCount: input.estimatedChapterCount ?? null,
+        estimatedWordCount: input.estimatedWordCount ?? null,
         forbiddenDirectionsJson: JSON.stringify(input.forbiddenDirections ?? []),
         genre: input.genre,
         initialIdea: input.initialIdea ?? null,
@@ -288,14 +332,16 @@ export class CreativePathRepository {
       .prepare(
         `
         insert into story_blueprints (
-          id, project_id, premise, logline, core_promise, main_conflict,
-          protagonist_arc, antagonist_force, differentiators_json, risks_json,
-          status, version, source_artifact_id, created_at, updated_at
+          id, project_id, premise, logline, core_promise, main_goal, main_conflict,
+          protagonist_arc, antagonist_force, stakes, story_driver, emotional_axes_json,
+          differentiators_json, risks_json, status, version, source_artifact_id,
+          created_at, updated_at
         )
         values (
-          @blueprintId, @projectId, @premise, @logline, @corePromise, @mainConflict,
-          @protagonistArc, @antagonistForce, @differentiatorsJson, @risksJson,
-          'draft', @version, @sourceArtifactId, @now, @now
+          @blueprintId, @projectId, @premise, @logline, @corePromise, @mainGoal, @mainConflict,
+          @protagonistArc, @antagonistForce, @stakes, @storyDriver, @emotionalAxesJson,
+          @differentiatorsJson, @risksJson, 'draft', @version, @sourceArtifactId,
+          @now, @now
         )
       `,
       )
@@ -304,14 +350,18 @@ export class CreativePathRepository {
         blueprintId: input.blueprintId,
         corePromise: input.corePromise,
         differentiatorsJson: JSON.stringify(input.differentiators ?? []),
+        emotionalAxesJson: JSON.stringify(input.emotionalAxes ?? []),
         logline: input.logline,
         mainConflict: input.mainConflict,
+        mainGoal: input.mainGoal ?? "",
         now,
         premise: input.premise,
         projectId: input.projectId,
         protagonistArc: input.protagonistArc ?? null,
         risksJson: JSON.stringify(input.risks ?? []),
         sourceArtifactId: input.sourceArtifactId ?? null,
+        stakes: input.stakes ?? "",
+        storyDriver: input.storyDriver ?? "growth_reversal",
         version: nextVersion,
       });
 
@@ -321,6 +371,82 @@ export class CreativePathRepository {
     }
 
     return blueprint;
+  }
+
+  saveBlueprintForm(input: SaveStoryBlueprintFormInput): StoryBlueprintRecord {
+    const now = input.now ?? Date.now();
+    const current =
+      input.blueprintId === undefined
+        ? this.getActiveBlueprint(input.projectId)
+        : this.getBlueprintById(input.projectId, input.blueprintId);
+
+    if (!current) {
+      const antagonistForce = normalizeNullableText(input.fields.antagonistForce);
+      const protagonistArc = normalizeNullableText(input.fields.protagonistArc);
+
+      return this.saveBlueprint({
+        blueprintId: `${input.projectId}:blueprint:${now}`,
+        corePromise: input.fields.corePromise.trim(),
+        differentiators: normalizeList(input.fields.differentiators),
+        emotionalAxes: normalizeList(input.fields.emotionalAxes),
+        logline: input.fields.logline.trim(),
+        mainConflict: input.fields.mainConflict.trim(),
+        mainGoal: input.fields.mainGoal.trim(),
+        now,
+        premise: input.fields.premise.trim(),
+        projectId: input.projectId,
+        risks: normalizeList(input.fields.risks),
+        stakes: input.fields.stakes.trim(),
+        storyDriver: input.fields.storyDriver,
+        ...(antagonistForce === null ? {} : { antagonistForce }),
+        ...(protagonistArc === null ? {} : { protagonistArc }),
+      });
+    }
+
+    this.projectDatabase.client
+      .prepare(
+        `
+        update story_blueprints
+        set premise = @premise,
+            logline = @logline,
+            core_promise = @corePromise,
+            main_goal = @mainGoal,
+            main_conflict = @mainConflict,
+            protagonist_arc = @protagonistArc,
+            antagonist_force = @antagonistForce,
+            stakes = @stakes,
+            story_driver = @storyDriver,
+            emotional_axes_json = @emotionalAxesJson,
+            differentiators_json = @differentiatorsJson,
+            risks_json = @risksJson,
+            updated_at = @now
+        where project_id = @projectId and id = @blueprintId
+        `,
+      )
+      .run({
+        antagonistForce: normalizeNullableText(input.fields.antagonistForce),
+        blueprintId: current.id,
+        corePromise: input.fields.corePromise.trim(),
+        differentiatorsJson: JSON.stringify(normalizeList(input.fields.differentiators)),
+        emotionalAxesJson: JSON.stringify(normalizeList(input.fields.emotionalAxes)),
+        logline: input.fields.logline.trim(),
+        mainConflict: input.fields.mainConflict.trim(),
+        mainGoal: input.fields.mainGoal.trim(),
+        now,
+        premise: input.fields.premise.trim(),
+        projectId: input.projectId,
+        protagonistArc: normalizeNullableText(input.fields.protagonistArc),
+        risksJson: JSON.stringify(normalizeList(input.fields.risks)),
+        stakes: input.fields.stakes.trim(),
+        storyDriver: input.fields.storyDriver,
+      });
+
+    const updated = this.getBlueprintById(input.projectId, current.id);
+    if (!updated) {
+      throw new Error(`STORY_BLUEPRINT_NOT_CREATED: ${current.id}`);
+    }
+
+    return updated;
   }
 
   applyBlueprint(projectId: string, blueprintId: string, now = Date.now()): StoryBlueprintRecord {
@@ -559,6 +685,8 @@ function mapProjectBriefRow(row: ProjectBriefRow): ProjectBriefRecord {
   return {
     createdAt: row.created_at,
     emotionalRewards: parseJsonArray(row.emotional_rewards_json),
+    estimatedChapterCount: row.estimated_chapter_count,
+    estimatedWordCount: row.estimated_word_count,
     forbiddenDirections: parseJsonArray(row.forbidden_directions_json),
     genre: row.genre,
     id: row.id,
@@ -581,18 +709,31 @@ function mapStoryBlueprintRow(row: StoryBlueprintRow): StoryBlueprintRecord {
     corePromise: row.core_promise,
     createdAt: row.created_at,
     differentiators: parseJsonArray(row.differentiators_json),
+    emotionalAxes: parseJsonArray(row.emotional_axes_json),
     id: row.id,
     logline: row.logline,
     mainConflict: row.main_conflict,
+    mainGoal: row.main_goal,
     premise: row.premise,
     projectId: row.project_id,
     protagonistArc: row.protagonist_arc,
     risks: parseJsonArray(row.risks_json),
     sourceArtifactId: row.source_artifact_id,
+    stakes: row.stakes,
     status: row.status,
+    storyDriver: row.story_driver,
     updatedAt: row.updated_at,
     version: row.version,
   };
+}
+
+function normalizeList(values: readonly string[]): string[] {
+  return values.map((value) => value.trim()).filter((value) => value.length > 0);
+}
+
+function normalizeNullableText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function parseJsonArray(value: string): readonly string[] {

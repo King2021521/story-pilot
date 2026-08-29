@@ -50,7 +50,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
   constructor(options: OpenAICompatibleProviderOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/u, "");
-    this.apiKey = options.apiKey;
+    this.apiKey = normalizeApiKey(options.apiKey);
     this.model = options.model;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
@@ -121,6 +121,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     return response.json();
   }
+}
+
+function normalizeApiKey(apiKey: string): string {
+  return apiKey.trim().replace(/^Bearer\s+/iu, "");
 }
 
 function mapChatUsage(usage: ChatCompletionResponse["usage"]): TokenUsage | undefined {

@@ -109,6 +109,14 @@ export class StoryPilotApiClient {
     return this.send("blueprint.generate", input);
   }
 
+  saveBlueprintForm(input: CommandPayload<"blueprint.saveForm">) {
+    return this.send("blueprint.saveForm", input);
+  }
+
+  completeBlueprintForm(input: CommandPayload<"blueprint.completeForm">) {
+    return this.send("blueprint.completeForm", input);
+  }
+
   applyBlueprint(input: CommandPayload<"blueprint.apply">) {
     return this.send("blueprint.apply", input);
   }
@@ -296,6 +304,14 @@ export class StoryPilotApiClient {
 
   updateWorldRule(input: CommandPayload<"worldRule.update">) {
     return this.send("worldRule.update", input);
+  }
+
+  saveWorldbuildingFields(input: CommandPayload<"worldbuilding.saveFields">) {
+    return this.send("worldbuilding.saveFields", input);
+  }
+
+  completeWorldbuildingFields(input: CommandPayload<"worldbuilding.completeFields">) {
+    return this.send("worldbuilding.completeFields", input);
   }
 
   listPlotlines(input: CommandPayload<"plotline.list">) {

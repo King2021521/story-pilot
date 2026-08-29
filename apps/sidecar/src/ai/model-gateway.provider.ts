@@ -2,10 +2,16 @@ import {
   FakeModelProvider,
   ModelGateway,
   OpenAICompatibleProvider,
+  type EmbedInput,
+  type EmbedResult,
+  type GenerateObjectInput,
+  type GenerateObjectResult,
+  type StreamTextInput,
   type ModelProvider,
   type ProviderEmbedResult,
   type ProviderObjectResult,
 } from "@story-pilot/ai";
+import type { z } from "zod";
 
 export const MODEL_GATEWAY = "MODEL_GATEWAY";
 
@@ -45,11 +51,34 @@ export function createModelGatewayFromEnv(
             "把核心设定绑定人物选择，而不是只做背景装饰。",
             "每一卷至少保留一个可追踪的伏笔回收链。",
           ],
+          emotionalAxes: ["悬疑", "反转"],
           logline: "主角从异常事件中发现更大的秩序裂缝。",
           mainConflict: "主角追求真相或力量时，必须对抗既有秩序制造的阻力。",
+          mainGoal: "查清异常事件背后的真相，并打破维持压迫的旧秩序。",
           premise: "主角从异常事件中发现更大的秩序裂缝。",
           protagonistArc: "主角从被动卷入转为主动承担代价。",
           risks: ["设定堆叠过多会拖慢开篇。"],
+          stakes: "失败会让主角失去关键关系、身份位置或改变命运的机会。",
+          storyDriver: "mystery",
+        },
+        CoreStoryFieldCompletionOutput: {
+          fields: {
+            antagonistForce: "隐藏真相、垄断资源或维持旧秩序的对抗力量。",
+            corePromise: "持续提供目标推进、压力升级、关键反转和阶段性情绪回报。",
+            differentiators: [
+              "把核心设定绑定人物选择，而不是只做背景装饰。",
+              "每个阶段胜利都会引出新的代价或更深层真相。",
+            ],
+            emotionalAxes: ["悬疑", "反转"],
+            logline: "主角从异常事件中发现更大的秩序裂缝。",
+            mainConflict: "主角追求真相或力量时，必须对抗既有秩序制造的阻力。",
+            mainGoal: "查清异常事件背后的真相，并打破维持压迫的旧秩序。",
+            premise: "主角从异常事件中发现更大的秩序裂缝。",
+            protagonistArc: "主角从被动卷入转为主动承担代价。",
+            risks: ["开篇目标过散会削弱追读。"],
+            stakes: "失败会让主角失去关键关系、身份位置或改变命运的机会。",
+            storyDriver: "mystery",
+          },
         },
         ChapterDraftOutput: {
           draft: {
@@ -115,6 +144,24 @@ export function createModelGatewayFromEnv(
               type: "weapon",
             },
           ],
+        },
+        WorldbuildingFieldCompletionOutput: {
+          fields: {
+            coreConflict: "旧秩序垄断关键资源，新进入者必须在遵守规则和打破规则之间付出代价。",
+            culture: "普通人相信秩序能换来最低限度的安全，因此对破坏规则者既恐惧又期待。",
+            economy: "稀缺资源、通行资格、情报和关键器物构成主要交换网络。",
+            factions: "掌握旧规则的组织、依附规则生存的普通人和试图改写规则的新势力持续拉扯。",
+            geography: "核心舞台由中心权力场、边缘生存区和隐藏资源点组成，移动本身会暴露立场。",
+            history: "一次旧灾难或旧案改变了权力结构，幸存者用沉默维持表面稳定。",
+            powerOrder: "公开权力负责维持秩序，隐性权力控制资源流动，两者互相依赖又互相提防。",
+            powerSystem:
+              "角色变强依靠资源、训练、知识或关系积累；每次跃迁都伴随暴露、反噬或人情债。",
+            rules: "核心规则必须可验证、可破坏且有代价；违反规则会引发身份、资源或安全损失。",
+            socialStructure: "世界按资源和身份权限分层，低层角色需要依附组织或找到漏洞才能上升。",
+            specialMechanism:
+              "特殊机制只在关键选择附近显形，用来揭示旧秩序漏洞而不是替角色解决问题。",
+            worldBase: "这是一个围绕资源、身份和旧秩序运转的长篇类型世界，舞台规则会持续制造冲突。",
+          },
         },
         OutlineGenerateOutput: {
           chapterOutlines: [
@@ -219,5 +266,25 @@ function createUnconfiguredModelError(): Error {
 
 export const modelGatewayProvider = {
   provide: MODEL_GATEWAY,
-  useFactory: () => createModelGatewayFromEnv(),
+  useFactory: () => new RuntimeModelGateway(),
 };
+
+class RuntimeModelGateway extends ModelGateway {
+  constructor() {
+    super(new UnconfiguredModelProvider());
+  }
+
+  override generateObject<TSchema extends z.ZodType>(
+    input: GenerateObjectInput<TSchema>,
+  ): Promise<GenerateObjectResult<z.infer<TSchema>>> {
+    return createModelGatewayFromEnv().generateObject(input);
+  }
+
+  override streamText(input: StreamTextInput): AsyncIterable<string> {
+    return createModelGatewayFromEnv().streamText(input);
+  }
+
+  override embed(input: EmbedInput): Promise<EmbedResult> {
+    return createModelGatewayFromEnv().embed(input);
+  }
+}

@@ -155,7 +155,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
     defaultPromptVersion: "v1",
     displayName: "世界观生成",
     name: "worldbuilding.generate",
-    outputSchemaName: "WorldbuildingGenerateOutput",
+    outputSchemaName: "WorldbuildingFieldCompletionOutput",
     promptCapability: "worldbuilding_generate",
     purpose: "worldbuilding_generate",
   },

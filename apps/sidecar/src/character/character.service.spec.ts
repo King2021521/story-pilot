@@ -44,15 +44,25 @@ describe("CharacterService", () => {
 
     const project = await projectService.createProject({ title: "长夜序章", genre: "悬疑" });
     const protagonist = await characterService.createCharacter({
-      projectId: project.id,
-      name: "林澈",
-      role: "protagonist",
-      goal: "查清父亲死亡真相",
-      need: "学会信任他人",
-      flaw: "过度自责",
-      secret: "十年前曾到过案发现场",
-      voiceProfile: "克制、短句、观察细节",
+      appearance: "旧风衣、随身旧笔记本。",
+      arcEnd: "愿意公开旧案证据并承担代价。",
+      arcStart: "逃避旧案，只想离开旧城。",
+      arcTurn: "发现证人仍被追杀后决定回头。",
       biography: "前刑警，因旧案离队。",
+      firstAppearance: "第 1 章",
+      flaw: "过度自责",
+      genderAge: "男，29 岁",
+      goal: "查清父亲死亡真相",
+      importance: "core",
+      name: "林澈",
+      narrativeFunction: "viewpoint",
+      need: "学会信任他人",
+      projectId: project.id,
+      relationshipHook: "与周潜互相怀疑。",
+      role: "protagonist",
+      secret: "十年前曾到过案发现场",
+      storyTask: "把旧信线索推进成主线调查。",
+      voiceProfile: "克制、短句、观察细节",
     });
     const antagonist = await characterService.createCharacter({
       projectId: project.id,
@@ -77,11 +87,39 @@ describe("CharacterService", () => {
         expect.objectContaining({ name: "secret", value: "十年前曾到过案发现场" }),
       ]),
     );
+    expect(protagonist).toMatchObject({
+      appearance: "旧风衣、随身旧笔记本。",
+      arcEnd: "愿意公开旧案证据并承担代价。",
+      firstAppearance: "第 1 章",
+      genderAge: "男，29 岁",
+      importance: "core",
+      narrativeFunction: "viewpoint",
+      relationshipHook: "与周潜互相怀疑。",
+      storyTask: "把旧信线索推进成主线调查。",
+    });
     expect(relation).toMatchObject({
       relationType: "suspects",
       sourceEntityId: protagonist.id,
       targetEntityId: antagonist.id,
     });
+    const updatedProtagonist = await characterService.updateCharacter({
+      characterId: protagonist.id,
+      patch: {
+        need: "保护证人",
+        secret: "",
+        voiceProfile: "回答前会先观察对方反应。",
+      },
+      projectId: project.id,
+    });
+    expect(updatedProtagonist.traits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "need", value: "保护证人" }),
+        expect.objectContaining({ name: "voice_profile", value: "回答前会先观察对方反应。" }),
+      ]),
+    );
+    expect(updatedProtagonist.traits).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "secret" })]),
+    );
 
     const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
     try {

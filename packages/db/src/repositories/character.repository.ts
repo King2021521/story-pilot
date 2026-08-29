@@ -16,7 +16,17 @@ export interface CharacterRecord {
   readonly name: string;
   readonly role: string;
   readonly archetype: string | null;
+  readonly genderAge: string | null;
+  readonly importance: string | null;
+  readonly firstAppearance: string | null;
+  readonly narrativeFunction: string | null;
+  readonly storyTask: string | null;
+  readonly relationshipHook: string | null;
   readonly profile: string | null;
+  readonly appearance: string | null;
+  readonly arcStart: string | null;
+  readonly arcTurn: string | null;
+  readonly arcEnd: string | null;
   readonly motivation: string | null;
   readonly traits: CharacterTraitRecord[];
 }
@@ -41,13 +51,29 @@ export interface CreateCharacterRecordInput {
   readonly name: string;
   readonly role: string;
   readonly archetype?: string;
+  readonly genderAge?: string;
+  readonly importance?: string;
+  readonly firstAppearance?: string;
+  readonly narrativeFunction?: string;
+  readonly storyTask?: string;
+  readonly relationshipHook?: string;
   readonly biography?: string;
+  readonly appearance?: string;
+  readonly arcStart?: string;
+  readonly arcTurn?: string;
+  readonly arcEnd?: string;
   readonly motivation?: string;
   readonly traits: readonly CreateCharacterTraitInput[];
   readonly now?: number;
 }
 
 export interface CreateCharacterTraitInput {
+  readonly traitId: string;
+  readonly name: string;
+  readonly value: string;
+}
+
+export interface UpdateCharacterTraitInput {
   readonly traitId: string;
   readonly name: string;
   readonly value: string;
@@ -73,8 +99,19 @@ export interface UpdateCharacterRecordInput {
   readonly name?: string;
   readonly role?: string;
   readonly archetype?: string;
+  readonly genderAge?: string;
+  readonly importance?: string;
+  readonly firstAppearance?: string;
+  readonly narrativeFunction?: string;
+  readonly storyTask?: string;
+  readonly relationshipHook?: string;
   readonly biography?: string;
+  readonly appearance?: string;
+  readonly arcStart?: string;
+  readonly arcTurn?: string;
+  readonly arcEnd?: string;
   readonly motivation?: string;
+  readonly traits?: readonly UpdateCharacterTraitInput[];
   readonly now?: number;
 }
 
@@ -84,7 +121,17 @@ interface CharacterRow {
   readonly display_name: string;
   readonly role: string;
   readonly archetype: string | null;
+  readonly gender_age: string | null;
+  readonly importance: string | null;
+  readonly first_appearance: string | null;
+  readonly narrative_function: string | null;
+  readonly story_task: string | null;
+  readonly relationship_hook: string | null;
   readonly profile: string | null;
+  readonly appearance: string | null;
+  readonly arc_start: string | null;
+  readonly arc_turn: string | null;
+  readonly arc_end: string | null;
   readonly motivation: string | null;
 }
 
@@ -122,22 +169,38 @@ export class CharacterRepository {
         .prepare(
           `
           insert into characters (
-            id, project_id, display_name, role, archetype, profile, motivation, created_at, updated_at
+            id, project_id, display_name, role, archetype, gender_age, importance,
+            first_appearance, narrative_function, story_task, relationship_hook,
+            profile, appearance, arc_start, arc_turn, arc_end, motivation,
+            created_at, updated_at
           )
           values (
-            @characterId, @projectId, @name, @role, @archetype, @profile, @motivation, @now, @now
+            @characterId, @projectId, @name, @role, @archetype, @genderAge, @importance,
+            @firstAppearance, @narrativeFunction, @storyTask, @relationshipHook,
+            @profile, @appearance, @arcStart, @arcTurn, @arcEnd, @motivation,
+            @now, @now
           )
         `,
         )
         .run({
+          appearance: input.appearance ?? null,
+          arcEnd: input.arcEnd ?? null,
+          arcStart: input.arcStart ?? null,
+          arcTurn: input.arcTurn ?? null,
           archetype: input.archetype ?? null,
           characterId: input.characterId,
+          firstAppearance: input.firstAppearance ?? null,
+          genderAge: input.genderAge ?? null,
+          importance: input.importance ?? null,
           motivation: input.motivation ?? null,
           name: input.name,
+          narrativeFunction: input.narrativeFunction ?? null,
           now,
           profile: input.biography ?? null,
           projectId: input.projectId,
+          relationshipHook: input.relationshipHook ?? null,
           role: input.role,
+          storyTask: input.storyTask ?? null,
         });
 
       for (const trait of input.traits) {
@@ -232,13 +295,23 @@ export class CharacterRepository {
       .map((trait) => mapTraitRow(trait as CharacterTraitRow));
 
     return {
+      appearance: row.appearance,
+      arcEnd: row.arc_end,
+      arcStart: row.arc_start,
+      arcTurn: row.arc_turn,
       archetype: row.archetype,
+      firstAppearance: row.first_appearance,
+      genderAge: row.gender_age,
       id: row.id,
+      importance: row.importance,
       motivation: row.motivation,
       name: row.display_name,
+      narrativeFunction: row.narrative_function,
       profile: row.profile,
       projectId: row.project_id,
+      relationshipHook: row.relationship_hook,
       role: row.role,
+      storyTask: row.story_task,
       traits,
     };
   }
@@ -254,29 +327,62 @@ export class CharacterRepository {
 
   updateCharacter(input: UpdateCharacterRecordInput): CharacterRecord {
     const now = input.now ?? Date.now();
-    this.projectDatabase.client
-      .prepare(
-        `
-        update characters
-        set display_name = coalesce(@name, display_name),
-            role = coalesce(@role, role),
-            archetype = coalesce(@archetype, archetype),
-            profile = coalesce(@biography, profile),
-            motivation = coalesce(@motivation, motivation),
-            updated_at = @now
-        where project_id = @projectId and id = @characterId
-        `,
-      )
-      .run({
-        archetype: input.archetype ?? null,
-        biography: input.biography ?? null,
-        characterId: input.characterId,
-        motivation: input.motivation ?? null,
-        name: input.name ?? null,
-        now,
-        projectId: input.projectId,
-        role: input.role ?? null,
-      });
+    const update = this.projectDatabase.client.transaction(() => {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update characters
+          set display_name = coalesce(@name, display_name),
+              role = coalesce(@role, role),
+              archetype = coalesce(@archetype, archetype),
+              gender_age = coalesce(@genderAge, gender_age),
+              importance = coalesce(@importance, importance),
+              first_appearance = coalesce(@firstAppearance, first_appearance),
+              narrative_function = coalesce(@narrativeFunction, narrative_function),
+              story_task = coalesce(@storyTask, story_task),
+              relationship_hook = coalesce(@relationshipHook, relationship_hook),
+              profile = coalesce(@biography, profile),
+              appearance = coalesce(@appearance, appearance),
+              arc_start = coalesce(@arcStart, arc_start),
+              arc_turn = coalesce(@arcTurn, arc_turn),
+              arc_end = coalesce(@arcEnd, arc_end),
+              motivation = coalesce(@motivation, motivation),
+              updated_at = @now
+          where project_id = @projectId and id = @characterId
+          `,
+        )
+        .run({
+          appearance: input.appearance ?? null,
+          arcEnd: input.arcEnd ?? null,
+          arcStart: input.arcStart ?? null,
+          arcTurn: input.arcTurn ?? null,
+          archetype: input.archetype ?? null,
+          biography: input.biography ?? null,
+          characterId: input.characterId,
+          firstAppearance: input.firstAppearance ?? null,
+          genderAge: input.genderAge ?? null,
+          importance: input.importance ?? null,
+          motivation: input.motivation ?? null,
+          name: input.name ?? null,
+          narrativeFunction: input.narrativeFunction ?? null,
+          now,
+          projectId: input.projectId,
+          relationshipHook: input.relationshipHook ?? null,
+          role: input.role ?? null,
+          storyTask: input.storyTask ?? null,
+        });
+
+      for (const trait of input.traits ?? []) {
+        this.upsertCharacterTrait({
+          characterId: input.characterId,
+          now,
+          projectId: input.projectId,
+          trait,
+        });
+      }
+    });
+
+    update();
 
     const character = this.getCharacter(input.projectId, input.characterId);
     if (!character) {
@@ -294,17 +400,91 @@ export class CharacterRepository {
       .all(projectId, characterId)
       .map((trait) => mapTraitRow(trait as CharacterTraitRow));
   }
+
+  private upsertCharacterTrait(input: {
+    readonly characterId: string;
+    readonly now: number;
+    readonly projectId: string;
+    readonly trait: UpdateCharacterTraitInput;
+  }): void {
+    const value = input.trait.value.trim();
+
+    if (!value) {
+      this.projectDatabase.client
+        .prepare(
+          "delete from character_traits where project_id = ? and character_id = ? and name = ?",
+        )
+        .run(input.projectId, input.characterId, input.trait.name);
+      return;
+    }
+
+    const existingTrait = this.projectDatabase.client
+      .prepare(
+        "select id from character_traits where project_id = ? and character_id = ? and name = ? limit 1",
+      )
+      .get(input.projectId, input.characterId, input.trait.name) as
+      { readonly id: string } | undefined;
+
+    if (existingTrait) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update character_traits
+          set value = @value, confidence = 1, updated_at = @now
+          where project_id = @projectId and character_id = @characterId and name = @name
+          `,
+        )
+        .run({
+          characterId: input.characterId,
+          name: input.trait.name,
+          now: input.now,
+          projectId: input.projectId,
+          value,
+        });
+      return;
+    }
+
+    this.projectDatabase.client
+      .prepare(
+        `
+        insert into character_traits (
+          id, project_id, character_id, name, value, confidence, created_at, updated_at
+        )
+        values (
+          @traitId, @projectId, @characterId, @name, @value, 1, @now, @now
+        )
+        `,
+      )
+      .run({
+        characterId: input.characterId,
+        name: input.trait.name,
+        now: input.now,
+        projectId: input.projectId,
+        traitId: input.trait.traitId,
+        value,
+      });
+  }
 }
 
 function mapCharacterRow(row: CharacterRow, traits: CharacterTraitRecord[]): CharacterRecord {
   return {
+    appearance: row.appearance,
+    arcEnd: row.arc_end,
+    arcStart: row.arc_start,
+    arcTurn: row.arc_turn,
     archetype: row.archetype,
+    firstAppearance: row.first_appearance,
+    genderAge: row.gender_age,
     id: row.id,
+    importance: row.importance,
     motivation: row.motivation,
     name: row.display_name,
+    narrativeFunction: row.narrative_function,
     profile: row.profile,
     projectId: row.project_id,
+    relationshipHook: row.relationship_hook,
     role: row.role,
+    storyTask: row.story_task,
     traits,
   };
 }

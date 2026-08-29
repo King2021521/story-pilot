@@ -25,9 +25,28 @@ import { useEffect, useMemo, useState } from "react";
 const { Text, Title } = Typography;
 
 export interface CharacterElement {
+  readonly appearance?: string | null;
+  readonly arcEnd?: string | null;
+  readonly arcStart?: string | null;
+  readonly arcTurn?: string | null;
+  readonly archetype?: string | null;
+  readonly firstAppearance?: string | null;
+  readonly genderAge?: string | null;
   readonly id: string;
+  readonly importance?: CharacterImportanceValue | null;
+  readonly motivation?: string | null;
   readonly name: string;
+  readonly narrativeFunction?: CharacterNarrativeFunctionValue | null;
+  readonly profile?: string | null;
+  readonly relationshipHook?: string | null;
   readonly role: string;
+  readonly storyTask?: string | null;
+  readonly traits?: readonly CharacterTraitElement[];
+}
+
+export interface CharacterTraitElement {
+  readonly name: string;
+  readonly value: string;
 }
 
 export interface WorldRuleElement {
@@ -88,9 +107,40 @@ export interface GenerateElementCandidatesResult {
 }
 
 export interface CreateCharacterValues {
+  readonly appearance?: string;
+  readonly arcEnd?: string;
+  readonly arcStart?: string;
+  readonly arcTurn?: string;
+  readonly archetype?: string;
+  readonly biography?: string;
+  readonly firstAppearance?: string;
+  readonly flaw?: string;
+  readonly genderAge?: string;
+  readonly goal?: string;
+  readonly importance?: CharacterImportanceValue;
   readonly name: string;
+  readonly narrativeFunction?: CharacterNarrativeFunctionValue;
+  readonly need?: string;
+  readonly relationshipHook?: string;
   readonly role: "protagonist" | "antagonist" | "support" | "cameo";
+  readonly secret?: string;
+  readonly storyTask?: string;
+  readonly voiceProfile?: string;
 }
+
+export type CharacterImportanceValue = "core" | "major" | "minor" | "cameo";
+
+export type CharacterNarrativeFunctionValue =
+  | "viewpoint"
+  | "driver"
+  | "opposition"
+  | "ally"
+  | "mentor"
+  | "foil"
+  | "love_interest"
+  | "comic_relief"
+  | "information_source"
+  | "custom";
 
 export interface CreateWorldRuleValues {
   readonly category: "magic" | "tech" | "society" | "history" | "geography" | "economy" | "custom";
