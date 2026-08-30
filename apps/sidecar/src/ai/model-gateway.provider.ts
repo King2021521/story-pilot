@@ -2,10 +2,16 @@ import {
   FakeModelProvider,
   ModelGateway,
   OpenAICompatibleProvider,
+  type EmbedInput,
+  type EmbedResult,
+  type GenerateObjectInput,
+  type GenerateObjectResult,
+  type StreamTextInput,
   type ModelProvider,
   type ProviderEmbedResult,
   type ProviderObjectResult,
 } from "@story-pilot/ai";
+import type { z } from "zod";
 
 export const MODEL_GATEWAY = "MODEL_GATEWAY";
 
@@ -18,21 +24,31 @@ export function createModelGatewayFromEnv(
   const model = env.STORY_PILOT_LLM_MODEL ?? "gpt-5.5";
   const baseUrl = env.STORY_PILOT_LLM_BASE_URL;
   const apiKey = env.STORY_PILOT_LLM_API_KEY;
+  const embeddingModel = env.STORY_PILOT_LLM_EMBEDDING_MODEL;
+  const maxRetries = readPositiveInteger(env.STORY_PILOT_LLM_MAX_RETRIES);
+  const timeoutMs = readPositiveInteger(env.STORY_PILOT_LLM_TIMEOUT_MS);
 
   if (baseUrl && apiKey) {
     return new ModelGateway(
       new OpenAICompatibleProvider({
         apiKey,
         baseUrl,
+        ...(embeddingModel === undefined ? {} : { embeddingModel }),
         model,
         ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
       }),
+      {
+        ...(maxRetries === undefined ? {} : { maxRetries }),
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
+      },
     );
   }
 
   if (env.STORY_PILOT_ALLOW_FAKE_MODEL !== "true") {
     return new ModelGateway(new UnconfiguredModelProvider());
   }
+
+  const fakeCoreStoryText = buildFakeCoreStoryText("核心故事");
 
   return new ModelGateway(
     new FakeModelProvider({
@@ -45,11 +61,35 @@ export function createModelGatewayFromEnv(
             "把核心设定绑定人物选择，而不是只做背景装饰。",
             "每一卷至少保留一个可追踪的伏笔回收链。",
           ],
+          emotionalAxes: ["悬疑", "反转"],
           logline: "主角从异常事件中发现更大的秩序裂缝。",
           mainConflict: "主角追求真相或力量时，必须对抗既有秩序制造的阻力。",
+          mainGoal: "查清异常事件背后的真相，并打破维持压迫的旧秩序。",
           premise: "主角从异常事件中发现更大的秩序裂缝。",
           protagonistArc: "主角从被动卷入转为主动承担代价。",
           risks: ["设定堆叠过多会拖慢开篇。"],
+          stakes: "失败会让主角失去关键关系、身份位置或改变命运的机会。",
+          storyDriver: "mystery",
+        },
+        CoreStoryFieldCompletionOutput: {
+          fields: {
+            antagonistForce: fakeCoreStoryText,
+            corePromise: fakeCoreStoryText,
+            differentiators: [
+              "把核心设定绑定人物选择，而不是只做背景装饰。",
+              "每个阶段胜利都会引出新的代价或更深层真相。",
+            ],
+            emotionalAxes: ["悬疑", "反转"],
+            logline:
+              "主角从异常事件中发现更大的秩序裂缝，并在保护同伴、公开真相与重建秩序之间不断付出代价。",
+            mainConflict: fakeCoreStoryText,
+            mainGoal: fakeCoreStoryText,
+            premise: fakeCoreStoryText,
+            protagonistArc: fakeCoreStoryText,
+            risks: ["开篇目标过散会削弱追读。"],
+            stakes: fakeCoreStoryText,
+            storyDriver: "mystery",
+          },
         },
         ChapterDraftOutput: {
           draft: {
@@ -115,6 +155,22 @@ export function createModelGatewayFromEnv(
               type: "weapon",
             },
           ],
+        },
+        WorldbuildingFieldCompletionOutput: {
+          fields: {
+            coreConflict: buildFakeWorldbuildingDimension("核心矛盾"),
+            culture: buildFakeWorldbuildingDimension("文化价值"),
+            economy: buildFakeWorldbuildingDimension("资源经济"),
+            factions: buildFakeWorldbuildingDimension("势力格局"),
+            geography: buildFakeWorldbuildingDimension("空间地理"),
+            history: buildFakeWorldbuildingDimension("历史背景"),
+            powerOrder: buildFakeWorldbuildingDimension("权力体系"),
+            powerSystem: buildFakeWorldbuildingDimension("力量体系"),
+            rules: buildFakeWorldbuildingDimension("秩序规则"),
+            socialStructure: buildFakeWorldbuildingDimension("社会结构"),
+            specialMechanism: buildFakeWorldbuildingDimension("特殊机制"),
+            worldBase: buildFakeWorldbuildingDimension("世界基底"),
+          },
         },
         OutlineGenerateOutput: {
           chapterOutlines: [
@@ -196,6 +252,36 @@ export function createModelGatewayFromEnv(
   );
 }
 
+function buildFakeCoreStoryText(label: string): string {
+  return [
+    `${label}围绕主角目标、读者期待和长期阻力建立清晰契约：主角不是被动等待事件发生，而是被一个必须解决的问题推向行动。`,
+    "每次行动都要带来可见收益，也留下新的代价，包括关系裂痕、信息暴露、资源损耗和对手升级。",
+    "对抗力量拥有自己的利益逻辑和组织资源，能够持续制造阻碍，而不是只在关键章出现。",
+    "阶段胜利必须兑现情绪回报，同时打开更高层级的问题，让长篇连载始终保持目标递进、冲突升级和人物变化。",
+    "这种契约要求每一卷都有清晰目标、明确阻力、可见收益和难以逃避的后果，让读者始终知道主角正在向哪里推进，也知道任何胜利都不会免费。",
+  ].join("");
+}
+
+function buildFakeWorldbuildingDimension(label: string): string {
+  return [
+    `${label}围绕资源、身份和旧秩序形成稳定规则：核心资源不能凭空出现，任何组织想获得安全都必须交出劳动、情报、技术或关系信用。`,
+    "运行规则上，每个决定都会改变资源、通行、信任和防线四类状态，短期收益会留下长期后果，不能用万能能力直接抹平冲突。",
+    "叙事冲突来自掌控资源者与改写规则者的拉扯，主角每次破局都会暴露位置、损耗盟友、激化外部势力或触发旧制度反扑。",
+    "代价限制保证设定不会变成背景装饰，剧情接口则可以连接地点争夺、人物站队、制度审判、技术升级和卷末反转，并与其他世界观维度互相闭环。",
+    "该维度还要解释人物为什么会相信、服从或反抗这些规则，使后续章节能自然展开选择、误判、交易、背叛和回收。",
+    "因此每次新增设定都应能反过来改变角色选择。",
+  ].join("");
+}
+
+function readPositiveInteger(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
 class UnconfiguredModelProvider implements ModelProvider {
   readonly model = "unconfigured";
   readonly name = "unconfigured";
@@ -219,5 +305,25 @@ function createUnconfiguredModelError(): Error {
 
 export const modelGatewayProvider = {
   provide: MODEL_GATEWAY,
-  useFactory: () => createModelGatewayFromEnv(),
+  useFactory: () => new RuntimeModelGateway(),
 };
+
+class RuntimeModelGateway extends ModelGateway {
+  constructor() {
+    super(new UnconfiguredModelProvider());
+  }
+
+  override generateObject<TSchema extends z.ZodType>(
+    input: GenerateObjectInput<TSchema>,
+  ): Promise<GenerateObjectResult<z.infer<TSchema>>> {
+    return createModelGatewayFromEnv().generateObject(input);
+  }
+
+  override streamText(input: StreamTextInput): AsyncIterable<string> {
+    return createModelGatewayFromEnv().streamText(input);
+  }
+
+  override embed(input: EmbedInput): Promise<EmbedResult> {
+    return createModelGatewayFromEnv().embed(input);
+  }
+}

@@ -33,12 +33,23 @@ describe("command registry", () => {
       "brief.save",
       "brief.confirm",
       "blueprint.generate",
+      "blueprint.saveForm",
+      "blueprint.completeForm",
       "blueprint.apply",
       "outline.generate",
+      "outline.saveDraft",
+      "outline.saveVolumeOutline",
+      "outline.saveChapterOutline",
+      "outline.saveSceneOutline",
       "outline.approveChapterOutline",
       "outline.applyChapterOutline",
       "plot.generateBookPlan",
       "plot.applyBookPlan",
+      "plot.saveBookPlanDraft",
+      "plot.saveVolumePlan",
+      "plot.saveArcPlan",
+      "plot.saveChapterPlan",
+      "plot.saveScenePlan",
       "plot.generateRollingOutline",
       "plot.applyChapterPlans",
       "plot.analyzeOutlineImpact",
@@ -55,19 +66,34 @@ describe("command registry", () => {
       "character.list",
       "character.create",
       "character.update",
+      "entityRelation.list",
+      "entityRelation.create",
+      "entityRelation.update",
       "character.generateNames",
       "element.generateCandidates",
       "element.acceptCandidates",
       "worldRule.list",
       "worldRule.create",
       "worldRule.update",
+      "worldbuilding.saveFields",
+      "worldbuilding.completeFields",
       "plotline.list",
       "plotline.create",
+      "plotline.update",
+      "plotline.createNode",
       "plotline.updateNode",
       "storyEvent.list",
       "storyEvent.create",
+      "storyEvent.update",
+      "eventRelation.list",
+      "eventRelation.create",
+      "eventRelation.update",
+      "conflict.list",
+      "conflict.create",
+      "conflict.update",
       "foreshadowing.list",
       "foreshadowing.create",
+      "foreshadowing.update",
       "foreshadowing.plan",
       "workOrder.list",
       "workOrder.get",
@@ -164,6 +190,129 @@ describe("command registry", () => {
     });
   });
 
+  it("parses character profile payloads with narrative design fields", () => {
+    expect(
+      parseCommandPayload("character.create", {
+        appearance: "旧风衣、随身旧笔记本，观察时会按住袖口。",
+        arcEnd: "愿意公开旧案证据并承担代价。",
+        arcStart: "逃避旧案，只想离开旧城。",
+        arcTurn: "发现证人仍被追杀后决定回头。",
+        archetype: "离队调查者",
+        biography: "前刑警，因十年前钟楼案离队。",
+        firstAppearance: "第 1 章",
+        flaw: "过度自责",
+        genderAge: "女，27 岁",
+        goal: "查清旧信来源",
+        importance: "core",
+        name: "林鸢",
+        narrativeFunction: "viewpoint",
+        need: "重新学会信任他人",
+        projectId: "proj_1",
+        relationshipHook: "与钟楼守档人互相试探。",
+        role: "protagonist",
+        secret: "十年前曾到过案发现场",
+        storyTask: "把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。",
+        voiceProfile: "克制、短句、偏观察细节。",
+      }),
+    ).toMatchObject({
+      firstAppearance: "第 1 章",
+      genderAge: "女，27 岁",
+      importance: "core",
+      name: "林鸢",
+      narrativeFunction: "viewpoint",
+      role: "protagonist",
+      storyTask: "把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。",
+    });
+
+    expect(() =>
+      parseCommandPayload("character.create", {
+        importance: "decorative",
+        name: "林鸢",
+        projectId: "proj_1",
+      }),
+    ).toThrow();
+  });
+
+  it("parses plotline profile and node payloads with narrative design fields", () => {
+    expect(
+      parseCommandPayload("plotline.create", {
+        centralQuestion: "旧信到底是谁寄出的？",
+        driver: "每三章投放一条可验证线索，并用一次误导制造新问题。",
+        emotionalPromise: "持续悬疑、逼近真相和人物承担代价的爽感。",
+        importance: "core",
+        kind: "mystery",
+        midEscalation: "线索从旧信转向档案伪造和证人追杀。",
+        narrativeRole: "secret_reveal",
+        payoffPlan: "在卷末揭示寄信人身份，并回收信纸水印伏笔。",
+        priority: 5,
+        projectId: "proj_1",
+        relatedCharacterIds: ["character_1"],
+        relatedForeshadowingIds: ["foreshadowing_1"],
+        relatedStoryEventIds: ["event_1"],
+        relatedWorldRuleIds: ["world_rule_1"],
+        startState: "主角只知道旧信存在，不知道背后牵连旧案。",
+        status: "planning",
+        summary: "围绕旧信来源展开的调查线。",
+        title: "旧信谜团",
+      }),
+    ).toMatchObject({
+      centralQuestion: "旧信到底是谁寄出的？",
+      importance: "core",
+      kind: "mystery",
+      narrativeRole: "secret_reveal",
+      relatedCharacterIds: ["character_1"],
+      status: "planning",
+      title: "旧信谜团",
+    });
+
+    expect(
+      parseCommandPayload("plotline.update", {
+        patch: {
+          payoffPlan: "第 20 章揭示寄信人并改变主角目标。",
+          relatedCharacterIds: [],
+          status: "active",
+        },
+        plotlineId: "plotline_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      patch: {
+        payoffPlan: "第 20 章揭示寄信人并改变主角目标。",
+        relatedCharacterIds: [],
+        status: "active",
+      },
+      plotlineId: "plotline_1",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("plotline.createNode", {
+        chapterHint: "第 3 章",
+        description: "让读者看到信纸水印，但暂时不解释来源。",
+        kind: "seed",
+        plotlineId: "plotline_1",
+        position: 1,
+        projectId: "proj_1",
+        status: "planned",
+        title: "信纸水印出现",
+      }),
+    ).toMatchObject({
+      chapterHint: "第 3 章",
+      kind: "seed",
+      plotlineId: "plotline_1",
+      status: "planned",
+      title: "信纸水印出现",
+    });
+
+    expect(() =>
+      parseCommandPayload("plotline.create", {
+        importance: "decorative",
+        projectId: "proj_1",
+        title: "无效故事线",
+      }),
+    ).toThrow();
+  });
+
   it("parses AI workflow payloads", () => {
     expect(
       parseCommandPayload("ai.generate", {
@@ -237,19 +386,21 @@ describe("command registry", () => {
       parseCommandPayload("element.generateCandidates", {
         constraints: ["不使用现代科技词"],
         count: 10,
-        elementType: "weapon",
-        genre: "玄幻",
+        description: "生成冰雪末世安全屋周边的地下黑市势力名称。",
+        elementType: "faction",
+        genre: "冰雪末世",
         projectId: "proj_1",
-        style: "热血",
+        style: "硬核生存",
         worldRuleIds: ["rule_1"],
       }),
     ).toEqual({
       constraints: ["不使用现代科技词"],
       count: 10,
-      elementType: "weapon",
-      genre: "玄幻",
+      description: "生成冰雪末世安全屋周边的地下黑市势力名称。",
+      elementType: "faction",
+      genre: "冰雪末世",
       projectId: "proj_1",
-      style: "热血",
+      style: "硬核生存",
       worldRuleIds: ["rule_1"],
     });
 
@@ -261,7 +412,7 @@ describe("command registry", () => {
             name: "夜照",
             rationale: "适合悬疑题材里的线索武器。",
             tags: ["旧城", "线索"],
-            type: "weapon",
+            type: "sect",
           },
         ],
         projectId: "proj_1",
@@ -273,11 +424,94 @@ describe("command registry", () => {
           name: "夜照",
           rationale: "适合悬疑题材里的线索武器。",
           tags: ["旧城", "线索"],
-          type: "weapon",
+          type: "sect",
         },
       ],
       projectId: "proj_1",
     });
+  });
+
+  it("parses fixed worldbuilding form fields with 500 character limits", () => {
+    expect(
+      parseCommandPayload("worldbuilding.saveFields", {
+        fields: {
+          geography: "旧城围绕钟楼扩散。",
+          powerSystem: "角色依靠档案解读和人情网络推进调查。",
+          worldBase: "近现代旧城悬疑世界。",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      fields: {
+        coreConflict: "",
+        culture: "",
+        economy: "",
+        factions: "",
+        geography: "旧城围绕钟楼扩散。",
+        history: "",
+        powerOrder: "",
+        powerSystem: "角色依靠档案解读和人情网络推进调查。",
+        rules: "",
+        socialStructure: "",
+        specialMechanism: "",
+        worldBase: "近现代旧城悬疑世界。",
+      },
+      projectId: "proj_1",
+    });
+
+    expect(() =>
+      parseCommandPayload("worldbuilding.completeFields", {
+        fields: {
+          worldBase: "超".repeat(501),
+        },
+        projectId: "proj_1",
+      }),
+    ).toThrow();
+  });
+
+  it("parses editable core story form fields with bounded long text and option fields", () => {
+    expect(
+      parseCommandPayload("blueprint.saveForm", {
+        fields: {
+          corePromise: "每个单元都给出硬线索和情绪反转。",
+          differentiators: ["旧信谜题和人物成长绑定"],
+          emotionalAxes: ["悬疑", "反转"],
+          logline: "雨夜旧信把主角拖回十年前钟楼旧案。",
+          mainConflict: "主角追查真相时不断触碰旧城秩序。",
+          mainGoal: "找出钟楼火灾真相并保护仍被旧案威胁的人。",
+          premise: "旧城钟楼火灾十年后，主角收到一封不该存在的旧信。",
+          risks: ["线索密度不足会削弱追读"],
+          stakes: "失败会让旧案幸存者再次被清算。",
+          storyDriver: "mystery",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      fields: {
+        antagonistForce: "",
+        corePromise: "每个单元都给出硬线索和情绪反转。",
+        differentiators: ["旧信谜题和人物成长绑定"],
+        emotionalAxes: ["悬疑", "反转"],
+        logline: "雨夜旧信把主角拖回十年前钟楼旧案。",
+        mainConflict: "主角追查真相时不断触碰旧城秩序。",
+        mainGoal: "找出钟楼火灾真相并保护仍被旧案威胁的人。",
+        premise: "旧城钟楼火灾十年后，主角收到一封不该存在的旧信。",
+        protagonistArc: "",
+        risks: ["线索密度不足会削弱追读"],
+        stakes: "失败会让旧案幸存者再次被清算。",
+        storyDriver: "mystery",
+      },
+      projectId: "proj_1",
+    });
+
+    expect(() =>
+      parseCommandPayload("blueprint.completeForm", {
+        fields: {
+          premise: "故".repeat(801),
+        },
+        projectId: "proj_1",
+      }),
+    ).toThrow();
   });
 
   it("parses longform planning payloads", () => {
@@ -301,6 +535,84 @@ describe("command registry", () => {
     ).toEqual({
       artifactId: "artifact_1",
       projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveBookPlanDraft", {
+        bookPlanId: "book_plan_1",
+        corePromise: "每卷完成一次核心爽点兑现。",
+        endingDirection: "主角公开终局代价。",
+        mainPlotlineId: "plotline_1",
+        projectId: "proj_1",
+        status: "active",
+        targetWordCount: 3_000_000,
+        title: "全书大纲",
+      }),
+    ).toEqual({
+      bookPlanId: "book_plan_1",
+      corePromise: "每卷完成一次核心爽点兑现。",
+      endingDirection: "主角公开终局代价。",
+      mainPlotlineId: "plotline_1",
+      projectId: "proj_1",
+      status: "active",
+      targetWordCount: 3_000_000,
+      title: "全书大纲",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveVolumePlan", {
+        bookPlanId: "book_plan_1",
+        climax: "卷末完成第一次公开破局。",
+        majorConflict: "底层修士与司星阁禁令正面冲突。",
+        projectId: "proj_1",
+        purpose: "展示规则、压迫和第一次突破。",
+        status: "draft",
+        targetWordCount: 360_000,
+        title: "第一卷 星潮初醒",
+        volumeIndex: 1,
+        volumePlanId: "volume_plan_1",
+      }),
+    ).toEqual({
+      bookPlanId: "book_plan_1",
+      climax: "卷末完成第一次公开破局。",
+      majorConflict: "底层修士与司星阁禁令正面冲突。",
+      projectId: "proj_1",
+      purpose: "展示规则、压迫和第一次突破。",
+      status: "draft",
+      targetWordCount: 360_000,
+      title: "第一卷 星潮初醒",
+      volumeIndex: 1,
+      volumePlanId: "volume_plan_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveArcPlan", {
+        arcIndex: 1,
+        arcPlanId: "arc_plan_1",
+        characterArcId: "character_arc_1",
+        endChapterIndex: 20,
+        escalation: ["发现禁令", "第一次越界", "暴露代价"],
+        plotlineId: "plotline_1",
+        projectId: "proj_1",
+        purpose: "建立修行规则和第一重代价。",
+        startChapterIndex: 1,
+        status: "draft",
+        title: "星潮初醒",
+        volumePlanId: "volume_plan_1",
+      }),
+    ).toEqual({
+      arcIndex: 1,
+      arcPlanId: "arc_plan_1",
+      characterArcId: "character_arc_1",
+      endChapterIndex: 20,
+      escalation: ["发现禁令", "第一次越界", "暴露代价"],
+      plotlineId: "plotline_1",
+      projectId: "proj_1",
+      purpose: "建立修行规则和第一重代价。",
+      startChapterIndex: 1,
+      status: "draft",
+      title: "星潮初醒",
+      volumePlanId: "volume_plan_1",
     });
 
     expect(
@@ -342,12 +654,76 @@ describe("command registry", () => {
       targetId: "chapter_plan_1",
       targetType: "chapter_plan",
     });
+
+    expect(
+      parseCommandPayload("plot.saveChapterPlan", {
+        arcPlanId: "arc_plan_1",
+        chapterGoal: "主角启动安全屋，并第一次面对求助压力。",
+        chapterIndex: 1,
+        chapterPlanId: "chapter_plan_1",
+        conflict: "主角必须在救人和暴露据点之间选择。",
+        emotionalTurn: "从独善其身到被迫承担。",
+        hook: "门外传来熟悉的求救声。",
+        informationGain: "安全屋入口可能被追踪。",
+        projectId: "proj_1",
+        relatedCharacterIds: ["char_1"],
+        relatedForeshadowingIds: ["foreshadowing_1"],
+        relatedPlotlineIds: ["plotline_1"],
+        status: "draft",
+        targetWordCount: 3200,
+        title: "第 1 章 暴雪预警",
+      }),
+    ).toEqual({
+      arcPlanId: "arc_plan_1",
+      chapterGoal: "主角启动安全屋，并第一次面对求助压力。",
+      chapterIndex: 1,
+      chapterPlanId: "chapter_plan_1",
+      conflict: "主角必须在救人和暴露据点之间选择。",
+      emotionalTurn: "从独善其身到被迫承担。",
+      hook: "门外传来熟悉的求救声。",
+      informationGain: "安全屋入口可能被追踪。",
+      projectId: "proj_1",
+      relatedCharacterIds: ["char_1"],
+      relatedForeshadowingIds: ["foreshadowing_1"],
+      relatedPlotlineIds: ["plotline_1"],
+      status: "draft",
+      targetWordCount: 3200,
+      title: "第 1 章 暴雪预警",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveScenePlan", {
+        chapterPlanId: "chapter_plan_1",
+        conflictTurn: "电力切换失败，邻居开始敲门。",
+        locationId: "location_1",
+        memoryTargets: ["安全屋首次暴露热源"],
+        outcome: "主角守住入口，但留下门禁破绽。",
+        projectId: "proj_1",
+        sceneGoal: "把安全屋危机具体化。",
+        sceneIndex: 1,
+        scenePlanId: "scene_plan_1",
+        status: "draft",
+      }),
+    ).toEqual({
+      chapterPlanId: "chapter_plan_1",
+      conflictTurn: "电力切换失败，邻居开始敲门。",
+      locationId: "location_1",
+      memoryTargets: ["安全屋首次暴露热源"],
+      outcome: "主角守住入口，但留下门禁破绽。",
+      projectId: "proj_1",
+      sceneGoal: "把安全屋危机具体化。",
+      sceneIndex: 1,
+      scenePlanId: "scene_plan_1",
+      status: "draft",
+    });
   });
 
   it("parses creative path and outline payloads", () => {
     expect(
       parseCommandPayload("brief.save", {
         emotionalRewards: ["爽点", "悬疑"],
+        estimatedChapterCount: 260,
+        estimatedWordCount: 800_000,
         forbiddenDirections: ["不要系统流"],
         genre: "玄幻",
         initialIdea: "少年发现旧都遗物。",
@@ -359,11 +735,22 @@ describe("command registry", () => {
         targetAudience: "男频爽文",
       }),
     ).toMatchObject({
+      estimatedChapterCount: 260,
+      estimatedWordCount: 800_000,
       genre: "玄幻",
       initialIdea: "少年发现旧都遗物。",
       subgenres: ["废柴逆袭"],
       targetAudience: "男频爽文",
     });
+
+    expect(() =>
+      parseCommandPayload("brief.save", {
+        estimatedChapterCount: 0,
+        estimatedWordCount: 9_999,
+        genre: "玄幻",
+        projectId: "proj_1",
+      }),
+    ).toThrow();
 
     expect(
       parseCommandPayload("outline.generate", {
@@ -375,6 +762,116 @@ describe("command registry", () => {
       chapterCount: 10,
       projectId: "proj_1",
       scope: "chapter_batch",
+    });
+
+    expect(
+      parseCommandPayload("outline.saveDraft", {
+        basis: { source: "manual" },
+        outlineId: "outline_1",
+        projectId: "proj_1",
+        scope: "full_book",
+        status: "draft",
+        title: "全书大纲",
+      }),
+    ).toEqual({
+      basis: { source: "manual" },
+      outlineId: "outline_1",
+      projectId: "proj_1",
+      scope: "full_book",
+      status: "draft",
+      title: "全书大纲",
+    });
+
+    expect(
+      parseCommandPayload("outline.saveVolumeOutline", {
+        climax: "卷末安全屋第一次公开反击。",
+        majorConflict: "救人与隐藏堡垒位置冲突。",
+        outlineId: "outline_1",
+        projectId: "proj_1",
+        purpose: "完成极寒降临和安全屋立足。",
+        sortOrder: 1,
+        status: "draft",
+        title: "第一卷 白灾入屋",
+        volumeOutlineId: "volume_outline_1",
+        wordCountGoal: 500_000,
+      }),
+    ).toEqual({
+      climax: "卷末安全屋第一次公开反击。",
+      majorConflict: "救人与隐藏堡垒位置冲突。",
+      outlineId: "outline_1",
+      projectId: "proj_1",
+      purpose: "完成极寒降临和安全屋立足。",
+      sortOrder: 1,
+      status: "draft",
+      title: "第一卷 白灾入屋",
+      volumeOutlineId: "volume_outline_1",
+      wordCountGoal: 500_000,
+    });
+
+    expect(
+      parseCommandPayload("outline.saveChapterOutline", {
+        chapterGoal: "主角收到极寒预警并启动安全屋改造。",
+        conflict: "时间只剩三小时，物资与信任都不足。",
+        hook: "预警邮件第二次自动刷新。",
+        informationGain: "极寒不是普通寒潮。",
+        outlineId: "outline_1",
+        projectId: "proj_1",
+        relatedForeshadowingIds: ["foreshadowing_1"],
+        relatedPlotlineNodeIds: ["node_1"],
+        requiredCharacterIds: ["char_1"],
+        requiredLocationIds: ["location_1"],
+        sortOrder: 1,
+        status: "draft",
+        targetWordCount: 3300,
+        title: "第 1 章 暴雪预警",
+        volumeOutlineId: "volume_outline_1",
+      }),
+    ).toEqual({
+      chapterGoal: "主角收到极寒预警并启动安全屋改造。",
+      conflict: "时间只剩三小时，物资与信任都不足。",
+      hook: "预警邮件第二次自动刷新。",
+      informationGain: "极寒不是普通寒潮。",
+      outlineId: "outline_1",
+      projectId: "proj_1",
+      relatedForeshadowingIds: ["foreshadowing_1"],
+      relatedPlotlineNodeIds: ["node_1"],
+      requiredCharacterIds: ["char_1"],
+      requiredLocationIds: ["location_1"],
+      sortOrder: 1,
+      status: "draft",
+      targetWordCount: 3300,
+      title: "第 1 章 暴雪预警",
+      volumeOutlineId: "volume_outline_1",
+    });
+
+    expect(
+      parseCommandPayload("outline.saveSceneOutline", {
+        beatType: "opening_hook",
+        chapterOutlineId: "chapter_outline_1",
+        conflict: "改造声引来物业询问。",
+        entryState: "主角半信半疑。",
+        exitState: "主角确认灾难正在逼近。",
+        locationId: "location_1",
+        projectId: "proj_1",
+        purpose: "用具体动作展示安全屋第一轮升级。",
+        sceneOutlineId: "scene_outline_1",
+        sortOrder: 1,
+        status: "draft",
+        title: "三小时倒计时",
+      }),
+    ).toEqual({
+      beatType: "opening_hook",
+      chapterOutlineId: "chapter_outline_1",
+      conflict: "改造声引来物业询问。",
+      entryState: "主角半信半疑。",
+      exitState: "主角确认灾难正在逼近。",
+      locationId: "location_1",
+      projectId: "proj_1",
+      purpose: "用具体动作展示安全屋第一轮升级。",
+      sceneOutlineId: "scene_outline_1",
+      sortOrder: 1,
+      status: "draft",
+      title: "三小时倒计时",
     });
 
     expect(
@@ -498,6 +995,7 @@ describe("command registry", () => {
         title: "雨夜来信",
         description: "主角收到关键线索。",
         eventType: "discovery",
+        outcome: "主角决定追查旧案。",
         participants: [
           {
             entityType: "character",
@@ -507,6 +1005,7 @@ describe("command registry", () => {
         ],
       }),
     ).toMatchObject({
+      outcome: "主角决定追查旧案。",
       participants: [
         {
           entityType: "character",
@@ -514,6 +1013,179 @@ describe("command registry", () => {
           role: "discoverer",
         },
       ],
+    });
+  });
+
+  it("parses entity relation payloads", () => {
+    expect(
+      parseCommandPayload("entityRelation.create", {
+        description: "主角保护医生，医生提供避难所医疗秩序。",
+        polarity: 1,
+        projectId: "proj_1",
+        relationType: "protects",
+        sourceEntityId: "char_1",
+        sourceEntityType: "character",
+        status: "confirmed",
+        strength: 0.8,
+        targetEntityId: "char_2",
+        targetEntityType: "character",
+      }),
+    ).toEqual({
+      description: "主角保护医生，医生提供避难所医疗秩序。",
+      polarity: 1,
+      projectId: "proj_1",
+      relationType: "protects",
+      sourceEntityId: "char_1",
+      sourceEntityType: "character",
+      status: "confirmed",
+      strength: 0.8,
+      targetEntityId: "char_2",
+      targetEntityType: "character",
+    });
+
+    expect(
+      parseCommandPayload("entityRelation.update", {
+        entityRelationId: "relation_1",
+        patch: {
+          description: "关系从互利变成稳定同盟。",
+          status: "confirmed",
+          strength: 0.95,
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      entityRelationId: "relation_1",
+      patch: {
+        description: "关系从互利变成稳定同盟。",
+        status: "confirmed",
+        strength: 0.95,
+      },
+      projectId: "proj_1",
+    });
+  });
+
+  it("parses conflict and event relation payloads", () => {
+    expect(
+      parseCommandPayload("conflict.create", {
+        conflictType: "survival",
+        escalationPath: ["断电", "邻里围门", "外部势力锁定暖源"],
+        opposingForces: ["安全屋", "失控幸存者"],
+        projectId: "proj_1",
+        relatedPlotlineId: "plotline_1",
+        stakes: "安全屋一旦暴露，主角会失去唯一生存优势。",
+        status: "active",
+        title: "暖源暴露危机",
+      }),
+    ).toEqual({
+      conflictType: "survival",
+      escalationPath: ["断电", "邻里围门", "外部势力锁定暖源"],
+      opposingForces: ["安全屋", "失控幸存者"],
+      projectId: "proj_1",
+      relatedPlotlineId: "plotline_1",
+      stakes: "安全屋一旦暴露，主角会失去唯一生存优势。",
+      status: "active",
+      title: "暖源暴露危机",
+    });
+
+    expect(
+      parseCommandPayload("conflict.update", {
+        conflictId: "conflict_1",
+        patch: {
+          escalationPath: ["抢药", "断水", "第一次武装冲突"],
+          status: "resolved",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      conflictId: "conflict_1",
+      patch: {
+        escalationPath: ["抢药", "断水", "第一次武装冲突"],
+        status: "resolved",
+      },
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("eventRelation.create", {
+        description: "预警邮件直接导致主角抢先改造堡垒。",
+        projectId: "proj_1",
+        relationType: "causes",
+        sourceEventId: "event_1",
+        targetEventId: "event_2",
+      }),
+    ).toEqual({
+      description: "预警邮件直接导致主角抢先改造堡垒。",
+      projectId: "proj_1",
+      relationType: "causes",
+      sourceEventId: "event_1",
+      targetEventId: "event_2",
+    });
+
+    expect(
+      parseCommandPayload("eventRelation.update", {
+        eventRelationId: "event_relation_1",
+        patch: {
+          description: "因果关系改为递进升级。",
+          relationType: "escalates",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      eventRelationId: "event_relation_1",
+      patch: {
+        description: "因果关系改为递进升级。",
+        relationType: "escalates",
+      },
+      projectId: "proj_1",
+    });
+  });
+
+  it("parses story event updates with editable plot-node fields", () => {
+    expect(
+      parseCommandPayload("storyEvent.update", {
+        projectId: "proj_1",
+        storyEventId: "event_1",
+        patch: {
+          chapterId: "chapter_3",
+          description: "主角意识到旧信并非偶然出现。",
+          eventType: "reveal",
+          participants: [
+            {
+              entityType: "character",
+              entityId: "char_1",
+              role: "witness",
+            },
+          ],
+          status: "draft",
+          storyTime: "第 3 章夜雨",
+          title: "旧信真意",
+        },
+      }),
+    ).toMatchObject({
+      patch: {
+        chapterId: "chapter_3",
+        description: "主角意识到旧信并非偶然出现。",
+        eventType: "reveal",
+        status: "draft",
+        storyTime: "第 3 章夜雨",
+      },
+      storyEventId: "event_1",
+    });
+
+    expect(
+      parseCommandPayload("storyEvent.update", {
+        projectId: "proj_1",
+        storyEventId: "event_1",
+        patch: {
+          outcome: "主角决定守住安全屋入口。",
+        },
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      storyEventId: "event_1",
+      patch: {
+        outcome: "主角决定守住安全屋入口。",
+      },
     });
   });
 
@@ -530,6 +1202,48 @@ describe("command registry", () => {
     ).toMatchObject({
       payoffEventId: "event_payoff",
       seedEventId: "event_seed",
+    });
+  });
+
+  it("parses foreshadowing updates with importance and event links", () => {
+    expect(
+      parseCommandPayload("foreshadowing.update", {
+        foreshadowingId: "foreshadowing_1",
+        projectId: "proj_1",
+        patch: {
+          description: "信纸水印第一次出现，读者只看见图案。",
+          importance: 5,
+          payoffEventId: "event_payoff",
+          payoffExpectation: "第 20 章揭示水印来自伪造档案。",
+          seedEventId: "event_seed",
+          status: "payoff_ready",
+          title: "水印伏笔",
+        },
+      }),
+    ).toMatchObject({
+      foreshadowingId: "foreshadowing_1",
+      patch: {
+        importance: 5,
+        payoffEventId: "event_payoff",
+        seedEventId: "event_seed",
+        status: "payoff_ready",
+      },
+    });
+
+    expect(
+      parseCommandPayload("foreshadowing.update", {
+        foreshadowingId: "foreshadowing_1",
+        projectId: "proj_1",
+        patch: {
+          description: "水印只在第一页角落闪过。",
+        },
+      }),
+    ).toEqual({
+      foreshadowingId: "foreshadowing_1",
+      projectId: "proj_1",
+      patch: {
+        description: "水印只在第一页角落闪过。",
+      },
     });
   });
 

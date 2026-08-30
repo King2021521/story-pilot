@@ -44,7 +44,7 @@ export function GraphPreviewPanel({ loading = false, neighborhood }: GraphPrevie
         dataSource={[...neighborhood.nodes]}
         renderItem={(node) => (
           <List.Item>
-            <Space direction="vertical" size={4}>
+            <Space orientation="vertical" size={4}>
               <Text strong>{node.label}</Text>
               <Space size={8}>
                 <Tag color="geekblue">{node.type}</Tag>

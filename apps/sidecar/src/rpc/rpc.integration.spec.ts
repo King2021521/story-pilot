@@ -4,12 +4,54 @@ import { join } from "node:path";
 
 import { Test } from "@nestjs/testing";
 import { FakeModelProvider, ModelGateway } from "@story-pilot/ai";
-import { createProjectDatabase, PROJECT_DATABASE_FILE } from "@story-pilot/db";
+import {
+  createProjectDatabase,
+  PROJECT_DATABASE_FILE,
+  type WorldbuildingFields,
+} from "@story-pilot/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
 import { AppModule } from "../app.module.js";
 import { RpcService } from "./rpc.service.js";
+
+function completeWorldbuildingFields(
+  overrides: Partial<WorldbuildingFields> = {},
+): WorldbuildingFields {
+  return {
+    coreConflict: "旧秩序与新生力量围绕资源和合法性长期冲突。",
+    culture: "民众相信血脉、功绩与契约共同决定身份。",
+    economy: "土地、粮草、军械、情报和修行资源决定势力上限。",
+    factions: "王朝残部、地方豪强、边境军镇与民间盟会互相牵制。",
+    geography: "都城、边郡、河谷粮仓和山中秘境构成主要舞台。",
+    history: "旧王朝衰败后，各方借灾年和战乱重塑权力秩序。",
+    powerOrder: "皇权名义尚在，实际权力由军功、宗族与资源控制。",
+    powerSystem: "角色通过武学、军略、情报网络和资源调度获得优势。",
+    rules: "军令、盟约、宗法和地方潜规则共同约束行动。",
+    socialStructure: "士族、军户、商帮、流民与修行者拥有不同生存路径。",
+    specialMechanism: "星潮周期性影响修行效率和战略窗口。",
+    worldBase: "架空古代争霸世界，现实权谋与轻度超凡并存。",
+    ...overrides,
+  };
+}
+
+function coreStoryFormFields(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    antagonistForce: "",
+    corePromise: "",
+    differentiators: [],
+    emotionalAxes: [],
+    logline: "",
+    mainConflict: "",
+    mainGoal: "",
+    premise: "",
+    protagonistArc: "",
+    risks: [],
+    stakes: "",
+    storyDriver: "growth_reversal",
+    ...overrides,
+  };
+}
 
 describe("RpcService MVP command integration", () => {
   const tempDirs: string[] = [];
@@ -146,6 +188,126 @@ describe("RpcService MVP command integration", () => {
         errorCode: "AI_MODEL_NOT_CONFIGURED",
         ok: false,
       });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("runs form completion commands through prompt templates and strict output schemas", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_template_project",
+          payload: {
+            genre: "冰雪末世",
+            style: "硬核生存、基地经营",
+            title: "雪境堡垒",
+          },
+        }),
+      );
+      const projectId = getString(project, "id");
+      const rootPath = getString(project, "rootPath");
+      const worldbuilding = await expectRpcOk(
+        rpcService.handle({
+          command: "worldbuilding.completeFields",
+          id: "req_template_worldbuilding",
+          payload: {
+            fields: completeWorldbuildingFields({
+              worldBase: "冰雪末世，主角提前打造山顶安全屋。",
+            }),
+            projectId,
+          },
+        }),
+      );
+      const coreStory = await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.completeForm",
+          id: "req_template_core_story",
+          payload: {
+            fields: coreStoryFormFields({
+              mainGoal: "让雪境堡垒在极寒中长期自给并建立公共秩序。",
+              premise: "全球极寒爆发，主角提前占据旧防灾堡垒。",
+            }),
+            projectId,
+          },
+        }),
+      );
+
+      expect(
+        getString(getRecord(worldbuilding, "fields"), "worldBase").length,
+      ).toBeGreaterThanOrEqual(300);
+      expect(getString(getRecord(coreStory, "fields"), "premise").length).toBeGreaterThanOrEqual(
+        200,
+      );
+      const completedWorldbuildingFields = getRecord(worldbuilding, "fields");
+      const completedCoreStoryFields = getRecord(coreStory, "fields");
+      const completedStoryDriver = getString(completedCoreStoryFields, "storyDriver");
+      const savedWorldbuilding = await expectRpcOk(
+        rpcService.handle({
+          command: "worldbuilding.saveFields",
+          id: "req_template_worldbuilding_save",
+          payload: {
+            fields: completedWorldbuildingFields,
+            projectId,
+          },
+        }),
+      );
+      const savedCoreStory = await expectRpcOk(
+        rpcService.handle({
+          command: "blueprint.saveForm",
+          id: "req_template_core_story_save",
+          payload: {
+            fields: completedCoreStoryFields,
+            projectId,
+          },
+        }),
+      );
+
+      expect(
+        getString(getRecord(savedWorldbuilding, "fields"), "worldBase").length,
+      ).toBeGreaterThanOrEqual(300);
+      expect(getString(savedCoreStory, "storyDriver")).toBe(completedStoryDriver);
+
+      const projectDatabase = createProjectDatabase(join(rootPath, PROJECT_DATABASE_FILE));
+      try {
+        const rows = projectDatabase.client
+          .prepare(
+            "select purpose, prompt_version, request from model_calls order by created_at asc",
+          )
+          .all() as Array<{ prompt_version: string; purpose: string; request: string }>;
+        expect(rows).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              prompt_version: "worldbuilding.complete.v1",
+              purpose: "worldbuilding_generate",
+            }),
+            expect.objectContaining({
+              prompt_version: "core-story.complete.v1",
+              purpose: "core_story_complete",
+            }),
+          ]),
+        );
+        expect(rows.map((row) => parseJsonRecord(row.request))).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ templateId: "worldbuilding.complete" }),
+            expect.objectContaining({ templateId: "core-story.complete" }),
+          ]),
+        );
+        const worldbuildingProfile = projectDatabase.client
+          .prepare("select world_base from worldbuilding_profiles where project_id = ?")
+          .get(projectId) as { world_base: string } | undefined;
+        const storyBlueprint = projectDatabase.client
+          .prepare("select premise, story_driver from story_blueprints where project_id = ?")
+          .get(projectId) as { premise: string; story_driver: string } | undefined;
+
+        expect(worldbuildingProfile?.world_base.length).toBeGreaterThanOrEqual(300);
+        expect(storyBlueprint?.premise.length).toBeGreaterThanOrEqual(200);
+        expect(storyBlueprint?.story_driver).toBe(completedStoryDriver);
+      } finally {
+        projectDatabase.close();
+      }
     } finally {
       await moduleRef.close();
     }
@@ -602,6 +764,646 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("saves editable longform outline plans and exposes full fields on the workbench board", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_editable_outline_project",
+          payload: {
+            genre: "权谋",
+            title: "布衣天子",
+          },
+        }),
+      );
+      const projectId = getString(project, "id");
+
+      const bookPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveBookPlanDraft",
+          id: "req_save_book_plan_draft",
+          payload: {
+            corePromise: "小人物每卷完成一次权力反转，并付出一次身份代价。",
+            endingDirection: "主角放弃旧身份，重建朝堂规则。",
+            mainPlotlineId: "plotline_main",
+            projectId,
+            status: "active",
+            targetWordCount: 1_200_000,
+            title: "布衣天子全书大纲",
+          },
+        }),
+      );
+      const volumePlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveVolumePlan",
+          id: "req_save_volume_plan",
+          payload: {
+            bookPlanId: getString(bookPlan, "id"),
+            climax: "主角在公堂反杀第一次构陷。",
+            majorConflict: "旧贵族封锁上升通道，主角必须借民案撬动权力结构。",
+            projectId,
+            purpose: "完成身份压迫、入局动机和第一次公开胜利。",
+            status: "draft",
+            targetWordCount: 280_000,
+            title: "第一卷 寒门入局",
+            volumeIndex: 1,
+          },
+        }),
+      );
+      const arcPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveArcPlan",
+          id: "req_save_arc_plan",
+          payload: {
+            arcIndex: 1,
+            endChapterIndex: 24,
+            escalation: ["旧案开场", "证人失踪", "公堂反杀"],
+            plotlineId: "plotline_main",
+            projectId,
+            purpose: "用第一阶段让主角从被动受害转为主动查案。",
+            startChapterIndex: 1,
+            status: "draft",
+            title: "旧案破口",
+            volumePlanId: getString(volumePlan, "id"),
+          },
+        }),
+      );
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_editable_outline_board",
+          payload: { projectId },
+        }),
+      );
+      const boardCreativePath = getRecord(board, "creativePath");
+
+      expect(bookPlan).toMatchObject({
+        corePromise: "小人物每卷完成一次权力反转，并付出一次身份代价。",
+        endingDirection: "主角放弃旧身份，重建朝堂规则。",
+        mainPlotlineId: "plotline_main",
+        status: "active",
+        targetWordCount: 1_200_000,
+        title: "布衣天子全书大纲",
+      });
+      expect(volumePlan).toMatchObject({
+        bookPlanId: getString(bookPlan, "id"),
+        climax: "主角在公堂反杀第一次构陷。",
+        majorConflict: "旧贵族封锁上升通道，主角必须借民案撬动权力结构。",
+        purpose: "完成身份压迫、入局动机和第一次公开胜利。",
+        targetWordCount: 280_000,
+      });
+      expect(arcPlan).toMatchObject({
+        endChapterIndex: 24,
+        escalation: ["旧案开场", "证人失踪", "公堂反杀"],
+        plotlineId: "plotline_main",
+        startChapterIndex: 1,
+        volumePlanId: getString(volumePlan, "id"),
+      });
+      expect(getRecordArray(boardCreativePath, "bookPlans")).toEqual([
+        expect.objectContaining({
+          corePromise: "小人物每卷完成一次权力反转，并付出一次身份代价。",
+          id: getString(bookPlan, "id"),
+        }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "volumePlans")).toEqual([
+        expect.objectContaining({
+          id: getString(volumePlan, "id"),
+          majorConflict: "旧贵族封锁上升通道，主角必须借民案撬动权力结构。",
+        }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "arcPlans")).toEqual([
+        expect.objectContaining({
+          escalation: ["旧案开场", "证人失踪", "公堂反杀"],
+          id: getString(arcPlan, "id"),
+          purpose: "用第一阶段让主角从被动受害转为主动查案。",
+        }),
+      ]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("saves manual story planning entities through public RPC and exposes them on the board", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_manual_story_project",
+          payload: {
+            estimatedChapterCount: 1500,
+            estimatedWordCount: 5_000_000,
+            genre: "冰雪末世安全屋",
+            title: "极寒堡垒",
+          },
+        }),
+      );
+      const projectId = getString(project, "id");
+
+      const protagonist = await expectRpcOk(
+        rpcService.handle({
+          command: "character.create",
+          id: "req_manual_story_character_protagonist",
+          payload: {
+            arcEnd: "从只求自保变成能建立秩序的安全屋领袖。",
+            goal: "守住安全屋并建立稳定生存共同体。",
+            importance: "core",
+            name: "陆沉",
+            narrativeFunction: "driver",
+            projectId,
+            role: "protagonist",
+            storyTask: "承担安全屋建设、资源分配与秩序重建主线。",
+          },
+        }),
+      );
+      const doctor = await expectRpcOk(
+        rpcService.handle({
+          command: "character.create",
+          id: "req_manual_story_character_doctor",
+          payload: {
+            goal: "用医疗能力换取庇护，同时守住旧医院秘密。",
+            importance: "major",
+            name: "沈砚秋",
+            narrativeFunction: "ally",
+            projectId,
+            role: "support",
+            storyTask: "提供医疗线、信任危机与安全屋内部伦理冲突。",
+          },
+        }),
+      );
+      const entityRelation = await expectRpcOk(
+        rpcService.handle({
+          command: "entityRelation.create",
+          id: "req_manual_story_entity_relation_create",
+          payload: {
+            description: "陆沉用安全屋保护沈砚秋，沈砚秋用医疗能力稳定内部秩序。",
+            polarity: 1,
+            projectId,
+            relationType: "庇护与互信",
+            sourceEntityId: getString(protagonist, "id"),
+            sourceEntityType: "character",
+            status: "confirmed",
+            strength: 0.8,
+            targetEntityId: getString(doctor, "id"),
+            targetEntityType: "character",
+          },
+        }),
+      );
+      const updatedEntityRelation = await expectRpcOk(
+        rpcService.handle({
+          command: "entityRelation.update",
+          id: "req_manual_story_entity_relation_update",
+          payload: {
+            entityRelationId: getString(entityRelation, "id"),
+            patch: {
+              description: "互信关系会被医疗资源短缺持续考验。",
+              strength: 0.95,
+            },
+            projectId,
+          },
+        }),
+      );
+
+      const plotline = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.create",
+          id: "req_manual_story_plotline",
+          payload: {
+            centralQuestion: "安全屋能否从个人避难所升级为末世秩序核心？",
+            driver: "极寒、资源、邻里围困和外部势力逐步升级。",
+            emotionalPromise: "每次升级都带来更强安全感和更大代价。",
+            importance: "core",
+            kind: "main",
+            narrativeRole: "main_drive",
+            payoffPlan: "终局安全屋成为极寒城市的规则中心。",
+            priority: 1,
+            projectId,
+            relatedCharacterIds: [getString(protagonist, "id")],
+            status: "active",
+            summary: "围绕安全屋建设、扩张、防守和秩序重建推进。",
+            title: "安全屋升级主线",
+          },
+        }),
+      );
+      const conflict = await expectRpcOk(
+        rpcService.handle({
+          command: "conflict.create",
+          id: "req_manual_story_conflict_create",
+          payload: {
+            conflictType: "survival",
+            escalationPath: ["暴雪断电", "热源暴露", "邻里围门", "掠夺者围攻"],
+            opposingForces: ["安全屋小队", "失控幸存者与掠夺联盟"],
+            projectId,
+            relatedPlotlineId: getString(plotline, "id"),
+            stakes: "安全屋一旦失守，主角会失去全部生存优势和秩序试验场。",
+            status: "active",
+            title: "热源暴露危机",
+          },
+        }),
+      );
+      const updatedConflict = await expectRpcOk(
+        rpcService.handle({
+          command: "conflict.update",
+          id: "req_manual_story_conflict_update",
+          payload: {
+            conflictId: getString(conflict, "id"),
+            patch: {
+              stakes: "危机升级为整栋楼对安全屋规则的第一次集体挑战。",
+              status: "resolved",
+            },
+            projectId,
+          },
+        }),
+      );
+
+      const warningEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.create",
+          id: "req_manual_story_event_warning",
+          payload: {
+            description: "气象系统发布极寒红色预警，陆沉抢在断电前完成最后一批囤货。",
+            eventType: "discovery",
+            outcome: "安全屋建设进入封闭运行，外界秩序开始崩塌。",
+            participants: [
+              {
+                entityId: getString(protagonist, "id"),
+                entityType: "character",
+                role: "driver",
+              },
+            ],
+            projectId,
+            status: "canon",
+            storyTime: "第 1 章",
+            title: "极寒预警",
+          },
+        }),
+      );
+      const siegeEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.create",
+          id: "req_manual_story_event_siege",
+          payload: {
+            description: "热成像暴露安全屋位置，邻居和掠夺者开始联手试探入口。",
+            eventType: "conflict",
+            outcome: "主角守住门禁，但第一次公开暴露安全屋的存在。",
+            participants: [
+              {
+                entityId: getString(protagonist, "id"),
+                entityType: "character",
+                role: "defender",
+              },
+            ],
+            projectId,
+            status: "planned",
+            storyTime: "第 12 章",
+            title: "第一次围门",
+          },
+        }),
+      );
+      const updatedWarningEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.update",
+          id: "req_manual_story_event_update",
+          payload: {
+            patch: {
+              outcome: "陆沉完成安全屋封闭启动，也埋下热源被侦测的伏笔。",
+              status: "canon",
+            },
+            projectId,
+            storyEventId: getString(warningEvent, "id"),
+          },
+        }),
+      );
+      const eventRelation = await expectRpcOk(
+        rpcService.handle({
+          command: "eventRelation.create",
+          id: "req_manual_story_event_relation_create",
+          payload: {
+            description: "极寒预警导致安全屋封闭，也让后续热源暴露成为必然。",
+            projectId,
+            relationType: "foreshadows",
+            sourceEventId: getString(warningEvent, "id"),
+            targetEventId: getString(siegeEvent, "id"),
+          },
+        }),
+      );
+      const updatedEventRelation = await expectRpcOk(
+        rpcService.handle({
+          command: "eventRelation.update",
+          id: "req_manual_story_event_relation_update",
+          payload: {
+            eventRelationId: getString(eventRelation, "id"),
+            patch: {
+              description: "预警、囤货和热源暴露形成明确因果链。",
+              relationType: "causes",
+            },
+            projectId,
+          },
+        }),
+      );
+
+      const outline = await expectRpcOk(
+        rpcService.handle({
+          command: "outline.saveDraft",
+          id: "req_manual_story_outline_save",
+          payload: {
+            basis: {
+              premise: "冰雪末世，主角提前打造安全屋，在秩序崩坏中不断升级防御和规则。",
+              targetWordCount: 5_000_000,
+            },
+            projectId,
+            scope: "full_book",
+            status: "draft",
+            title: "极寒堡垒全书手工大纲",
+          },
+        }),
+      );
+      const volumeOutline = await expectRpcOk(
+        rpcService.handle({
+          command: "outline.saveVolumeOutline",
+          id: "req_manual_story_volume_outline_save",
+          payload: {
+            climax: "主角用备用能源和外墙防御击退第一次掠夺联盟。",
+            majorConflict: "安全屋热源暴露后，周边幸存者持续逼近。",
+            outlineId: getString(outline, "id"),
+            projectId,
+            purpose: "完成极寒降临、安全屋启动、邻里压力和首次攻防。",
+            sortOrder: 1,
+            status: "draft",
+            title: "第一卷 极寒降临",
+            wordCountGoal: 600_000,
+          },
+        }),
+      );
+      const chapterOutline = await expectRpcOk(
+        rpcService.handle({
+          command: "outline.saveChapterOutline",
+          id: "req_manual_story_chapter_outline_save",
+          payload: {
+            chapterGoal: "陆沉收到极寒预警并启动安全屋封闭运行。",
+            conflict: "陆沉必须在断电前完成安全屋能源切换。",
+            emotionalTurn: "从冷静准备转为确认末世已不可逆。",
+            hook: "气象预警突然从三天倒计时变成三小时。",
+            informationGain: "极寒速度远超官方预估。",
+            outlineId: getString(outline, "id"),
+            projectId,
+            relatedPlotlineNodeIds: [],
+            requiredCharacterIds: [getString(protagonist, "id")],
+            requiredLocationIds: [],
+            sortOrder: 1,
+            status: "draft",
+            targetWordCount: 3500,
+            title: "第 1 章 极寒预警",
+            volumeOutlineId: getString(volumeOutline, "id"),
+          },
+        }),
+      );
+      const sceneOutline = await expectRpcOk(
+        rpcService.handle({
+          command: "outline.saveSceneOutline",
+          id: "req_manual_story_scene_outline_save",
+          payload: {
+            beatType: "opening_hook",
+            chapterOutlineId: getString(chapterOutline, "id"),
+            conflict: "备用电源接入失败，楼道温度开始急降。",
+            entryState: "陆沉以为准备已经足够充分。",
+            exitState: "陆沉完成切换，也第一次感到安全屋不是单纯避难而是战场。",
+            projectId,
+            purpose: "展示安全屋系统、末世压迫和主角执行力。",
+            sortOrder: 1,
+            status: "draft",
+            title: "封闭启动",
+          },
+        }),
+      );
+
+      const bookPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveBookPlanDraft",
+          id: "req_manual_story_book_plan",
+          payload: {
+            corePromise: "每一阶段都兑现安全屋升级、危机压迫和规则重建的爽点。",
+            endingDirection: "安全屋从个人堡垒升级为极寒城市的新秩序中心。",
+            mainPlotlineId: getString(plotline, "id"),
+            projectId,
+            status: "active",
+            targetWordCount: 5_000_000,
+            title: "500 万字长篇规划",
+          },
+        }),
+      );
+      const volumePlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveVolumePlan",
+          id: "req_manual_story_volume_plan",
+          payload: {
+            bookPlanId: getString(bookPlan, "id"),
+            climax: "击退第一次成组织围攻。",
+            majorConflict: "极寒第一阶段的资源与入口暴露危机。",
+            projectId,
+            purpose: "搭建安全屋核心机制和第一批人物关系。",
+            status: "active",
+            targetWordCount: 600_000,
+            title: "第一卷 极寒降临",
+            volumeIndex: 1,
+          },
+        }),
+      );
+      const arcPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveArcPlan",
+          id: "req_manual_story_arc_plan",
+          payload: {
+            arcIndex: 1,
+            endChapterIndex: 30,
+            escalation: ["预警", "断电", "热源暴露", "围门"],
+            plotlineId: getString(plotline, "id"),
+            projectId,
+            purpose: "用前三十章完成安全屋启动和第一次外部冲突闭环。",
+            startChapterIndex: 1,
+            status: "draft",
+            title: "启动与暴露",
+            volumePlanId: getString(volumePlan, "id"),
+          },
+        }),
+      );
+      const chapterPlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveChapterPlan",
+          id: "req_manual_story_chapter_plan",
+          payload: {
+            arcPlanId: getString(arcPlan, "id"),
+            chapterGoal: "陆沉启动安全屋，并第一次面对门外求助压力。",
+            chapterIndex: 1,
+            conflict: "断电前最后一次能源切换失败。",
+            emotionalTurn: "从冷静准备转为意识到末世已经无法逆转。",
+            hook: "全城灯光熄灭，安全屋门外响起急促敲门声。",
+            informationGain: "极寒速度远超官方预估。",
+            projectId,
+            relatedCharacterIds: [getString(protagonist, "id")],
+            relatedPlotlineIds: [getString(plotline, "id")],
+            status: "draft",
+            targetWordCount: 3500,
+            title: "第 1 章 极寒预警",
+          },
+        }),
+      );
+      const scenePlan = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.saveScenePlan",
+          id: "req_manual_story_scene_plan",
+          payload: {
+            chapterPlanId: getString(chapterPlan, "id"),
+            conflictTurn: "门禁和能源不能同时稳定，主角必须手动切换。",
+            memoryTargets: ["安全屋能源系统", "极寒首次断电"],
+            outcome: "安全屋启动成功，但门外求助者成为下一章压力。",
+            projectId,
+            sceneGoal: "完成章首危机和安全屋能力展示。",
+            sceneIndex: 1,
+            status: "draft",
+          },
+        }),
+      );
+
+      const entityRelations = await expectRpcOk(
+        rpcService.handle({
+          command: "entityRelation.list",
+          id: "req_manual_story_entity_relation_list",
+          payload: { projectId },
+        }),
+      );
+      const conflicts = await expectRpcOk(
+        rpcService.handle({
+          command: "conflict.list",
+          id: "req_manual_story_conflict_list",
+          payload: { projectId },
+        }),
+      );
+      const eventRelations = await expectRpcOk(
+        rpcService.handle({
+          command: "eventRelation.list",
+          id: "req_manual_story_event_relation_list",
+          payload: { projectId },
+        }),
+      );
+      const storyEvents = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.list",
+          id: "req_manual_story_event_list",
+          payload: { projectId },
+        }),
+      );
+      const board = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_manual_story_board",
+          payload: { projectId },
+        }),
+      );
+      const boardCreativePath = getRecord(board, "creativePath");
+
+      expect(updatedEntityRelation).toMatchObject({
+        description: "互信关系会被医疗资源短缺持续考验。",
+        strength: 0.95,
+      });
+      expect(getRecordArray(entityRelations, "items")).toEqual([
+        expect.objectContaining({
+          id: getString(entityRelation, "id"),
+          sourceEntityId: getString(protagonist, "id"),
+          targetEntityId: getString(doctor, "id"),
+        }),
+      ]);
+      expect(updatedConflict).toMatchObject({
+        stakes: "危机升级为整栋楼对安全屋规则的第一次集体挑战。",
+        status: "resolved",
+      });
+      expect(getRecordArray(conflicts, "items")).toEqual([
+        expect.objectContaining({
+          id: getString(conflict, "id"),
+          relatedPlotlineId: getString(plotline, "id"),
+        }),
+      ]);
+      expect(updatedWarningEvent).toMatchObject({
+        outcome: "陆沉完成安全屋封闭启动，也埋下热源被侦测的伏笔。",
+      });
+      expect(getRecordArray(storyEvents, "items")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: getString(warningEvent, "id"),
+            outcome: "陆沉完成安全屋封闭启动，也埋下热源被侦测的伏笔。",
+          }),
+        ]),
+      );
+      expect(updatedEventRelation).toMatchObject({
+        description: "预警、囤货和热源暴露形成明确因果链。",
+        relationType: "causes",
+      });
+      expect(getRecordArray(eventRelations, "items")).toEqual([
+        expect.objectContaining({
+          id: getString(eventRelation, "id"),
+          sourceEventId: getString(warningEvent, "id"),
+          targetEventId: getString(siegeEvent, "id"),
+        }),
+      ]);
+      expect(outline).toMatchObject({
+        scope: "full_book",
+        title: "极寒堡垒全书手工大纲",
+      });
+      expect(volumeOutline).toMatchObject({
+        majorConflict: "安全屋热源暴露后，周边幸存者持续逼近。",
+        outlineId: getString(outline, "id"),
+      });
+      expect(chapterOutline).toMatchObject({
+        chapterGoal: "陆沉收到极寒预警并启动安全屋封闭运行。",
+        conflict: "陆沉必须在断电前完成安全屋能源切换。",
+        volumeOutlineId: getString(volumeOutline, "id"),
+      });
+      expect(sceneOutline).toMatchObject({
+        chapterOutlineId: getString(chapterOutline, "id"),
+        purpose: "展示安全屋系统、末世压迫和主角执行力。",
+      });
+      expect(chapterPlan).toMatchObject({
+        arcPlanId: getString(arcPlan, "id"),
+        chapterIndex: 1,
+        title: "第 1 章 极寒预警",
+      });
+      expect(scenePlan).toMatchObject({
+        chapterPlanId: getString(chapterPlan, "id"),
+        sceneIndex: 1,
+      });
+      expect(getRecordArray(board, "entityRelations")).toEqual([
+        expect.objectContaining({ id: getString(entityRelation, "id") }),
+      ]);
+      expect(getRecordArray(board, "conflicts")).toEqual([
+        expect.objectContaining({ id: getString(conflict, "id") }),
+      ]);
+      expect(getRecordArray(board, "eventRelations")).toEqual([
+        expect.objectContaining({ id: getString(eventRelation, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "outlines")).toEqual([
+        expect.objectContaining({ id: getString(outline, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "volumeOutlines")).toEqual([
+        expect.objectContaining({ id: getString(volumeOutline, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "chapterOutlines")).toEqual([
+        expect.objectContaining({ id: getString(chapterOutline, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "sceneOutlines")).toEqual([
+        expect.objectContaining({ id: getString(sceneOutline, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "chapterPlans")).toEqual([
+        expect.objectContaining({ id: getString(chapterPlan, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "scenePlans")).toEqual([
+        expect.objectContaining({ id: getString(scenePlan, "id") }),
+      ]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("initializes the nine-step creative path for new projects", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
@@ -741,6 +1543,8 @@ describe("RpcService MVP command integration", () => {
           id: "req_path_brief_save",
           payload: {
             emotionalRewards: ["悬疑", "反转"],
+            estimatedChapterCount: 260,
+            estimatedWordCount: 800_000,
             genre: "悬疑",
             initialIdea: "雨夜旧信把主角拖回十年前的钟楼旧案。",
             lengthProfile: "长篇连载",
@@ -752,6 +1556,10 @@ describe("RpcService MVP command integration", () => {
           },
         }),
       );
+      expect(savedBrief).toMatchObject({
+        estimatedChapterCount: 260,
+        estimatedWordCount: 800_000,
+      });
       const confirmedBrief = await expectRpcOk(
         rpcService.handle({
           command: "brief.confirm",
@@ -1026,7 +1834,7 @@ describe("RpcService MVP command integration", () => {
   });
 
   it("evaluates creative stage gates and supports strict advance, skip, and reopen", async () => {
-    const { moduleRef, rootDir, rpcService } = await createRpcHarness(tempDirs);
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
       const project = await expectRpcOk(
         rpcService.handle({
@@ -1105,9 +1913,9 @@ describe("RpcService MVP command integration", () => {
           requirements: expect.arrayContaining([
             expect.objectContaining({
               current: 0,
-              key: "world_rules",
+              key: "worldbuilding_fields",
               ok: false,
-              required: 3,
+              required: 12,
             }),
           ]),
           stageKey: "worldbuilding",
@@ -1129,18 +1937,14 @@ describe("RpcService MVP command integration", () => {
 
       await expectRpcOk(
         rpcService.handle({
-          command: "worldRule.create",
-          id: "req_gate_world_rule",
+          command: "worldbuilding.saveFields",
+          id: "req_gate_worldbuilding_profile",
           payload: {
-            category: "magic",
-            constraintLevel: "hard",
+            fields: completeWorldbuildingFields(),
             projectId,
-            statement: "星潮只在双月同天时增强。",
-            title: "星潮规则",
           },
         }),
       );
-      await createWorldbuildingAssets({ projectId, rootDir, rpcService });
       const advancedWorldbuilding = await expectRpcOk(
         rpcService.handle({
           command: "creativeStage.advance",
@@ -1216,8 +2020,8 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
-  it("requires complete worldbuilding assets before advancing a xuanhuan project", async () => {
-    const { moduleRef, rootDir, rpcService } = await createRpcHarness(tempDirs);
+  it("requires complete worldbuilding fields before advancing a xuanhuan project", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
       const project = await createConfirmedBriefAndBlueprint(rpcService, {
         genre: "玄幻",
@@ -1227,14 +2031,23 @@ describe("RpcService MVP command integration", () => {
 
       await expectRpcOk(
         rpcService.handle({
-          command: "worldRule.create",
-          id: "req_gate_world_only_rule",
+          command: "worldbuilding.saveFields",
+          id: "req_gate_world_partial_profile",
           payload: {
-            category: "magic",
-            constraintLevel: "hard",
+            fields: completeWorldbuildingFields({
+              coreConflict: "",
+              culture: "",
+              economy: "",
+              factions: "",
+              geography: "",
+              history: "",
+              powerOrder: "",
+              powerSystem: "",
+              rules: "",
+              socialStructure: "",
+              specialMechanism: "",
+            }),
             projectId,
-            statement: "星潮只在双月同天时增强。",
-            title: "星潮核心规则",
           },
         }),
       );
@@ -1267,31 +2080,13 @@ describe("RpcService MVP command integration", () => {
           requirements: expect.arrayContaining([
             expect.objectContaining({
               current: 1,
-              key: "world_rules",
+              key: "worldbuilding_fields",
               ok: false,
-              required: 3,
+              required: 12,
             }),
             expect.objectContaining({
               current: 0,
-              key: "locations",
-              ok: false,
-              required: 2,
-            }),
-            expect.objectContaining({
-              current: 0,
-              key: "organizations",
-              ok: false,
-              required: 1,
-            }),
-            expect.objectContaining({
-              current: 0,
-              key: "power_systems",
-              ok: false,
-              required: 1,
-            }),
-            expect.objectContaining({
-              current: 0,
-              key: "items",
+              key: "power_system",
               ok: false,
               required: 1,
             }),
@@ -1307,7 +2102,19 @@ describe("RpcService MVP command integration", () => {
         },
       });
 
-      await createWorldbuildingAssets({ projectId, rootDir, rpcService });
+      await expectRpcOk(
+        rpcService.handle({
+          command: "worldbuilding.saveFields",
+          id: "req_gate_world_complete_profile",
+          payload: {
+            fields: completeWorldbuildingFields({
+              powerSystem: "星潮修行按境界、资源和代价分层，越阶会损伤根基。",
+              worldBase: "玄幻星潮世界，宗门、王朝与边境军镇争夺天象资源。",
+            }),
+            projectId,
+          },
+        }),
+      );
 
       const advanced = await expectRpcOk(
         rpcService.handle({
@@ -1326,11 +2133,8 @@ describe("RpcService MVP command integration", () => {
         gateReport: {
           ok: true,
           requirements: expect.arrayContaining([
-            expect.objectContaining({ key: "world_rules", ok: true, required: 3 }),
-            expect.objectContaining({ key: "locations", ok: true, required: 2 }),
-            expect.objectContaining({ key: "organizations", ok: true, required: 1 }),
-            expect.objectContaining({ key: "power_systems", ok: true, required: 1 }),
-            expect.objectContaining({ key: "items", ok: true, required: 1 }),
+            expect.objectContaining({ key: "worldbuilding_fields", ok: true, required: 12 }),
+            expect.objectContaining({ key: "power_system", ok: true, required: 1 }),
           ]),
         },
         stage: {
@@ -1596,11 +2400,26 @@ describe("RpcService MVP command integration", () => {
           command: "character.create",
           id: "req_character_create",
           payload: {
+            appearance: "旧风衣、随身旧笔记本。",
+            arcEnd: "愿意公开旧案证据并承担代价。",
+            arcStart: "逃避旧案，只想离开旧城。",
+            arcTurn: "发现证人仍被追杀后决定回头。",
             archetype: "调查者",
+            biography: "前刑警，因旧案离队。",
+            firstAppearance: "第 1 章",
+            flaw: "过度自责",
+            genderAge: "女，27 岁",
             goal: "查清旧案",
+            importance: "core",
             name: "林鸢",
+            narrativeFunction: "viewpoint",
+            need: "重新学会信任他人",
             projectId: getString(project, "id"),
+            relationshipHook: "与钟楼守档人互相试探。",
             role: "protagonist",
+            secret: "十年前曾到过案发现场",
+            storyTask: "把旧信线索推进成主线调查。",
+            voiceProfile: "克制、短句、偏观察细节。",
           },
         }),
       );
@@ -1610,10 +2429,23 @@ describe("RpcService MVP command integration", () => {
           id: "req_character_update",
           payload: {
             characterId: getString(character, "id"),
-            patch: { goal: "保护证人", name: "林鸢" },
+            patch: {
+              arcEnd: "从逃避旧案的人，变成愿意公开档案的人。",
+              goal: "保护证人",
+              name: "林鸢",
+              need: "保护证人",
+              secret: "",
+              storyTask: "保护证人并揭开档案伪造链条。",
+            },
             projectId: getString(project, "id"),
           },
         }),
+      );
+      expect(getRecordArray(updatedCharacter, "traits")).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "need", value: "保护证人" })]),
+      );
+      expect(getRecordArray(updatedCharacter, "traits")).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "secret" })]),
       );
       const generatedNames = await expectRpcOk(
         rpcService.handle({
@@ -1765,7 +2597,11 @@ describe("RpcService MVP command integration", () => {
       );
       const boardCreativePath = getRecord(boardAfterReview, "creativePath");
 
-      expect(updatedCharacter).toMatchObject({ motivation: "保护证人" });
+      expect(updatedCharacter).toMatchObject({
+        arcEnd: "从逃避旧案的人，变成愿意公开档案的人。",
+        motivation: "保护证人",
+        storyTask: "保护证人并揭开档案伪造链条。",
+      });
       expect(getRecordArray(generatedNames, "items")).toHaveLength(3);
       expect(updatedWorldRule).toMatchObject({ content: "档案馆夜间只允许内部人员进入。" });
       expect(getRecordArray(characterList, "items")).toEqual([
@@ -1825,7 +2661,7 @@ describe("RpcService MVP command integration", () => {
           },
         }),
       );
-      await expectRpcOk(
+      const worldRule = await expectRpcOk(
         rpcService.handle({
           command: "worldRule.create",
           id: "world_rule_create",
@@ -1842,11 +2678,61 @@ describe("RpcService MVP command integration", () => {
           command: "plotline.create",
           id: "plotline_create",
           payload: {
+            centralQuestion: "旧信到底是谁寄出的？",
+            driver: "每三章投放一条线索，并用一次误导制造新的问题。",
+            emotionalPromise: "持续解谜、反转和真相逼近。",
+            importance: "core",
             kind: "mystery",
+            narrativeRole: "secret_reveal",
             priority: 5,
             projectId: getString(project, "id"),
+            relatedCharacterIds: [],
+            relatedForeshadowingIds: [],
+            relatedStoryEventIds: [],
+            relatedWorldRuleIds: [getString(worldRule, "id")],
             summary: "围绕旧信来源展开。",
             title: "旧信谜团",
+          },
+        }),
+      );
+      const plotlineList = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.list",
+          id: "plotline_list_for_node",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+      const plotline = getRecordArray(plotlineList, "items")[0];
+      if (!plotline) {
+        throw new Error("Expected plotline created through RPC");
+      }
+      const updatedPlotline = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.update",
+          id: "plotline_update",
+          payload: {
+            patch: {
+              payoffPlan: "卷末揭示寄信人，同时回收信纸水印伏笔。",
+              status: "active",
+            },
+            plotlineId: getString(plotline, "id"),
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const plotlineNode = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.createNode",
+          id: "plotline_node_create",
+          payload: {
+            chapterHint: "第 3 章",
+            description: "信纸水印第一次出现，但暂时不解释来源。",
+            kind: "seed",
+            plotlineId: getString(plotline, "id"),
+            position: 1,
+            projectId: getString(project, "id"),
+            status: "planned",
+            title: "信纸水印出现",
           },
         }),
       );
@@ -1874,8 +2760,155 @@ describe("RpcService MVP command integration", () => {
       expect(board).toMatchObject({
         characters: [expect.objectContaining({ name: "林鸢" })],
         foreshadowings: [expect.objectContaining({ title: "水印伏笔" })],
-        plotlines: [expect.objectContaining({ name: "旧信谜团" })],
+        plotlines: [
+          expect.objectContaining({
+            centralQuestion: "旧信到底是谁寄出的？",
+            name: "旧信谜团",
+            nodes: [
+              expect.objectContaining({
+                chapterHint: "第 3 章",
+                id: getString(plotlineNode, "id"),
+                title: "信纸水印出现",
+              }),
+            ],
+            payoffPlan: "卷末揭示寄信人，同时回收信纸水印伏笔。",
+            status: "active",
+          }),
+        ],
         worldRules: [expect.objectContaining({ title: "旧城区治理" })],
+      });
+      expect(updatedPlotline).toMatchObject({
+        payoffPlan: "卷末揭示寄信人，同时回收信纸水印伏笔。",
+        status: "active",
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("updates plot node workspace records through RPC and returns board-aligned fields", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_plot_nodes_update",
+          payload: { genre: "权谋", title: "布衣天子" },
+        }),
+      );
+
+      const storyEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.create",
+          id: "req_story_event_create_for_update",
+          payload: {
+            description: "秦钰收到带水印的旧信。",
+            eventType: "discovery",
+            projectId: getString(project, "id"),
+            status: "draft",
+            storyTime: "第 1 章夜雨",
+            title: "旧信出现",
+          },
+        }),
+      );
+      const payoffEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.create",
+          id: "req_story_event_payoff_for_update",
+          payload: {
+            description: "秦钰在公堂指出档案被调包。",
+            eventType: "reveal",
+            projectId: getString(project, "id"),
+            title: "档案调包真相",
+          },
+        }),
+      );
+      const foreshadowing = await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.create",
+          id: "req_foreshadowing_create_for_update",
+          payload: {
+            description: "信纸水印第一次出现，暂不解释来源。",
+            importance: 4,
+            projectId: getString(project, "id"),
+            seedEventId: getString(storyEvent, "id"),
+            status: "seeded",
+            title: "信纸水印",
+          },
+        }),
+      );
+
+      const updatedStoryEvent = await expectRpcOk(
+        rpcService.handle({
+          command: "storyEvent.update",
+          id: "req_story_event_update",
+          payload: {
+            patch: {
+              description: "秦钰确认旧信水印来自官府档案纸。",
+              eventType: "reveal",
+              status: "canon",
+              storyTime: "第 3 章公堂前",
+              title: "水印来源暴露",
+            },
+            projectId: getString(project, "id"),
+            storyEventId: getString(storyEvent, "id"),
+          },
+        }),
+      );
+      const updatedForeshadowing = await expectRpcOk(
+        rpcService.handle({
+          command: "foreshadowing.update",
+          id: "req_foreshadowing_update",
+          payload: {
+            foreshadowingId: getString(foreshadowing, "id"),
+            patch: {
+              description: "水印像是普通纸纹，实则是官府档案纸暗纹。",
+              importance: 5,
+              payoffEventId: getString(payoffEvent, "id"),
+              payoffExpectation: "第 20 章揭示水印证明档案调包。",
+              status: "payoff_ready",
+              title: "档案纸水印",
+            },
+            projectId: getString(project, "id"),
+          },
+        }),
+      );
+      const board = await expectRpcData(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_board_plot_nodes_update",
+          payload: { projectId: getString(project, "id") },
+        }),
+      );
+
+      expect(updatedStoryEvent).toMatchObject({
+        eventType: "reveal",
+        status: "canon",
+        storyTime: "第 3 章公堂前",
+        summary: "秦钰确认旧信水印来自官府档案纸。",
+        title: "水印来源暴露",
+      });
+      expect(updatedForeshadowing).toMatchObject({
+        importance: 5,
+        payoffText: "第 20 章揭示水印证明档案调包。",
+        status: "payoff_ready",
+      });
+      expect(board).toMatchObject({
+        foreshadowings: [
+          expect.objectContaining({
+            importance: 5,
+            title: "档案纸水印",
+          }),
+        ],
+        storyEvents: [
+          expect.objectContaining({
+            storyTime: "第 3 章公堂前",
+            title: "水印来源暴露",
+          }),
+          expect.objectContaining({
+            title: "档案调包真相",
+          }),
+        ],
       });
     } finally {
       await moduleRef.close();
@@ -1913,7 +2946,8 @@ describe("RpcService MVP command integration", () => {
           id: "req_element_generate",
           payload: {
             count: 5,
-            elementType: "weapon",
+            description: "围绕安全屋外部补给线生成可长期博弈的地下势力名称。",
+            elementType: "faction",
             projectId: getString(project, "id"),
             style: "热血",
             worldRuleIds: [getString(worldRule, "id")],
@@ -1924,13 +2958,13 @@ describe("RpcService MVP command integration", () => {
       expect(generatedItems).toHaveLength(5);
       expect(generatedItems).toEqual([
         expect.objectContaining({
-          name: "潮汐断星刃",
-          type: "weapon",
+          name: "白线同盟",
+          type: "faction",
         }),
-        expect.objectContaining({ type: "weapon" }),
-        expect.objectContaining({ type: "weapon" }),
-        expect.objectContaining({ type: "weapon" }),
-        expect.objectContaining({ type: "weapon" }),
+        expect.objectContaining({ type: "faction" }),
+        expect.objectContaining({ type: "faction" }),
+        expect.objectContaining({ type: "faction" }),
+        expect.objectContaining({ type: "faction" }),
       ]);
 
       const accepted = await expectRpcOk(
@@ -1958,7 +2992,7 @@ describe("RpcService MVP command integration", () => {
                 name: "司星阁",
                 rationale: "能制造修行秩序冲突。",
                 tags: ["宗门"],
-                type: "organization",
+                type: "sect",
               },
               {
                 description: "星轨潮汐最强的古老观星台。",
@@ -2008,7 +3042,7 @@ describe("RpcService MVP command integration", () => {
         expect.objectContaining({ name: "司星阁", target: "organization" }),
         expect.objectContaining({ name: "落星台", target: "location" }),
         expect.objectContaining({ name: "星回原", target: "location" }),
-        expect.objectContaining({ name: "潮汐断星刃", target: "item" }),
+        expect.objectContaining({ name: "白线同盟", target: "organization" }),
         expect.objectContaining({ name: "星潮九转", target: "item" }),
         expect.objectContaining({ name: "旧星罗盘", target: "item" }),
       ]);
@@ -2025,13 +3059,13 @@ describe("RpcService MVP command integration", () => {
         ]),
       );
       expect(getRecordArray(board, "organizations")).toEqual([
-        expect.objectContaining({ name: "司星阁", type: "organization" }),
+        expect.objectContaining({ name: "司星阁", type: "sect" }),
+        expect.objectContaining({ name: "白线同盟", type: "faction" }),
       ]);
       const boardItems = getRecordArray(board, "items");
-      expect(boardItems).toHaveLength(3);
+      expect(boardItems).toHaveLength(2);
       expect(boardItems).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ name: "潮汐断星刃", type: "weapon" }),
           expect.objectContaining({ name: "旧星罗盘", type: "item" }),
           expect.objectContaining({ name: "星潮九转", type: "technique" }),
         ]),
@@ -2258,6 +3292,7 @@ async function createRpcHarness(tempDirs: string[]) {
   process.env.STORY_PILOT_PROJECTS_ROOT = join(rootDir, "projects");
   delete process.env.STORY_PILOT_GLOBAL_DATABASE_PATH;
   delete process.env.STORY_PILOT_SETTINGS_PATH;
+  const generatedCoreStoryText = buildGeneratedCoreStoryText("雪境堡垒");
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MODEL_GATEWAY)
@@ -2269,11 +3304,32 @@ async function createRpcHarness(tempDirs: string[]) {
               antagonistForce: "旧城钟楼背后的既得利益者。",
               corePromise: "每三章给出一条硬线索和一次反转。",
               differentiators: ["旧信谜题与人物成长绑定。"],
+              emotionalAxes: ["悬疑", "反转"],
               logline: "旧信把主角拖回十年前的钟楼旧案。",
               mainConflict: "主角追查旧案时不断触碰旧城秩序。",
+              mainGoal: "查清钟楼旧案并保护仍被旧案威胁的人。",
               premise: "雨夜旧信揭开旧城钟楼案。",
               protagonistArc: "从逃避旧案到主动承担代价。",
               risks: ["线索密度不足会削弱悬疑感。"],
+              stakes: "失败会让旧案幸存者再次被清算。",
+              storyDriver: "mystery",
+            },
+            CoreStoryFieldCompletionOutput: {
+              fields: {
+                antagonistForce: generatedCoreStoryText,
+                corePromise: generatedCoreStoryText,
+                differentiators: ["安全屋升级与秩序重建绑定", "资源账本推动人物关系变化"],
+                emotionalAxes: ["生存压迫", "安全感兑现"],
+                logline:
+                  "全球极寒爆发后，沈砚把废弃堡垒改造成最后暖源，并在收容、自保与公开技术之间重建秩序。",
+                mainConflict: generatedCoreStoryText,
+                mainGoal: generatedCoreStoryText,
+                premise: generatedCoreStoryText,
+                protagonistArc: generatedCoreStoryText,
+                risks: ["建设爽点不能脱离代价", "敌对势力不能只靠降智制造压力"],
+                stakes: generatedCoreStoryText,
+                storyDriver: "survival",
+              },
             },
             ChapterDraftOutput: {
               draft: {
@@ -2345,6 +3401,22 @@ async function createRpcHarness(tempDirs: string[]) {
                   type: "city",
                 },
               ],
+            },
+            WorldbuildingFieldCompletionOutput: {
+              fields: {
+                coreConflict: buildGeneratedWorldbuildingText("核心矛盾"),
+                culture: buildGeneratedWorldbuildingText("文化价值"),
+                economy: buildGeneratedWorldbuildingText("资源经济"),
+                factions: buildGeneratedWorldbuildingText("势力格局"),
+                geography: buildGeneratedWorldbuildingText("空间地理"),
+                history: buildGeneratedWorldbuildingText("历史背景"),
+                powerOrder: buildGeneratedWorldbuildingText("权力体系"),
+                powerSystem: buildGeneratedWorldbuildingText("力量体系"),
+                rules: buildGeneratedWorldbuildingText("秩序规则"),
+                socialStructure: buildGeneratedWorldbuildingText("社会结构"),
+                specialMechanism: buildGeneratedWorldbuildingText("特殊机制"),
+                worldBase: buildGeneratedWorldbuildingText("世界基底"),
+              },
             },
             BookPlanGenerateOutput: {
               bookPlan: {
@@ -2554,91 +3626,24 @@ async function createConfirmedBriefAndBlueprint(
   return project;
 }
 
-async function createWorldbuildingAssets(input: {
-  readonly projectId: string;
-  readonly rootDir: string;
-  readonly rpcService: RpcService;
-}): Promise<void> {
-  for (const [index, rule] of [
-    ["限制代价", "借用星潮会损耗寿元，越阶越明显。"],
-    ["社会秩序", "司星阁垄断观星历法并控制修行资源。"],
-  ] as const) {
-    await expectRpcOk(
-      input.rpcService.handle({
-        command: "worldRule.create",
-        id: `req_gate_world_rule_${index}`,
-        payload: {
-          category: index === "限制代价" ? "magic" : "society",
-          constraintLevel: "hard",
-          projectId: input.projectId,
-          statement: rule,
-          title: index,
-        },
-      }),
-    );
-  }
+function buildGeneratedCoreStoryText(anchor: string): string {
+  return [
+    `${anchor}的故事契约把主角目标、读者期待和长期阻力绑定在同一条因果链上：主角必须守住安全屋，也必须决定安全屋到底是个人私产、幸存者避难所，还是极寒时代的新秩序样本。`,
+    "每一次扩建都会兑现安全感和建设爽点，同时留下更难偿还的代价，包括热源暴露、物资账本失衡、盟友立场变化和外部势力升级。",
+    "对抗力量拥有清晰利益逻辑，会用并购、封锁、舆论、间谍和武力持续压迫主角，而不是等待主角触发事件。",
+    "阶段胜利必须推动下一阶段目标，让读者持续看到安全屋升级、制度试错、群像羁绊和文明重建的递进。",
+  ].join("");
+}
 
-  await expectRpcOk(
-    input.rpcService.handle({
-      command: "element.acceptCandidates",
-      id: "req_gate_world_accept_assets",
-      payload: {
-        items: [
-          {
-            description: "主城，司星阁和各大世家争夺资源的中心。",
-            name: "照潮城",
-            tags: ["城市"],
-            type: "city",
-          },
-          {
-            description: "星潮最强时开启的古老试炼场。",
-            name: "落星台",
-            tags: ["地点"],
-            type: "location",
-          },
-          {
-            description: "垄断观星术与星潮资源的组织。",
-            name: "司星阁",
-            tags: ["组织"],
-            type: "organization",
-          },
-          {
-            description: "早期冲突中被争夺的关键武器。",
-            name: "潮汐断星刃",
-            tags: ["武器"],
-            type: "weapon",
-          },
-        ],
-        projectId: input.projectId,
-      },
-    }),
-  );
-
-  const projectDatabase = createProjectDatabase(
-    join(input.rootDir, "projects", input.projectId, PROJECT_DATABASE_FILE),
-  );
-  try {
-    projectDatabase.client
-      .prepare(
-        `
-        insert into power_systems (
-          id, project_id, name, kind, source, cost, levels_json, taboos_json,
-          conflict_hooks_json, status, created_at, updated_at
-        )
-        values (
-          'power_system_star_tide', @projectId, '星潮九转', 'cultivation',
-          '星潮', '寿元损耗', '["启星","凝潮","照命"]', '["无代价越阶"]',
-          '["司星阁封锁晋阶资源"]', 'canon', @now, @now
-        )
-        `,
-      )
-      .run({
-        now: Date.now(),
-        projectId: input.projectId,
-      });
-  } finally {
-    projectDatabase.close();
-  }
+function buildGeneratedWorldbuildingText(anchor: string): string {
+  return [
+    `${anchor}围绕极寒灾变、安全屋工程和幸存者秩序展开：热量、食物、药品、通行权和可信信息都是不可凭空产生的硬资源，任何组织想活下去都必须付出劳动、技术、情报或政治信用。`,
+    "运行规则上，每个设定都要改变人物选择，短期收益会留下长期后果，例如热源扩张会暴露位置，收容人口会稀释储备，公开技术会削弱垄断也会引来围攻。",
+    "叙事冲突来自自保与公共秩序的拉扯，主角每次破局都要承担资源损耗、关系裂痕、制度反噬或敌方升级。",
+    "代价限制保证安全屋不能万能，剧情接口可以连接卷级工程升级、外部势力谈判、内部审议、灾害变异、伏笔回收和终局文明重启，并与其他世界观维度形成闭环。",
+    "这些接口会反复回到人物选择，让设定持续变成情节压力。",
+    "后续每卷都能围绕该规则升级冲突并回收早期代价。",
+  ].join("");
 }
 
 async function expectRpcOk(responsePromise: Promise<unknown>): Promise<Record<string, unknown>> {

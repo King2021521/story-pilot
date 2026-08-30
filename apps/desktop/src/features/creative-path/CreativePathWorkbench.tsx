@@ -18,6 +18,7 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   Modal,
   Select,
   Space,
@@ -146,6 +147,8 @@ export interface ProjectBriefItem {
   readonly targetAudience: string | null;
   readonly platformProfile: string | null;
   readonly lengthProfile: string | null;
+  readonly estimatedWordCount: number | null;
+  readonly estimatedChapterCount: number | null;
   readonly narrativePov: string | null;
   readonly emotionalRewards: readonly string[];
   readonly initialIdea: string | null;
@@ -158,9 +161,13 @@ export interface StoryBlueprintItem {
   readonly premise: string;
   readonly logline: string;
   readonly corePromise: string;
+  readonly mainGoal?: string;
   readonly mainConflict: string;
   readonly protagonistArc: string | null;
   readonly antagonistForce: string | null;
+  readonly stakes?: string;
+  readonly storyDriver?: string;
+  readonly emotionalAxes?: readonly string[];
   readonly differentiators: readonly string[];
   readonly risks: readonly string[];
   readonly status: string;
@@ -168,37 +175,89 @@ export interface StoryBlueprintItem {
 
 export interface OutlineItem {
   readonly id: string;
+  readonly basis?: Record<string, unknown>;
   readonly title: string;
   readonly scope: string;
   readonly status: string;
 }
 
+export interface VolumeOutlineItem {
+  readonly climax: string | null;
+  readonly id: string;
+  readonly majorConflict: string | null;
+  readonly outlineId: string;
+  readonly purpose: string;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly title: string;
+  readonly volumeId: string | null;
+  readonly wordCountGoal: number | null;
+}
+
 export interface ChapterOutlineItem {
   readonly id: string;
   readonly chapterId: string | null;
+  readonly emotionalTurn?: string | null;
   readonly title: string;
   readonly chapterGoal: string;
   readonly conflict: string | null;
   readonly informationGain: string | null;
   readonly hook: string | null;
+  readonly outlineId?: string;
+  readonly sortOrder?: number;
   readonly status: string;
+  readonly targetWordCount?: number | null;
+  readonly volumeOutlineId?: string | null;
+}
+
+export interface SceneOutlineItem {
+  readonly beatType: string;
+  readonly chapterOutlineId: string;
+  readonly conflict: string | null;
+  readonly entryState: string | null;
+  readonly exitState: string | null;
+  readonly id: string;
+  readonly locationId: string | null;
+  readonly povCharacterId: string | null;
+  readonly purpose: string;
+  readonly sceneId: string | null;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly title: string;
 }
 
 export interface BookPlanItem {
+  readonly corePromise: string;
+  readonly endingDirection: string | null;
   readonly id: string;
+  readonly mainPlotlineId: string | null;
+  readonly status: string;
   readonly title: string;
   readonly targetWordCount: number;
 }
 
 export interface VolumePlanItem {
-  readonly id: string;
   readonly bookPlanId: string;
+  readonly climax: string | null;
+  readonly id: string;
+  readonly majorConflict: string;
+  readonly purpose: string;
+  readonly status: string;
   readonly title: string;
+  readonly targetWordCount: number;
   readonly volumeIndex: number;
 }
 
 export interface ArcPlanItem {
+  readonly arcIndex: number;
+  readonly characterArcId: string | null;
+  readonly endChapterIndex: number | null;
+  readonly escalation: readonly string[];
   readonly id: string;
+  readonly plotlineId: string | null;
+  readonly purpose: string;
+  readonly startChapterIndex: number | null;
+  readonly status: string;
   readonly volumePlanId: string;
   readonly title: string;
 }
@@ -222,7 +281,9 @@ export interface CreativePathBoard {
   readonly brief: ProjectBriefItem | null;
   readonly blueprint: StoryBlueprintItem | null;
   readonly outlines: readonly OutlineItem[];
+  readonly volumeOutlines: readonly VolumeOutlineItem[];
   readonly chapterOutlines: readonly ChapterOutlineItem[];
+  readonly sceneOutlines: readonly SceneOutlineItem[];
   readonly bookPlans: readonly BookPlanItem[];
   readonly volumePlans: readonly VolumePlanItem[];
   readonly arcPlans: readonly ArcPlanItem[];
@@ -237,6 +298,8 @@ export interface SaveBriefValues {
   readonly targetAudience?: string;
   readonly platformProfile?: string;
   readonly lengthProfile?: string;
+  readonly estimatedWordCount?: number | null;
+  readonly estimatedChapterCount?: number | null;
   readonly narrativePov?: string;
   readonly emotionalRewards: readonly string[];
   readonly initialIdea?: string;
@@ -339,6 +402,8 @@ export function CreativePathWorkbench({
             genre: board.brief?.genre ?? defaultGenre,
             initialIdea: board.brief?.initialIdea ?? "",
             lengthProfile: board.brief?.lengthProfile ?? "长篇连载",
+            estimatedWordCount: board.brief?.estimatedWordCount ?? 800_000,
+            estimatedChapterCount: board.brief?.estimatedChapterCount ?? 260,
             narrativePov: board.brief?.narrativePov ?? "第三人称",
             platformProfile: board.brief?.platformProfile ?? "男频",
             subgenres: board.brief?.subgenres.length ? board.brief.subgenres : ["废柴逆袭"],
@@ -361,6 +426,32 @@ export function CreativePathWorkbench({
             </Form.Item>
             <Form.Item label="篇幅目标" name="lengthProfile">
               <Select options={LENGTH_OPTIONS} />
+            </Form.Item>
+            <Form.Item
+              label="预计字数"
+              name="estimatedWordCount"
+              rules={[{ max: 20_000_000, min: 10_000, type: "number" }]}
+            >
+              <InputNumber
+                aria-label="预计字数"
+                max={20_000_000}
+                min={10_000}
+                step={10_000}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+            <Form.Item
+              label="预计章节数"
+              name="estimatedChapterCount"
+              rules={[{ max: 10_000, min: 1, type: "number" }]}
+            >
+              <InputNumber
+                aria-label="预计章节数"
+                max={10_000}
+                min={1}
+                step={10}
+                style={{ width: "100%" }}
+              />
             </Form.Item>
             <Form.Item label="叙事人称" name="narrativePov">
               <Select options={POV_OPTIONS} />
@@ -690,13 +781,15 @@ function LongformPlanSummary({ board }: { readonly board: CreativePathBoard }) {
 }
 
 function GateRequirementList({ report }: { readonly report: CreativeStageGateReport | undefined }) {
-  if (!report?.requirements.length) {
+  const requirements = report?.requirements ?? [];
+
+  if (requirements.length === 0) {
     return null;
   }
 
   return (
     <ul className="creative-stage-gate-list">
-      {report.requirements.map((requirement) => (
+      {requirements.map((requirement) => (
         <li className="creative-stage-gate-list__item" key={requirement.key}>
           <span>{requirement.label}</span>
           <Space size={6}>

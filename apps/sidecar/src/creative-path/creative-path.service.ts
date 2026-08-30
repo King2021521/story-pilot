@@ -5,10 +5,12 @@ import {
   ArtifactRepository,
   CREATIVE_STAGE_KEYS,
   ContextRepository,
+  type CoreStoryFormFields,
   CreativePathRepository,
   DomainEventRepository,
   ModelCallRepository,
   ProjectRepository,
+  WorldbuildingRepository,
   type ArtifactRecord,
   type CreativeStageKey,
   type CreativeStageRecord,
@@ -20,6 +22,9 @@ import {
 import {
   BlueprintGenerateOutputSchema,
   buildPromptMessages,
+  buildPromptTemplateMessages,
+  CoreStoryFieldCompletionOutputSchema,
+  type CoreStoryFieldCompletionOutput,
   type ModelGateway,
 } from "@story-pilot/ai";
 
@@ -33,6 +38,8 @@ export interface SaveBriefInput {
   readonly targetAudience?: string;
   readonly platformProfile?: string;
   readonly lengthProfile?: string;
+  readonly estimatedWordCount?: number;
+  readonly estimatedChapterCount?: number;
   readonly narrativePov?: string;
   readonly emotionalRewards?: readonly string[];
   readonly initialIdea?: string;
@@ -124,6 +131,19 @@ export interface ApplyBlueprintInput {
   readonly blueprintId: string;
 }
 
+export interface SaveBlueprintFormInput {
+  readonly projectId: string;
+  readonly fields: CoreStoryFormFields;
+}
+
+export interface CompleteBlueprintFormInput {
+  readonly projectId: string;
+  readonly fields: CoreStoryFormFields;
+}
+
+const CORE_STORY_COMPLETION_TEMPERATURE = 0.7;
+const CORE_STORY_COMPLETION_PROMPT_VERSION = "core-story.complete.v1";
+
 @Injectable()
 export class CreativePathService {
   constructor(
@@ -158,6 +178,12 @@ export class CreativePathService {
           projectId: input.projectId,
           subgenres: input.subgenres,
           now,
+          ...(input.estimatedChapterCount === undefined
+            ? {}
+            : { estimatedChapterCount: input.estimatedChapterCount }),
+          ...(input.estimatedWordCount === undefined
+            ? {}
+            : { estimatedWordCount: input.estimatedWordCount }),
           ...(input.initialIdea === undefined ? {} : { initialIdea: input.initialIdea }),
           ...(input.lengthProfile === undefined ? {} : { lengthProfile: input.lengthProfile }),
           ...(input.narrativePov === undefined ? {} : { narrativePov: input.narrativePov }),
@@ -562,10 +588,14 @@ export class CreativePathService {
         const blueprint = pathRepository.saveBlueprint({
           corePromise: draft.corePromise,
           differentiators: draft.differentiators,
+          emotionalAxes: draft.emotionalAxes,
           logline: draft.logline,
           mainConflict: draft.mainConflict,
+          mainGoal: draft.mainGoal,
           premise: draft.premise,
           risks: draft.risks,
+          stakes: draft.stakes,
+          storyDriver: draft.storyDriver,
           blueprintId: randomUUID(),
           projectId: input.projectId,
           sourceArtifactId: artifact.id,
@@ -594,12 +624,106 @@ export class CreativePathService {
     }
   }
 
+  async saveBlueprintForm(input: SaveBlueprintFormInput): Promise<StoryBlueprintRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      getProjectOrThrow(new ProjectRepository(projectDatabase), input.projectId);
+      const now = Date.now();
+      const save = projectDatabase.client.transaction(() => {
+        const pathRepository = new CreativePathRepository(projectDatabase);
+        const blueprint = pathRepository.saveBlueprintForm({
+          fields: input.fields,
+          projectId: input.projectId,
+          now,
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: blueprint.id,
+          aggregateType: "story_blueprint",
+          eventId: randomUUID(),
+          eventType: "story_blueprint.form_saved",
+          payload: {
+            filledFieldCount: countFilledCoreStoryFields(blueprint),
+            status: blueprint.status,
+          },
+          projectId: input.projectId,
+          now,
+        });
+
+        return blueprint;
+      });
+
+      return save();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async completeBlueprintForm(
+    input: CompleteBlueprintFormInput,
+  ): Promise<CoreStoryFieldCompletionOutput> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const pathRepository = new CreativePathRepository(projectDatabase);
+      const project = getProjectOrThrow(new ProjectRepository(projectDatabase), input.projectId);
+      const variables = buildCoreStoryCompletionVariables({
+        currentFields: input.fields,
+        pathRepository,
+        project,
+        projectDatabase,
+      });
+      const messages = buildPromptTemplateMessages({
+        templateId: "core-story.complete",
+        variables,
+      });
+      const modelResult = await this.modelGateway.generateObject({
+        messages,
+        promptVersion: CORE_STORY_COMPLETION_PROMPT_VERSION,
+        purpose: "core_story_complete",
+        schema: CoreStoryFieldCompletionOutputSchema,
+        schemaName: "CoreStoryFieldCompletionOutput",
+        temperature: CORE_STORY_COMPLETION_TEMPERATURE,
+      });
+      const now = Date.now();
+      new ModelCallRepository(projectDatabase).create({
+        latencyMs: modelResult.modelCall.latencyMs,
+        model: modelResult.modelCall.model,
+        modelCallId: randomUUID(),
+        projectId: input.projectId,
+        provider: modelResult.modelCall.provider,
+        purpose: modelResult.modelCall.purpose,
+        request: {
+          inputHash: hashCoreStoryInput(input.fields),
+          messages,
+          schemaName: "CoreStoryFieldCompletionOutput",
+          templateId: "core-story.complete",
+          temperature: CORE_STORY_COMPLETION_TEMPERATURE,
+        },
+        response: modelResult.raw,
+        status: modelResult.modelCall.status,
+        promptVersion: modelResult.modelCall.promptVersion ?? CORE_STORY_COMPLETION_PROMPT_VERSION,
+        ...(modelResult.modelCall.usage === undefined
+          ? {}
+          : { usage: modelResult.modelCall.usage }),
+        now,
+      });
+
+      return modelResult.object;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
   async applyBlueprint(input: ApplyBlueprintInput): Promise<StoryBlueprintRecord> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
       const now = Date.now();
       const apply = projectDatabase.client.transaction(() => {
         const pathRepository = new CreativePathRepository(projectDatabase);
+        const draft = pathRepository.getBlueprintById(input.projectId, input.blueprintId);
+        if (!draft) {
+          throw new Error(`STORY_BLUEPRINT_NOT_FOUND: ${input.blueprintId}`);
+        }
+        assertBlueprintReadyForConfirmation(draft);
         const blueprint = pathRepository.applyBlueprint(input.projectId, input.blueprintId, now);
         if (blueprint.sourceArtifactId) {
           new ArtifactRepository(projectDatabase).markApplied(
@@ -687,6 +811,36 @@ function buildStageGateReport(
   };
 }
 
+function buildCoreStoryCompletionVariables(input: {
+  readonly currentFields: CoreStoryFormFields;
+  readonly pathRepository: CreativePathRepository;
+  readonly project: {
+    readonly genre: string;
+    readonly id: string;
+    readonly style: string | null;
+    readonly title: string;
+  };
+  readonly projectDatabase: ProjectDatabase;
+}): Record<string, unknown> {
+  const brief = input.pathRepository.getLatestBrief(input.project.id);
+  const currentBlueprint = input.pathRepository.getActiveBlueprint(input.project.id);
+  const worldbuildingProfile = new WorldbuildingRepository(input.projectDatabase).getProfile(
+    input.project.id,
+  );
+
+  return {
+    project: {
+      genre: input.project.genre,
+      style: input.project.style,
+      title: input.project.title,
+    },
+    brief,
+    worldbuildingProfile: worldbuildingProfile?.fields ?? null,
+    currentBlueprint,
+    currentFields: input.currentFields,
+  };
+}
+
 function buildPreviousStageRequirements(
   stages: readonly CreativeStageRecord[],
   stageKey: CreativeStageKey,
@@ -710,6 +864,46 @@ function buildPreviousStageRequirements(
       required: 1,
     },
   ];
+}
+
+function countFilledCoreStoryFields(blueprint: StoryBlueprintRecord): number {
+  return [
+    blueprint.premise,
+    blueprint.logline,
+    blueprint.corePromise,
+    blueprint.mainGoal,
+    blueprint.mainConflict,
+    blueprint.protagonistArc,
+    blueprint.antagonistForce,
+    blueprint.stakes,
+    blueprint.storyDriver,
+    ...blueprint.emotionalAxes,
+    ...blueprint.differentiators,
+    ...blueprint.risks,
+  ].filter(hasText).length;
+}
+
+function assertBlueprintReadyForConfirmation(blueprint: StoryBlueprintRecord): void {
+  const missing = [
+    ["故事前提", hasText(blueprint.premise)],
+    ["一句话故事", hasText(blueprint.logline)],
+    ["核心承诺", hasText(blueprint.corePromise)],
+    ["主线目标", hasText(blueprint.mainGoal)],
+    ["核心矛盾", hasText(blueprint.mainConflict)],
+    ["主角弧光", hasText(blueprint.protagonistArc)],
+    ["对抗力量", hasText(blueprint.antagonistForce)],
+    ["失败代价", hasText(blueprint.stakes)],
+    ["故事驱动类型", hasText(blueprint.storyDriver)],
+    ["情绪主轴", blueprint.emotionalAxes.length > 0],
+    ["差异化设计", blueprint.differentiators.length > 0],
+    ["风险与规避", blueprint.risks.length > 0],
+  ]
+    .filter(([, ok]) => !ok)
+    .map(([label]) => label);
+
+  if (missing.length > 0) {
+    throw new Error(`BLUEPRINT_NOT_READY: ${missing.join("、")}`);
+  }
 }
 
 function buildContentRequirements(
@@ -746,10 +940,24 @@ function buildContentRequirements(
           hasText(blueprint?.corePromise) ? 1 : 0,
           1,
         ),
+        requirement("blueprint_main_goal", "主线目标", hasText(blueprint?.mainGoal) ? 1 : 0, 1),
         requirement(
           "blueprint_main_conflict",
           "主冲突",
           hasText(blueprint?.mainConflict) ? 1 : 0,
+          1,
+        ),
+        requirement("blueprint_stakes", "失败代价", hasText(blueprint?.stakes) ? 1 : 0, 1),
+        requirement(
+          "blueprint_story_driver",
+          "故事驱动类型",
+          hasText(blueprint?.storyDriver) ? 1 : 0,
+          1,
+        ),
+        requirement(
+          "blueprint_emotional_axes",
+          "情绪主轴",
+          blueprint?.emotionalAxes.length ?? 0,
           1,
         ),
         requirement(
@@ -765,6 +973,9 @@ function buildContentRequirements(
       const blueprint = pathRepository.getActiveBlueprint(projectId);
       const project = getProjectOrThrow(new ProjectRepository(projectDatabase), projectId);
       const requiresPowerSystem = isPowerSystemGenre(project.genre);
+      const profile = new WorldbuildingRepository(projectDatabase).getProfile(projectId);
+      const fields = profile?.fields;
+      const filledFieldCount = fields ? Object.values(fields).filter(hasText).length : 0;
       return [
         requirement(
           "confirmed_blueprint",
@@ -772,55 +983,12 @@ function buildContentRequirements(
           blueprint?.status === "confirmed" ? 1 : 0,
           1,
         ),
+        requirement("worldbuilding_fields", "世界观维度", filledFieldCount, 12),
         requirement(
-          "world_rules",
-          "世界观规则",
-          countRows(
-            projectDatabase,
-            "select count(*) as count from world_rules where project_id = ? and status != 'archived'",
-            projectId,
-          ),
-          3,
-        ),
-        requirement(
-          "locations",
-          "地点",
-          countRows(
-            projectDatabase,
-            "select count(*) as count from locations where project_id = ? and status != 'archived'",
-            projectId,
-          ),
-          2,
-        ),
-        requirement(
-          "organizations",
-          "组织或社会力量",
-          countRows(
-            projectDatabase,
-            "select count(*) as count from organizations where project_id = ? and status != 'archived'",
-            projectId,
-          ),
-          1,
-        ),
-        requirement(
-          "power_systems",
+          "power_system",
           "力量体系",
-          countRows(
-            projectDatabase,
-            "select count(*) as count from power_systems where project_id = ? and status != 'archived'",
-            projectId,
-          ),
+          hasText(fields?.powerSystem) ? 1 : 0,
           requiresPowerSystem ? 1 : 0,
-        ),
-        requirement(
-          "items",
-          "早期冲突道具",
-          countRows(
-            projectDatabase,
-            "select count(*) as count from items where project_id = ? and status != 'archived'",
-            projectId,
-          ),
-          1,
         ),
       ];
     }
@@ -1283,6 +1451,10 @@ function getProjectOrThrow(repository: ProjectRepository, projectId: string) {
 
 function hashGenerationContextInput(input: Record<string, unknown>): string {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+function hashCoreStoryInput(fields: CoreStoryFormFields): string {
+  return `sha256:${createHash("sha256").update(JSON.stringify(fields)).digest("hex")}`;
 }
 
 function getNextStageKey(stageKey: CreativeStageKey): CreativeStageKey | null {

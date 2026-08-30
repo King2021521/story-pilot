@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { Inject, Injectable } from "@nestjs/common";
+import type { CommandPayload } from "@story-pilot/contracts";
 import {
   ArtifactRepository,
   ContextRepository,
@@ -12,6 +13,8 @@ import {
   type ArtifactRecord,
   type ChapterOutlineRecord,
   type OutlineRecord,
+  type SceneOutlineRecord,
+  type VolumeOutlineRecord,
 } from "@story-pilot/db";
 import {
   buildPromptMessages,
@@ -20,6 +23,7 @@ import {
 } from "@story-pilot/ai";
 
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
+import { buildCreativeContextItems, creativeContextText } from "../ai/creative-context.js";
 import { ProjectStorageService } from "../storage/project-storage.service.js";
 
 export interface GenerateOutlineInput {
@@ -43,6 +47,11 @@ export interface ChapterOutlineInput {
   readonly chapterOutlineId: string;
 }
 
+type SaveOutlineDraftInput = CommandPayload<"outline.saveDraft">;
+type SaveVolumeOutlineInput = CommandPayload<"outline.saveVolumeOutline">;
+type SaveChapterOutlineInput = CommandPayload<"outline.saveChapterOutline">;
+type SaveSceneOutlineInput = CommandPayload<"outline.saveSceneOutline">;
+
 @Injectable()
 export class OutlineService {
   constructor(
@@ -56,45 +65,10 @@ export class OutlineService {
       const project = getProjectOrThrow(new ProjectRepository(projectDatabase), input.projectId);
       const pathRepository = new CreativePathRepository(projectDatabase);
       const path = pathRepository.getPath(input.projectId);
-      const contextItems = [
-        {
-          content: JSON.stringify(
-            {
-              genre: project.genre,
-              style: project.style,
-              title: project.title,
-            },
-            null,
-            2,
-          ),
-          contextPackageItemId: randomUUID(),
-          itemId: project.id,
-          itemType: "project",
-          rank: 1,
-        },
-        ...(path.brief
-          ? [
-              {
-                content: JSON.stringify(path.brief, null, 2),
-                contextPackageItemId: randomUUID(),
-                itemId: path.brief.id,
-                itemType: "project_brief",
-                rank: 2,
-              },
-            ]
-          : []),
-        ...(path.blueprint
-          ? [
-              {
-                content: JSON.stringify(path.blueprint, null, 2),
-                contextPackageItemId: randomUUID(),
-                itemId: path.blueprint.id,
-                itemType: "story_blueprint",
-                rank: 3,
-              },
-            ]
-          : []),
-      ];
+      const contextItems = buildCreativeContextItems({
+        projectDatabase,
+        projectId: project.id,
+      });
       const contextPackage = new ContextRepository(projectDatabase).createPackage({
         contextPackageId: randomUUID(),
         inputHash: hashGenerationContextInput({
@@ -113,7 +87,7 @@ export class OutlineService {
       });
       const messages = buildPromptMessages({
         capability: "outline_generate",
-        context: contextItems.map((item) => item.content).join("\n\n"),
+        context: creativeContextText(contextItems),
         instruction:
           input.instruction?.trim() ||
           `生成 ${input.chapterCount} 章 ${input.scope} 章节大纲，必须先完成章纲再进入正文。`,
@@ -228,6 +202,182 @@ export class OutlineService {
       });
 
       return generate();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async saveOutlineDraft(input: SaveOutlineDraftInput): Promise<OutlineRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const outlineId = input.outlineId ?? randomUUID();
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const outline = new OutlineRepository(projectDatabase).saveOutlineDraft({
+          basis: input.basis,
+          now,
+          outlineId,
+          projectId: input.projectId,
+          scope: input.scope,
+          status: input.status,
+          title: input.title,
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: outline.id,
+          aggregateType: "outline",
+          eventId: randomUUID(),
+          eventType: "outline.saved",
+          now,
+          payload: {
+            scope: outline.scope,
+            status: outline.status,
+            title: outline.title,
+          },
+          projectId: input.projectId,
+        });
+
+        return outline;
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async saveVolumeOutline(input: SaveVolumeOutlineInput): Promise<VolumeOutlineRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const volumeOutlineId = input.volumeOutlineId ?? randomUUID();
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const volumeOutline = new OutlineRepository(projectDatabase).saveVolumeOutline({
+          now,
+          outlineId: input.outlineId,
+          projectId: input.projectId,
+          purpose: input.purpose,
+          sortOrder: input.sortOrder,
+          status: input.status,
+          title: input.title,
+          volumeOutlineId,
+          ...(input.climax === undefined ? {} : { climax: input.climax }),
+          ...(input.majorConflict === undefined ? {} : { majorConflict: input.majorConflict }),
+          ...(input.volumeId === undefined ? {} : { volumeId: input.volumeId }),
+          ...(input.wordCountGoal === undefined ? {} : { wordCountGoal: input.wordCountGoal }),
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: volumeOutline.id,
+          aggregateType: "volume_outline",
+          eventId: randomUUID(),
+          eventType: "volume_outline.saved",
+          now,
+          payload: {
+            outlineId: volumeOutline.outlineId,
+            sortOrder: volumeOutline.sortOrder,
+            status: volumeOutline.status,
+          },
+          projectId: input.projectId,
+        });
+
+        return volumeOutline;
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async saveChapterOutline(input: SaveChapterOutlineInput): Promise<ChapterOutlineRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const chapterOutlineId = input.chapterOutlineId ?? randomUUID();
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const chapterOutline = new OutlineRepository(projectDatabase).saveChapterOutline({
+          chapterGoal: input.chapterGoal,
+          chapterOutlineId,
+          now,
+          outlineId: input.outlineId,
+          projectId: input.projectId,
+          relatedForeshadowingIds: input.relatedForeshadowingIds,
+          relatedPlotlineNodeIds: input.relatedPlotlineNodeIds,
+          requiredCharacterIds: input.requiredCharacterIds,
+          requiredLocationIds: input.requiredLocationIds,
+          sortOrder: input.sortOrder,
+          status: input.status,
+          title: input.title,
+          ...(input.chapterId === undefined ? {} : { chapterId: input.chapterId }),
+          ...(input.conflict === undefined ? {} : { conflict: input.conflict }),
+          ...(input.emotionalTurn === undefined ? {} : { emotionalTurn: input.emotionalTurn }),
+          ...(input.hook === undefined ? {} : { hook: input.hook }),
+          ...(input.informationGain === undefined
+            ? {}
+            : { informationGain: input.informationGain }),
+          ...(input.targetWordCount === undefined
+            ? {}
+            : { targetWordCount: input.targetWordCount }),
+          ...(input.volumeOutlineId === undefined
+            ? {}
+            : { volumeOutlineId: input.volumeOutlineId }),
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: chapterOutline.id,
+          aggregateType: "chapter_outline",
+          eventId: randomUUID(),
+          eventType: "chapter_outline.saved",
+          now,
+          payload: {
+            outlineId: chapterOutline.outlineId,
+            sortOrder: chapterOutline.sortOrder,
+            status: chapterOutline.status,
+            volumeOutlineId: chapterOutline.volumeOutlineId,
+          },
+          projectId: input.projectId,
+        });
+
+        return chapterOutline;
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async saveSceneOutline(input: SaveSceneOutlineInput): Promise<SceneOutlineRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const sceneOutlineId = input.sceneOutlineId ?? randomUUID();
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const sceneOutline = new OutlineRepository(projectDatabase).saveSceneOutline({
+          beatType: input.beatType,
+          chapterOutlineId: input.chapterOutlineId,
+          now,
+          projectId: input.projectId,
+          purpose: input.purpose,
+          sceneOutlineId,
+          sortOrder: input.sortOrder,
+          status: input.status,
+          title: input.title,
+          ...(input.conflict === undefined ? {} : { conflict: input.conflict }),
+          ...(input.entryState === undefined ? {} : { entryState: input.entryState }),
+          ...(input.exitState === undefined ? {} : { exitState: input.exitState }),
+          ...(input.locationId === undefined ? {} : { locationId: input.locationId }),
+          ...(input.povCharacterId === undefined ? {} : { povCharacterId: input.povCharacterId }),
+          ...(input.sceneId === undefined ? {} : { sceneId: input.sceneId }),
+        });
+        new DomainEventRepository(projectDatabase).append({
+          aggregateId: sceneOutline.id,
+          aggregateType: "scene_outline",
+          eventId: randomUUID(),
+          eventType: "scene_outline.saved",
+          now,
+          payload: {
+            chapterOutlineId: sceneOutline.chapterOutlineId,
+            sortOrder: sceneOutline.sortOrder,
+            status: sceneOutline.status,
+          },
+          projectId: input.projectId,
+        });
+
+        return sceneOutline;
+      })();
     } finally {
       projectDatabase.close();
     }

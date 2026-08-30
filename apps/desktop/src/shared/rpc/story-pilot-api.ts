@@ -109,6 +109,14 @@ export class StoryPilotApiClient {
     return this.send("blueprint.generate", input);
   }
 
+  saveBlueprintForm(input: CommandPayload<"blueprint.saveForm">) {
+    return this.send("blueprint.saveForm", input);
+  }
+
+  completeBlueprintForm(input: CommandPayload<"blueprint.completeForm">) {
+    return this.send("blueprint.completeForm", input);
+  }
+
   applyBlueprint(input: CommandPayload<"blueprint.apply">) {
     return this.send("blueprint.apply", input);
   }
@@ -117,12 +125,48 @@ export class StoryPilotApiClient {
     return this.send("outline.generate", input);
   }
 
+  saveOutlineDraft(input: CommandPayload<"outline.saveDraft">) {
+    return this.send("outline.saveDraft", input);
+  }
+
+  saveVolumeOutline(input: CommandPayload<"outline.saveVolumeOutline">) {
+    return this.send("outline.saveVolumeOutline", input);
+  }
+
+  saveChapterOutline(input: CommandPayload<"outline.saveChapterOutline">) {
+    return this.send("outline.saveChapterOutline", input);
+  }
+
+  saveSceneOutline(input: CommandPayload<"outline.saveSceneOutline">) {
+    return this.send("outline.saveSceneOutline", input);
+  }
+
   generateBookPlan(input: CommandPayload<"plot.generateBookPlan">) {
     return this.send("plot.generateBookPlan", input);
   }
 
   applyBookPlan(input: CommandPayload<"plot.applyBookPlan">) {
     return this.send("plot.applyBookPlan", input);
+  }
+
+  saveBookPlanDraft(input: CommandPayload<"plot.saveBookPlanDraft">) {
+    return this.send("plot.saveBookPlanDraft", input);
+  }
+
+  saveVolumePlan(input: CommandPayload<"plot.saveVolumePlan">) {
+    return this.send("plot.saveVolumePlan", input);
+  }
+
+  saveArcPlan(input: CommandPayload<"plot.saveArcPlan">) {
+    return this.send("plot.saveArcPlan", input);
+  }
+
+  saveChapterPlan(input: CommandPayload<"plot.saveChapterPlan">) {
+    return this.send("plot.saveChapterPlan", input);
+  }
+
+  saveScenePlan(input: CommandPayload<"plot.saveScenePlan">) {
+    return this.send("plot.saveScenePlan", input);
   }
 
   generateRollingOutline(input: CommandPayload<"plot.generateRollingOutline">) {
@@ -274,6 +318,18 @@ export class StoryPilotApiClient {
     return this.send("character.update", input);
   }
 
+  listEntityRelations(input: CommandPayload<"entityRelation.list">) {
+    return this.sendItems("entityRelation.list", input);
+  }
+
+  createEntityRelation(input: CommandPayload<"entityRelation.create">) {
+    return this.send("entityRelation.create", input);
+  }
+
+  updateEntityRelation(input: CommandPayload<"entityRelation.update">) {
+    return this.send("entityRelation.update", input);
+  }
+
   generateCharacterNames(input: CommandPayload<"character.generateNames">) {
     return this.send("character.generateNames", input);
   }
@@ -298,12 +354,28 @@ export class StoryPilotApiClient {
     return this.send("worldRule.update", input);
   }
 
+  saveWorldbuildingFields(input: CommandPayload<"worldbuilding.saveFields">) {
+    return this.send("worldbuilding.saveFields", input);
+  }
+
+  completeWorldbuildingFields(input: CommandPayload<"worldbuilding.completeFields">) {
+    return this.send("worldbuilding.completeFields", input);
+  }
+
   listPlotlines(input: CommandPayload<"plotline.list">) {
     return this.sendItems("plotline.list", input);
   }
 
   createPlotline(input: CommandPayload<"plotline.create">) {
     return this.send("plotline.create", input);
+  }
+
+  updatePlotline(input: CommandPayload<"plotline.update">) {
+    return this.send("plotline.update", input);
+  }
+
+  createPlotlineNode(input: CommandPayload<"plotline.createNode">) {
+    return this.send("plotline.createNode", input);
   }
 
   updatePlotlineNode(input: CommandPayload<"plotline.updateNode">) {
@@ -318,12 +390,44 @@ export class StoryPilotApiClient {
     return this.send("storyEvent.create", input);
   }
 
+  updateStoryEvent(input: CommandPayload<"storyEvent.update">) {
+    return this.send("storyEvent.update", input);
+  }
+
+  listEventRelations(input: CommandPayload<"eventRelation.list">) {
+    return this.sendItems("eventRelation.list", input);
+  }
+
+  createEventRelation(input: CommandPayload<"eventRelation.create">) {
+    return this.send("eventRelation.create", input);
+  }
+
+  updateEventRelation(input: CommandPayload<"eventRelation.update">) {
+    return this.send("eventRelation.update", input);
+  }
+
+  listConflicts(input: CommandPayload<"conflict.list">) {
+    return this.sendItems("conflict.list", input);
+  }
+
+  createConflict(input: CommandPayload<"conflict.create">) {
+    return this.send("conflict.create", input);
+  }
+
+  updateConflict(input: CommandPayload<"conflict.update">) {
+    return this.send("conflict.update", input);
+  }
+
   listForeshadowings(input: CommandPayload<"foreshadowing.list">) {
     return this.sendItems("foreshadowing.list", input);
   }
 
   createForeshadowing(input: CommandPayload<"foreshadowing.create">) {
     return this.send("foreshadowing.create", input);
+  }
+
+  updateForeshadowing(input: CommandPayload<"foreshadowing.update">) {
+    return this.send("foreshadowing.update", input);
   }
 
   planForeshadowing(input: CommandPayload<"foreshadowing.plan">) {

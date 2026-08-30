@@ -50,6 +50,89 @@ export interface ChapterOutlineRecord {
   readonly updatedAt: number;
 }
 
+export interface SceneOutlineRecord {
+  readonly id: string;
+  readonly chapterOutlineId: string;
+  readonly sceneId: string | null;
+  readonly title: string;
+  readonly purpose: string;
+  readonly beatType: string;
+  readonly povCharacterId: string | null;
+  readonly locationId: string | null;
+  readonly conflict: string | null;
+  readonly entryState: string | null;
+  readonly exitState: string | null;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+export interface SaveOutlineDraftInput {
+  readonly outlineId: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly scope: string;
+  readonly basis: Record<string, unknown>;
+  readonly status: string;
+  readonly now?: number;
+}
+
+export interface SaveVolumeOutlineInput {
+  readonly volumeOutlineId: string;
+  readonly projectId: string;
+  readonly outlineId: string;
+  readonly volumeId?: string | null;
+  readonly title: string;
+  readonly purpose: string;
+  readonly majorConflict?: string | null;
+  readonly climax?: string | null;
+  readonly wordCountGoal?: number | null;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly now?: number;
+}
+
+export interface SaveChapterOutlineInput {
+  readonly chapterOutlineId: string;
+  readonly projectId: string;
+  readonly outlineId: string;
+  readonly volumeOutlineId?: string | null;
+  readonly chapterId?: string | null;
+  readonly title: string;
+  readonly chapterGoal: string;
+  readonly conflict?: string | null;
+  readonly informationGain?: string | null;
+  readonly emotionalTurn?: string | null;
+  readonly hook?: string | null;
+  readonly requiredCharacterIds: readonly string[];
+  readonly requiredLocationIds: readonly string[];
+  readonly relatedPlotlineNodeIds: readonly string[];
+  readonly relatedForeshadowingIds: readonly string[];
+  readonly targetWordCount?: number | null;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly now?: number;
+}
+
+export interface SaveSceneOutlineInput {
+  readonly sceneOutlineId: string;
+  readonly projectId: string;
+  readonly chapterOutlineId: string;
+  readonly sceneId?: string | null;
+  readonly title: string;
+  readonly purpose: string;
+  readonly beatType: string;
+  readonly povCharacterId?: string | null;
+  readonly locationId?: string | null;
+  readonly conflict?: string | null;
+  readonly entryState?: string | null;
+  readonly exitState?: string | null;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly now?: number;
+}
+
 export interface CreateOutlineWithChaptersInput {
   readonly outlineId: string;
   readonly volumeOutlineId: string;
@@ -135,6 +218,24 @@ interface ChapterOutlineRow {
   readonly related_plotline_node_ids_json: string;
   readonly related_foreshadowing_ids_json: string;
   readonly target_word_count: number | null;
+  readonly sort_order: number;
+  readonly status: string;
+  readonly created_at: number;
+  readonly updated_at: number;
+}
+
+interface SceneOutlineRow {
+  readonly id: string;
+  readonly chapter_outline_id: string;
+  readonly scene_id: string | null;
+  readonly title: string;
+  readonly purpose: string;
+  readonly beat_type: string;
+  readonly pov_character_id: string | null;
+  readonly location_id: string | null;
+  readonly conflict: string | null;
+  readonly entry_state: string | null;
+  readonly exit_state: string | null;
   readonly sort_order: number;
   readonly status: string;
   readonly created_at: number;
@@ -251,7 +352,7 @@ export class OutlineRepository {
     create();
 
     const outline = this.getOutline(input.projectId, input.outlineId);
-    const volumeOutline = this.getVolumeOutline(input.volumeOutlineId);
+    const volumeOutline = this.getVolumeOutline(input.projectId, input.volumeOutlineId);
     if (!outline || !volumeOutline) {
       throw new Error(`OUTLINE_NOT_CREATED: ${input.outlineId}`);
     }
@@ -263,6 +364,340 @@ export class OutlineRepository {
     };
   }
 
+  saveOutlineDraft(input: SaveOutlineDraftInput): OutlineRecord {
+    const now = input.now ?? Date.now();
+    const existing = this.getOutline(input.projectId, input.outlineId);
+    if (existing) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update outlines
+          set title = @title,
+              scope = @scope,
+              basis_json = @basisJson,
+              status = @status,
+              version = version + 1,
+              updated_at = @now
+          where project_id = @projectId and id = @outlineId
+          `,
+        )
+        .run({
+          basisJson: JSON.stringify(input.basis),
+          outlineId: input.outlineId,
+          now,
+          projectId: input.projectId,
+          scope: input.scope,
+          status: input.status,
+          title: input.title,
+        });
+    } else {
+      this.projectDatabase.client
+        .prepare(
+          `
+          insert into outlines (
+            id, project_id, title, scope, basis_json, status, version,
+            source_artifact_id, created_at, updated_at
+          )
+          values (
+            @outlineId, @projectId, @title, @scope, @basisJson, @status, 1,
+            null, @now, @now
+          )
+          `,
+        )
+        .run({
+          basisJson: JSON.stringify(input.basis),
+          outlineId: input.outlineId,
+          now,
+          projectId: input.projectId,
+          scope: input.scope,
+          status: input.status,
+          title: input.title,
+        });
+    }
+
+    const outline = this.getOutline(input.projectId, input.outlineId);
+    if (!outline) {
+      throw new Error(`OUTLINE_NOT_FOUND: ${input.outlineId}`);
+    }
+
+    return outline;
+  }
+
+  saveVolumeOutline(input: SaveVolumeOutlineInput): VolumeOutlineRecord {
+    const now = input.now ?? Date.now();
+    const outline = this.getOutline(input.projectId, input.outlineId);
+    if (!outline) {
+      throw new Error(`OUTLINE_NOT_FOUND: ${input.outlineId}`);
+    }
+
+    const existing = this.getVolumeOutline(input.projectId, input.volumeOutlineId);
+    if (existing) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update volume_outlines
+          set outline_id = @outlineId,
+              volume_id = @volumeId,
+              title = @title,
+              purpose = @purpose,
+              major_conflict = @majorConflict,
+              climax = @climax,
+              word_count_goal = @wordCountGoal,
+              sort_order = @sortOrder,
+              status = @status,
+              updated_at = @now
+          where id = @volumeOutlineId
+          `,
+        )
+        .run({
+          climax: normalizeNullableText(input.climax),
+          majorConflict: normalizeNullableText(input.majorConflict),
+          outlineId: input.outlineId,
+          now,
+          purpose: input.purpose,
+          sortOrder: input.sortOrder,
+          status: input.status,
+          title: input.title,
+          volumeId: normalizeNullableText(input.volumeId),
+          volumeOutlineId: input.volumeOutlineId,
+          wordCountGoal: input.wordCountGoal ?? null,
+        });
+    } else {
+      this.projectDatabase.client
+        .prepare(
+          `
+          insert into volume_outlines (
+            id, outline_id, volume_id, title, purpose, major_conflict, climax,
+            word_count_goal, sort_order, status, created_at, updated_at
+          )
+          values (
+            @volumeOutlineId, @outlineId, @volumeId, @title, @purpose, @majorConflict, @climax,
+            @wordCountGoal, @sortOrder, @status, @now, @now
+          )
+          `,
+        )
+        .run({
+          climax: normalizeNullableText(input.climax),
+          majorConflict: normalizeNullableText(input.majorConflict),
+          outlineId: input.outlineId,
+          now,
+          purpose: input.purpose,
+          sortOrder: input.sortOrder,
+          status: input.status,
+          title: input.title,
+          volumeId: normalizeNullableText(input.volumeId),
+          volumeOutlineId: input.volumeOutlineId,
+          wordCountGoal: input.wordCountGoal ?? null,
+        });
+    }
+
+    const volumeOutline = this.getVolumeOutline(input.projectId, input.volumeOutlineId);
+    if (!volumeOutline) {
+      throw new Error(`VOLUME_OUTLINE_NOT_FOUND: ${input.volumeOutlineId}`);
+    }
+
+    return volumeOutline;
+  }
+
+  saveChapterOutline(input: SaveChapterOutlineInput): ChapterOutlineRecord {
+    const now = input.now ?? Date.now();
+    const outline = this.getOutline(input.projectId, input.outlineId);
+    if (!outline) {
+      throw new Error(`OUTLINE_NOT_FOUND: ${input.outlineId}`);
+    }
+    if (
+      input.volumeOutlineId !== undefined &&
+      input.volumeOutlineId !== null &&
+      !this.getVolumeOutline(input.projectId, input.volumeOutlineId)
+    ) {
+      throw new Error(`VOLUME_OUTLINE_NOT_FOUND: ${input.volumeOutlineId}`);
+    }
+
+    const existing = this.getChapterOutline(input.projectId, input.chapterOutlineId);
+    if (existing) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update chapter_outlines
+          set outline_id = @outlineId,
+              volume_outline_id = @volumeOutlineId,
+              chapter_id = @chapterId,
+              title = @title,
+              chapter_goal = @chapterGoal,
+              conflict = @conflict,
+              information_gain = @informationGain,
+              emotional_turn = @emotionalTurn,
+              hook = @hook,
+              required_character_ids_json = @requiredCharacterIdsJson,
+              required_location_ids_json = @requiredLocationIdsJson,
+              related_plotline_node_ids_json = @relatedPlotlineNodeIdsJson,
+              related_foreshadowing_ids_json = @relatedForeshadowingIdsJson,
+              target_word_count = @targetWordCount,
+              sort_order = @sortOrder,
+              status = @status,
+              updated_at = @now
+          where project_id = @projectId and id = @chapterOutlineId
+          `,
+        )
+        .run({
+          chapterGoal: input.chapterGoal,
+          chapterId: normalizeNullableText(input.chapterId),
+          chapterOutlineId: input.chapterOutlineId,
+          conflict: normalizeNullableText(input.conflict),
+          emotionalTurn: normalizeNullableText(input.emotionalTurn),
+          hook: normalizeNullableText(input.hook),
+          informationGain: normalizeNullableText(input.informationGain),
+          outlineId: input.outlineId,
+          now,
+          projectId: input.projectId,
+          relatedForeshadowingIdsJson: stringifyStringArray(input.relatedForeshadowingIds),
+          relatedPlotlineNodeIdsJson: stringifyStringArray(input.relatedPlotlineNodeIds),
+          requiredCharacterIdsJson: stringifyStringArray(input.requiredCharacterIds),
+          requiredLocationIdsJson: stringifyStringArray(input.requiredLocationIds),
+          sortOrder: input.sortOrder,
+          status: input.status,
+          targetWordCount: input.targetWordCount ?? null,
+          title: input.title,
+          volumeOutlineId: normalizeNullableText(input.volumeOutlineId),
+        });
+    } else {
+      this.projectDatabase.client
+        .prepare(
+          `
+          insert into chapter_outlines (
+            id, project_id, outline_id, volume_outline_id, chapter_id, title, chapter_goal,
+            conflict, information_gain, emotional_turn, hook,
+            required_character_ids_json, required_location_ids_json,
+            related_plotline_node_ids_json, related_foreshadowing_ids_json,
+            target_word_count, sort_order, status, created_at, updated_at
+          )
+          values (
+            @chapterOutlineId, @projectId, @outlineId, @volumeOutlineId, @chapterId, @title, @chapterGoal,
+            @conflict, @informationGain, @emotionalTurn, @hook,
+            @requiredCharacterIdsJson, @requiredLocationIdsJson,
+            @relatedPlotlineNodeIdsJson, @relatedForeshadowingIdsJson,
+            @targetWordCount, @sortOrder, @status, @now, @now
+          )
+          `,
+        )
+        .run({
+          chapterGoal: input.chapterGoal,
+          chapterId: normalizeNullableText(input.chapterId),
+          chapterOutlineId: input.chapterOutlineId,
+          conflict: normalizeNullableText(input.conflict),
+          emotionalTurn: normalizeNullableText(input.emotionalTurn),
+          hook: normalizeNullableText(input.hook),
+          informationGain: normalizeNullableText(input.informationGain),
+          outlineId: input.outlineId,
+          now,
+          projectId: input.projectId,
+          relatedForeshadowingIdsJson: stringifyStringArray(input.relatedForeshadowingIds),
+          relatedPlotlineNodeIdsJson: stringifyStringArray(input.relatedPlotlineNodeIds),
+          requiredCharacterIdsJson: stringifyStringArray(input.requiredCharacterIds),
+          requiredLocationIdsJson: stringifyStringArray(input.requiredLocationIds),
+          sortOrder: input.sortOrder,
+          status: input.status,
+          targetWordCount: input.targetWordCount ?? null,
+          title: input.title,
+          volumeOutlineId: normalizeNullableText(input.volumeOutlineId),
+        });
+    }
+
+    const chapterOutline = this.getChapterOutline(input.projectId, input.chapterOutlineId);
+    if (!chapterOutline) {
+      throw new Error(`CHAPTER_OUTLINE_NOT_FOUND: ${input.chapterOutlineId}`);
+    }
+
+    return chapterOutline;
+  }
+
+  saveSceneOutline(input: SaveSceneOutlineInput): SceneOutlineRecord {
+    const now = input.now ?? Date.now();
+    const chapterOutline = this.getChapterOutline(input.projectId, input.chapterOutlineId);
+    if (!chapterOutline) {
+      throw new Error(`CHAPTER_OUTLINE_NOT_FOUND: ${input.chapterOutlineId}`);
+    }
+
+    const existing = this.getSceneOutline(input.projectId, input.sceneOutlineId);
+    if (existing) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update scene_outlines
+          set chapter_outline_id = @chapterOutlineId,
+              scene_id = @sceneId,
+              title = @title,
+              purpose = @purpose,
+              beat_type = @beatType,
+              pov_character_id = @povCharacterId,
+              location_id = @locationId,
+              conflict = @conflict,
+              entry_state = @entryState,
+              exit_state = @exitState,
+              sort_order = @sortOrder,
+              status = @status,
+              updated_at = @now
+          where id = @sceneOutlineId
+          `,
+        )
+        .run({
+          beatType: input.beatType,
+          chapterOutlineId: input.chapterOutlineId,
+          conflict: normalizeNullableText(input.conflict),
+          entryState: normalizeNullableText(input.entryState),
+          exitState: normalizeNullableText(input.exitState),
+          locationId: normalizeNullableText(input.locationId),
+          now,
+          povCharacterId: normalizeNullableText(input.povCharacterId),
+          purpose: input.purpose,
+          sceneId: normalizeNullableText(input.sceneId),
+          sceneOutlineId: input.sceneOutlineId,
+          sortOrder: input.sortOrder,
+          status: input.status,
+          title: input.title,
+        });
+    } else {
+      this.projectDatabase.client
+        .prepare(
+          `
+          insert into scene_outlines (
+            id, chapter_outline_id, scene_id, title, purpose, beat_type,
+            pov_character_id, location_id, conflict, entry_state, exit_state,
+            sort_order, status, created_at, updated_at
+          )
+          values (
+            @sceneOutlineId, @chapterOutlineId, @sceneId, @title, @purpose, @beatType,
+            @povCharacterId, @locationId, @conflict, @entryState, @exitState,
+            @sortOrder, @status, @now, @now
+          )
+          `,
+        )
+        .run({
+          beatType: input.beatType,
+          chapterOutlineId: input.chapterOutlineId,
+          conflict: normalizeNullableText(input.conflict),
+          entryState: normalizeNullableText(input.entryState),
+          exitState: normalizeNullableText(input.exitState),
+          locationId: normalizeNullableText(input.locationId),
+          now,
+          povCharacterId: normalizeNullableText(input.povCharacterId),
+          purpose: input.purpose,
+          sceneId: normalizeNullableText(input.sceneId),
+          sceneOutlineId: input.sceneOutlineId,
+          sortOrder: input.sortOrder,
+          status: input.status,
+          title: input.title,
+        });
+    }
+
+    const sceneOutline = this.getSceneOutline(input.projectId, input.sceneOutlineId);
+    if (!sceneOutline) {
+      throw new Error(`SCENE_OUTLINE_NOT_FOUND: ${input.sceneOutlineId}`);
+    }
+
+    return sceneOutline;
+  }
+
   listOutlines(projectId: string): OutlineRecord[] {
     return this.projectDatabase.client
       .prepare(
@@ -270,6 +705,34 @@ export class OutlineRepository {
       )
       .all(projectId)
       .map((row) => mapOutlineRow(row as OutlineRow));
+  }
+
+  listVolumeOutlines(projectId: string, outlineId?: string): VolumeOutlineRecord[] {
+    const rows = outlineId
+      ? this.projectDatabase.client
+          .prepare(
+            `
+            select vo.*
+            from volume_outlines vo
+            join outlines o on o.id = vo.outline_id
+            where o.project_id = ? and vo.outline_id = ?
+            order by vo.sort_order asc, vo.created_at asc
+            `,
+          )
+          .all(projectId, outlineId)
+      : this.projectDatabase.client
+          .prepare(
+            `
+            select vo.*
+            from volume_outlines vo
+            join outlines o on o.id = vo.outline_id
+            where o.project_id = ?
+            order by vo.sort_order asc, vo.created_at asc
+            `,
+          )
+          .all(projectId);
+
+    return rows.map((row) => mapVolumeOutlineRow(row as VolumeOutlineRow));
   }
 
   listChapterOutlines(projectId: string, outlineId?: string): ChapterOutlineRecord[] {
@@ -288,6 +751,34 @@ export class OutlineRepository {
       )
       .all(projectId)
       .map((row) => mapChapterOutlineRow(row as ChapterOutlineRow));
+  }
+
+  listSceneOutlines(projectId: string, chapterOutlineId?: string): SceneOutlineRecord[] {
+    const rows = chapterOutlineId
+      ? this.projectDatabase.client
+          .prepare(
+            `
+            select so.*
+            from scene_outlines so
+            join chapter_outlines co on co.id = so.chapter_outline_id
+            where co.project_id = ? and so.chapter_outline_id = ?
+            order by so.sort_order asc, so.created_at asc
+            `,
+          )
+          .all(projectId, chapterOutlineId)
+      : this.projectDatabase.client
+          .prepare(
+            `
+            select so.*
+            from scene_outlines so
+            join chapter_outlines co on co.id = so.chapter_outline_id
+            where co.project_id = ?
+            order by co.sort_order asc, so.sort_order asc, so.created_at asc
+            `,
+          )
+          .all(projectId);
+
+    return rows.map((row) => mapSceneOutlineRow(row as SceneOutlineRow));
   }
 
   getChapterOutline(projectId: string, chapterOutlineId: string): ChapterOutlineRecord | null {
@@ -393,7 +884,7 @@ export class OutlineRepository {
     return { chapter, chapterOutline };
   }
 
-  private getOutline(projectId: string, outlineId: string): OutlineRecord | null {
+  getOutline(projectId: string, outlineId: string): OutlineRecord | null {
     const row = this.projectDatabase.client
       .prepare("select * from outlines where project_id = ? and id = ?")
       .get(projectId, outlineId) as OutlineRow | undefined;
@@ -401,12 +892,34 @@ export class OutlineRepository {
     return row ? mapOutlineRow(row) : null;
   }
 
-  private getVolumeOutline(volumeOutlineId: string): VolumeOutlineRecord | null {
+  getVolumeOutline(projectId: string, volumeOutlineId: string): VolumeOutlineRecord | null {
     const row = this.projectDatabase.client
-      .prepare("select * from volume_outlines where id = ?")
-      .get(volumeOutlineId) as VolumeOutlineRow | undefined;
+      .prepare(
+        `
+        select vo.*
+        from volume_outlines vo
+        join outlines o on o.id = vo.outline_id
+        where o.project_id = ? and vo.id = ?
+        `,
+      )
+      .get(projectId, volumeOutlineId) as VolumeOutlineRow | undefined;
 
     return row ? mapVolumeOutlineRow(row) : null;
+  }
+
+  getSceneOutline(projectId: string, sceneOutlineId: string): SceneOutlineRecord | null {
+    const row = this.projectDatabase.client
+      .prepare(
+        `
+        select so.*
+        from scene_outlines so
+        join chapter_outlines co on co.id = so.chapter_outline_id
+        where co.project_id = ? and so.id = ?
+        `,
+      )
+      .get(projectId, sceneOutlineId) as SceneOutlineRow | undefined;
+
+    return row ? mapSceneOutlineRow(row) : null;
   }
 
   private getDefaultProjectStructure(projectId: string): DefaultProjectStructureRow {
@@ -504,6 +1017,26 @@ function mapChapterOutlineRow(row: ChapterOutlineRow): ChapterOutlineRecord {
   };
 }
 
+function mapSceneOutlineRow(row: SceneOutlineRow): SceneOutlineRecord {
+  return {
+    beatType: row.beat_type,
+    chapterOutlineId: row.chapter_outline_id,
+    conflict: row.conflict,
+    createdAt: row.created_at,
+    entryState: row.entry_state,
+    exitState: row.exit_state,
+    id: row.id,
+    locationId: row.location_id,
+    povCharacterId: row.pov_character_id,
+    purpose: row.purpose,
+    sceneId: row.scene_id,
+    sortOrder: row.sort_order,
+    status: row.status,
+    title: row.title,
+    updatedAt: row.updated_at,
+  };
+}
+
 function mapChapterRow(row: ChapterRow): ChapterRecord {
   return {
     content: row.content,
@@ -520,6 +1053,18 @@ function mapChapterRow(row: ChapterRow): ChapterRecord {
     wordCount: row.word_count,
     workId: row.work_id,
   };
+}
+
+function normalizeNullableText(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function stringifyStringArray(values: readonly string[]): string {
+  return JSON.stringify(Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))));
 }
 
 function parseJsonArray(value: string): readonly string[] {

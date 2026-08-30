@@ -68,6 +68,33 @@ describe("PromptRegistry", () => {
     expect(prompt.content).toContain("避免同质化命名");
   });
 
+  it("loads worldbuilding form completion prompt with fixed 12-dimension JSON contract", () => {
+    const prompt = PromptRegistry.getPrompt("worldbuilding_generate", "v1");
+
+    expect(prompt.content).toContain("世界观表单补全器");
+    expect(prompt.content).toContain("模板变量");
+    expect(prompt.content).toContain("currentFields");
+    expect(prompt.content).toContain('"worldBase"');
+    expect(prompt.content).toContain('"specialMechanism"');
+    expect(prompt.content).toContain("每个字段 300 到 500 字");
+    expect(prompt.content).toContain("整体闭环");
+    expect(prompt.content).toContain("设定描述、运行规则、叙事冲突、代价限制、剧情接口");
+    expect(prompt.content).not.toContain('"items"');
+  });
+
+  it("loads core story form completion prompt with editable field JSON contract", () => {
+    const prompt = PromptRegistry.getPrompt("core_story_complete", "v1");
+
+    expect(prompt.content).toContain("核心故事表单补全器");
+    expect(prompt.content).toContain("模板变量");
+    expect(prompt.content).toContain("currentFields");
+    expect(prompt.content).toContain("worldbuildingProfile");
+    expect(prompt.content).toContain('"mainGoal"');
+    expect(prompt.content).toContain('"storyDriver"');
+    expect(prompt.content).toContain("200 到 800 字");
+    expect(prompt.content).toContain("只输出 JSON");
+  });
+
   it("loads longform planning prompts with layered outline contracts", () => {
     const bookPlanPrompt = PromptRegistry.getPrompt("book_plan_generate", "v1");
     const rollingPrompt = PromptRegistry.getPrompt("rolling_chapter_plan_generate", "v1");

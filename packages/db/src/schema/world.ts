@@ -2,6 +2,26 @@ import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { projects } from "./project.js";
 
+export const worldbuildingProfiles = sqliteTable("worldbuilding_profiles", {
+  projectId: text("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  worldBase: text("world_base").notNull().default(""),
+  geography: text("geography").notNull().default(""),
+  history: text("history").notNull().default(""),
+  powerSystem: text("power_system").notNull().default(""),
+  socialStructure: text("social_structure").notNull().default(""),
+  powerOrder: text("power_order").notNull().default(""),
+  factions: text("factions").notNull().default(""),
+  economy: text("economy").notNull().default(""),
+  culture: text("culture").notNull().default(""),
+  rules: text("rules").notNull().default(""),
+  specialMechanism: text("special_mechanism").notNull().default(""),
+  coreConflict: text("core_conflict").notNull().default(""),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const worldRules = sqliteTable(
   "world_rules",
   {

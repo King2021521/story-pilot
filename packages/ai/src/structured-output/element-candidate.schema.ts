@@ -5,6 +5,8 @@ export const ElementCandidateTypeSchema = z.enum([
   "city",
   "location",
   "organization",
+  "faction",
+  "sect",
   "weapon",
   "technique",
   "item",

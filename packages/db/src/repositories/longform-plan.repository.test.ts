@@ -79,6 +79,144 @@ describe("LongformPlanRepository", () => {
     }
   });
 
+  it("saves editable book, volume, and arc plan drafts", async () => {
+    const projectDatabase = await createProjectDatabaseWithProject(tempDirs);
+    try {
+      const repository = new LongformPlanRepository(projectDatabase);
+
+      const bookPlan = repository.saveBookPlanDraft({
+        bookPlanId: "book_plan_draft_1",
+        corePromise: "每卷完成一次权力反转和一次代价兑现。",
+        endingDirection: "主角放弃旧身份重建星潮秩序。",
+        mainPlotlineId: "plotline_1",
+        now: 10,
+        projectId: "project_1",
+        status: "active",
+        targetWordCount: 2_400_000,
+        title: "星潮纪全书大纲",
+      });
+      const volumePlan = repository.saveVolumePlan({
+        bookPlanId: bookPlan.id,
+        climax: "主角公开违反司星阁禁令。",
+        majorConflict: "主角需要星潮救人，司星阁垄断星潮。",
+        now: 20,
+        projectId: "project_1",
+        purpose: "建立世界压迫、修行规则和主角第一次破局。",
+        status: "draft",
+        targetWordCount: 360_000,
+        title: "第一卷 星潮初醒",
+        volumeIndex: 1,
+        volumePlanId: "volume_plan_draft_1",
+      });
+      const arcPlan = repository.saveArcPlan({
+        arcIndex: 1,
+        arcPlanId: "arc_plan_draft_1",
+        characterArcId: "character_arc_1",
+        endChapterIndex: 20,
+        escalation: ["发现禁令", "第一次越界", "暴露代价"],
+        now: 30,
+        plotlineId: "plotline_1",
+        projectId: "project_1",
+        purpose: "用二十章完成主角从被动求生到主动越界。",
+        startChapterIndex: 1,
+        status: "draft",
+        title: "禁令破口",
+        volumePlanId: volumePlan.id,
+      });
+
+      expect(bookPlan).toMatchObject({
+        corePromise: "每卷完成一次权力反转和一次代价兑现。",
+        endingDirection: "主角放弃旧身份重建星潮秩序。",
+        id: "book_plan_draft_1",
+        mainPlotlineId: "plotline_1",
+        status: "active",
+        targetWordCount: 2_400_000,
+      });
+      expect(volumePlan).toMatchObject({
+        bookPlanId: "book_plan_draft_1",
+        majorConflict: "主角需要星潮救人，司星阁垄断星潮。",
+        purpose: "建立世界压迫、修行规则和主角第一次破局。",
+        targetWordCount: 360_000,
+      });
+      expect(arcPlan).toMatchObject({
+        characterArcId: "character_arc_1",
+        endChapterIndex: 20,
+        escalation: ["发现禁令", "第一次越界", "暴露代价"],
+        plotlineId: "plotline_1",
+        startChapterIndex: 1,
+      });
+
+      const updatedBookPlan = repository.saveBookPlanDraft({
+        bookPlanId: bookPlan.id,
+        corePromise: "主线承诺改为每卷一次公开胜利和一次隐藏损失。",
+        endingDirection: null,
+        mainPlotlineId: null,
+        now: 40,
+        projectId: "project_1",
+        status: "draft",
+        targetWordCount: 2_600_000,
+        title: "星潮纪全书大纲二版",
+      });
+      const updatedVolumePlan = repository.saveVolumePlan({
+        bookPlanId: bookPlan.id,
+        climax: null,
+        majorConflict: "司星阁追捕主角，主角反向追查旧案。",
+        now: 50,
+        projectId: "project_1",
+        purpose: "强化侦查线和第一次反击。",
+        status: "active",
+        targetWordCount: 420_000,
+        title: "第一卷 旧信入局",
+        volumeIndex: 1,
+        volumePlanId: volumePlan.id,
+      });
+      const updatedArcPlan = repository.saveArcPlan({
+        arcIndex: 2,
+        arcPlanId: arcPlan.id,
+        characterArcId: null,
+        endChapterIndex: null,
+        escalation: ["旧信出现", "线索误导"],
+        now: 60,
+        plotlineId: null,
+        projectId: "project_1",
+        purpose: "改为调查旧信来源。",
+        startChapterIndex: null,
+        status: "active",
+        title: "旧信追查",
+        volumePlanId: volumePlan.id,
+      });
+
+      expect(updatedBookPlan).toMatchObject({
+        corePromise: "主线承诺改为每卷一次公开胜利和一次隐藏损失。",
+        endingDirection: null,
+        mainPlotlineId: null,
+        targetWordCount: 2_600_000,
+        title: "星潮纪全书大纲二版",
+        version: 2,
+      });
+      expect(updatedVolumePlan).toMatchObject({
+        climax: null,
+        majorConflict: "司星阁追捕主角，主角反向追查旧案。",
+        status: "active",
+        targetWordCount: 420_000,
+      });
+      expect(updatedArcPlan).toMatchObject({
+        arcIndex: 2,
+        characterArcId: null,
+        endChapterIndex: null,
+        escalation: ["旧信出现", "线索误导"],
+        plotlineId: null,
+        startChapterIndex: null,
+        status: "active",
+      });
+      expect(repository.listBookPlans("project_1")).toHaveLength(1);
+      expect(repository.listVolumePlans("project_1", bookPlan.id)).toHaveLength(1);
+      expect(repository.listArcPlans("project_1", volumePlan.id)).toHaveLength(1);
+    } finally {
+      projectDatabase.close();
+    }
+  });
+
   it("creates rolling chapter plans with scene plans and explicit references", async () => {
     const projectDatabase = await createProjectDatabaseWithProject(tempDirs);
     try {

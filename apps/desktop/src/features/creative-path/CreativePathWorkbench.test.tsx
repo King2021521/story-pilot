@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../../app/AppProviders";
 import { CreativePathWorkbench, type CreativePathBoard } from "./CreativePathWorkbench";
 
+type PersistedLegacyGateReport = NonNullable<CreativePathBoard["stages"][number]["gateReport"]>;
+
 describe("CreativePathWorkbench", () => {
   it("renders the nine-step creative path before chapter production", () => {
     render(
@@ -63,6 +65,8 @@ describe("CreativePathWorkbench", () => {
     await waitFor(() => {
       expect(onSaveBrief).toHaveBeenCalledWith(
         expect.objectContaining({
+          estimatedChapterCount: 260,
+          estimatedWordCount: 800_000,
           genre: "玄幻",
           subgenres: ["废柴逆袭"],
         }),
@@ -97,14 +101,26 @@ describe("CreativePathWorkbench", () => {
     const board = createCreativePathBoard({
       arcPlans: [
         {
+          arcIndex: 1,
+          characterArcId: null,
+          endChapterIndex: 20,
+          escalation: ["发现禁令", "第一次越界", "暴露代价"],
           id: "arc_plan_1",
+          plotlineId: null,
+          purpose: "建立修行规则和第一重代价。",
+          startChapterIndex: 1,
+          status: "draft",
           title: "星潮初醒",
           volumePlanId: "volume_plan_1",
         },
       ],
       bookPlans: [
         {
+          corePromise: "每卷完成一次境界突破和一次关系反转。",
+          endingDirection: "主角以失去旧身份为代价重塑天道。",
           id: "book_plan_1",
+          mainPlotlineId: null,
+          status: "draft",
           targetWordCount: 3_000_000,
           title: "星潮纪全书规划",
         },
@@ -128,7 +144,12 @@ describe("CreativePathWorkbench", () => {
       volumePlans: [
         {
           bookPlanId: "book_plan_1",
+          climax: "主角公开打破司星阁第一条禁令。",
           id: "volume_plan_1",
+          majorConflict: "主角想借星潮修行，司星阁禁止底层接触星潮。",
+          purpose: "完成世界规则展示和主角初次突破。",
+          status: "draft",
+          targetWordCount: 360_000,
           title: "第一卷 星潮初醒",
           volumeIndex: 1,
         },
@@ -227,6 +248,57 @@ describe("CreativePathWorkbench", () => {
       expect(onCompleteStage).toHaveBeenCalledWith({ stageKey: "worldbuilding" });
     });
   });
+
+  it("renders stages when persisted gate reports do not include requirement details", () => {
+    const board = createCreativePathBoard({
+      stages: [
+        {
+          gateReport: { completed: true } as unknown as PersistedLegacyGateReport,
+          readinessScore: 100,
+          stageKey: "brief",
+          status: "completed",
+        },
+        {
+          gateReport: { completed: true } as unknown as PersistedLegacyGateReport,
+          readinessScore: 100,
+          stageKey: "blueprint",
+          status: "completed",
+        },
+        {
+          gateReport: { initialized: true } as unknown as PersistedLegacyGateReport,
+          readinessScore: 10,
+          stageKey: "worldbuilding",
+          status: "available",
+        },
+        { readinessScore: 0, stageKey: "characters", status: "locked" },
+        { readinessScore: 0, stageKey: "plot_arcs", status: "locked" },
+        { readinessScore: 0, stageKey: "outline", status: "locked" },
+        { readinessScore: 0, stageKey: "chapters", status: "locked" },
+        { readinessScore: 0, stageKey: "memory_review", status: "locked" },
+        { readinessScore: 0, stageKey: "retrospective", status: "locked" },
+      ],
+    });
+
+    render(
+      <AppProviders>
+        <CreativePathWorkbench
+          board={board}
+          onApplyBlueprint={vi.fn()}
+          onApplyChapterOutline={vi.fn()}
+          onApproveChapterOutline={vi.fn()}
+          onCompleteStage={vi.fn()}
+          onConfirmBrief={vi.fn()}
+          onGenerateBlueprint={vi.fn()}
+          onGenerateDraftFromOutline={vi.fn()}
+          onGenerateOutline={vi.fn()}
+          onOpenCreativeElements={vi.fn()}
+          onSaveBrief={vi.fn()}
+        />
+      </AppProviders>,
+    );
+
+    expect(screen.getByRole("heading", { name: "世界观与要素" })).toBeInTheDocument();
+  });
 });
 
 function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): CreativePathBoard {
@@ -245,6 +317,8 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
     },
     brief: {
       emotionalRewards: ["爽点"],
+      estimatedChapterCount: 260,
+      estimatedWordCount: 800_000,
       forbiddenDirections: [],
       genre: "玄幻",
       id: "brief_1",
@@ -280,6 +354,7 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
       },
     ],
     reviewIssues: [],
+    sceneOutlines: [],
     scenePlans: [],
     stages: [
       { readinessScore: 10, stageKey: "brief", status: "available" },
@@ -292,6 +367,7 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    volumeOutlines: [],
     volumePlans: [],
     ...overrides,
   };

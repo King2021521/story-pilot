@@ -69,8 +69,11 @@ describe("runtime settings", () => {
           model: {
             apiKey: "json-api-key",
             baseUrl: "https://api.example.test/v1",
+            embeddingModel: "text-embedding-test",
+            maxRetries: 4,
             model: "gpt-test",
             provider: "openai-compatible",
+            timeoutMs: 90000,
           },
           storage: {
             homeDir: homePath,
@@ -86,7 +89,26 @@ describe("runtime settings", () => {
 
     expect(env.STORY_PILOT_LLM_API_KEY).toBe("json-api-key");
     expect(env.STORY_PILOT_LLM_BASE_URL).toBe("https://api.example.test/v1");
+    expect(env.STORY_PILOT_LLM_EMBEDDING_MODEL).toBe("text-embedding-test");
+    expect(env.STORY_PILOT_LLM_MAX_RETRIES).toBe("4");
     expect(env.STORY_PILOT_LLM_MODEL).toBe("gpt-test");
+    expect(env.STORY_PILOT_LLM_TIMEOUT_MS).toBe("90000");
+  });
+
+  it("treats setting.json as authoritative over local LLM environment values", () => {
+    const homePath = createTempHome();
+    const env: NodeJS.ProcessEnv = {
+      STORY_PILOT_HOME: homePath,
+      STORY_PILOT_LLM_API_KEY: "env-api-key",
+      STORY_PILOT_LLM_BASE_URL: "https://api.env.test/v1",
+      STORY_PILOT_LLM_MODEL: "env-model",
+    };
+
+    initializeRuntimeConfig({ env });
+
+    expect(env.STORY_PILOT_LLM_API_KEY).toBeUndefined();
+    expect(env.STORY_PILOT_LLM_BASE_URL).toBeUndefined();
+    expect(env.STORY_PILOT_LLM_MODEL).toBe("gpt-5.5");
   });
 
   it("renames invalid setting.json before recreating defaults", () => {

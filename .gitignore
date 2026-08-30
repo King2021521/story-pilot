@@ -17,6 +17,10 @@ apps/desktop/src-tauri/binaries/story-pilot-sidecar-*
 *.log
 logs/
 
+# Test output
+test-results/
+playwright-report/
+
 # Environment
 .env
 .env.*

@@ -40,7 +40,7 @@ import {
   storyEvents,
 } from "./plot.js";
 import { files, projects, volumes, works } from "./project.js";
-import { items, locations, organizations, worldRules } from "./world.js";
+import { items, locations, organizations, worldRules, worldbuildingProfiles } from "./world.js";
 import {
   aiCapabilities,
   aiEvalRuns,
@@ -91,6 +91,7 @@ export const projectSchema = {
   scenePlans,
   reviewIssues,
   retrospectives,
+  worldbuildingProfiles,
   worldRules,
   locations,
   organizations,

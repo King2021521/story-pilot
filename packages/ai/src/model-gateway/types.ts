@@ -33,6 +33,10 @@ export interface GenerateObjectInput<TSchema extends z.ZodType> {
   readonly messages: readonly ModelMessage[];
   readonly promptVersion?: string;
   readonly temperature?: number;
+  readonly topP?: number;
+  readonly maxOutputTokens?: number;
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
 }
 
 export interface GenerateObjectResult<TObject> {
@@ -46,6 +50,10 @@ export interface StreamTextInput {
   readonly messages: readonly ModelMessage[];
   readonly promptVersion?: string;
   readonly temperature?: number;
+  readonly topP?: number;
+  readonly maxOutputTokens?: number;
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
 }
 
 export interface EmbedInput {
@@ -64,6 +72,10 @@ export interface ProviderGenerateObjectInput {
   readonly messages: readonly ModelMessage[];
   readonly promptVersion?: string;
   readonly temperature?: number;
+  readonly topP?: number;
+  readonly maxOutputTokens?: number;
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
 }
 
 export interface ProviderObjectResult {
@@ -77,6 +89,10 @@ export interface ProviderStreamTextInput {
   readonly messages: readonly ModelMessage[];
   readonly promptVersion?: string;
   readonly temperature?: number;
+  readonly topP?: number;
+  readonly maxOutputTokens?: number;
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
 }
 
 export interface ProviderEmbedInput {

@@ -72,4 +72,80 @@ describe("StoryEventService", () => {
       }),
     ]);
   });
+
+  it("updates editable story event fields and participants", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-events-update-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, CharacterModule, PlotModule],
+    }).compile();
+    const projectService = moduleRef.get(ProjectService);
+    const characterService = moduleRef.get(CharacterService);
+    const storyEventService = moduleRef.get(StoryEventService) as StoryEventService & {
+      updateStoryEvent(input: {
+        readonly patch: {
+          readonly description?: string;
+          readonly eventType?: string;
+          readonly participants?: readonly {
+            readonly entityType: string;
+            readonly entityId: string;
+            readonly role: string;
+          }[];
+          readonly status?: string;
+          readonly storyTime?: string;
+          readonly title?: string;
+        };
+        readonly projectId: string;
+        readonly storyEventId: string;
+      }): Promise<Record<string, unknown>>;
+    };
+
+    const project = await projectService.createProject({ title: "长夜序章", genre: "悬疑" });
+    const character = await characterService.createCharacter({
+      projectId: project.id,
+      name: "林澈",
+      role: "protagonist",
+    });
+    const event = await storyEventService.createStoryEvent({
+      projectId: project.id,
+      title: "雨夜来信",
+      description: "林澈收到来自旧案现场的匿名信。",
+      eventType: "discovery",
+    });
+
+    const updated = await storyEventService.updateStoryEvent({
+      patch: {
+        description: "林澈确认匿名信来自十年前的案卷。",
+        eventType: "reveal",
+        participants: [
+          {
+            entityType: "character",
+            entityId: character.id,
+            role: "actor",
+          },
+        ],
+        status: "canon",
+        storyTime: "第 3 章夜雨",
+        title: "匿名信真意",
+      },
+      projectId: project.id,
+      storyEventId: event.id,
+    });
+
+    expect(updated).toMatchObject({
+      eventType: "reveal",
+      status: "canon",
+      storyTime: "第 3 章夜雨",
+      summary: "林澈确认匿名信来自十年前的案卷。",
+      title: "匿名信真意",
+    });
+    expect(updated.participants).toEqual([
+      expect.objectContaining({
+        entityId: character.id,
+        role: "actor",
+      }),
+    ]);
+  });
 });

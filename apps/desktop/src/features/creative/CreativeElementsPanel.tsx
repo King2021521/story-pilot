@@ -6,6 +6,7 @@ import {
   type CountPresetValue,
   type ElementTypePresetValue,
 } from "@story-pilot/presets";
+import type { CommandPayload } from "@story-pilot/contracts";
 import {
   Button,
   Checkbox,
@@ -25,9 +26,28 @@ import { useEffect, useMemo, useState } from "react";
 const { Text, Title } = Typography;
 
 export interface CharacterElement {
+  readonly appearance?: string | null;
+  readonly arcEnd?: string | null;
+  readonly arcStart?: string | null;
+  readonly arcTurn?: string | null;
+  readonly archetype?: string | null;
+  readonly firstAppearance?: string | null;
+  readonly genderAge?: string | null;
   readonly id: string;
+  readonly importance?: CharacterImportanceValue | null;
+  readonly motivation?: string | null;
   readonly name: string;
+  readonly narrativeFunction?: CharacterNarrativeFunctionValue | null;
+  readonly profile?: string | null;
+  readonly relationshipHook?: string | null;
   readonly role: string;
+  readonly storyTask?: string | null;
+  readonly traits?: readonly CharacterTraitElement[];
+}
+
+export interface CharacterTraitElement {
+  readonly name: string;
+  readonly value: string;
 }
 
 export interface WorldRuleElement {
@@ -47,15 +67,47 @@ export interface WorldElement {
 }
 
 export interface PlotlineElement {
+  readonly centralQuestion?: string | null;
+  readonly driver?: string | null;
+  readonly emotionalPromise?: string | null;
   readonly id: string;
+  readonly importance?: PlotlineImportanceValue | null;
+  readonly midEscalation?: string | null;
   readonly name: string;
+  readonly narrativeRole?: PlotlineNarrativeRoleValue | null;
+  readonly nodes?: readonly PlotlineNodeElement[];
+  readonly payoffPlan?: string | null;
   readonly priority: number;
+  readonly relatedCharacterIds?: readonly string[];
+  readonly relatedForeshadowingIds?: readonly string[];
+  readonly relatedStoryEventIds?: readonly string[];
+  readonly relatedWorldRuleIds?: readonly string[];
+  readonly startState?: string | null;
+  readonly status?: PlotlineStatusValue | null;
   readonly summary: string | null;
-  readonly type: string;
+  readonly type: PlotlineKindValue;
+}
+
+export interface PlotlineNodeElement {
+  readonly chapterHint?: string | null;
+  readonly description: string | null;
+  readonly id: string;
+  readonly kind: PlotlineNodeKindValue;
+  readonly plotlineId: string;
+  readonly position: number;
+  readonly projectId: string;
+  readonly status: PlotlineNodeStatusValue;
+  readonly targetChapterId: string | null;
+  readonly title: string;
 }
 
 export interface ForeshadowingElement {
   readonly id: string;
+  readonly importance?: number;
+  readonly links?: readonly {
+    readonly eventId: string;
+    readonly role: "seed" | "payoff";
+  }[];
   readonly payoffText: string | null;
   readonly seedText: string | null;
   readonly status: string;
@@ -73,6 +125,7 @@ export interface ElementCandidateItem {
 export interface GenerateElementCandidatesValues {
   readonly constraints: readonly string[];
   readonly count: CountPresetValue;
+  readonly description?: string;
   readonly elementType: ElementTypePresetValue;
   readonly genre: string;
   readonly style?: string;
@@ -88,9 +141,40 @@ export interface GenerateElementCandidatesResult {
 }
 
 export interface CreateCharacterValues {
+  readonly appearance?: string;
+  readonly arcEnd?: string;
+  readonly arcStart?: string;
+  readonly arcTurn?: string;
+  readonly archetype?: string;
+  readonly biography?: string;
+  readonly firstAppearance?: string;
+  readonly flaw?: string;
+  readonly genderAge?: string;
+  readonly goal?: string;
+  readonly importance?: CharacterImportanceValue;
   readonly name: string;
+  readonly narrativeFunction?: CharacterNarrativeFunctionValue;
+  readonly need?: string;
+  readonly relationshipHook?: string;
   readonly role: "protagonist" | "antagonist" | "support" | "cameo";
+  readonly secret?: string;
+  readonly storyTask?: string;
+  readonly voiceProfile?: string;
 }
+
+export type CharacterImportanceValue = "core" | "major" | "minor" | "cameo";
+
+export type CharacterNarrativeFunctionValue =
+  | "viewpoint"
+  | "driver"
+  | "opposition"
+  | "ally"
+  | "mentor"
+  | "foil"
+  | "love_interest"
+  | "comic_relief"
+  | "information_source"
+  | "custom";
 
 export interface CreateWorldRuleValues {
   readonly category: "magic" | "tech" | "society" | "history" | "geography" | "economy" | "custom";
@@ -99,23 +183,34 @@ export interface CreateWorldRuleValues {
   readonly title: string;
 }
 
-export interface CreatePlotlineValues {
-  readonly kind: "main" | "branch" | "romance" | "mystery" | "growth" | "world";
-  readonly priority: number;
-  readonly summary?: string;
-  readonly title: string;
-}
+export type PlotlineKindValue = CommandPayload<"plotline.create">["kind"];
+export type PlotlineNarrativeRoleValue = CommandPayload<"plotline.create">["narrativeRole"];
+export type PlotlineImportanceValue = CommandPayload<"plotline.create">["importance"];
+export type PlotlineStatusValue = CommandPayload<"plotline.create">["status"];
+export type PlotlineNodeKindValue = CommandPayload<"plotline.createNode">["kind"];
+export type PlotlineNodeStatusValue = CommandPayload<"plotline.createNode">["status"];
+
+export type CreatePlotlineValues = Omit<CommandPayload<"plotline.create">, "projectId">;
+export type UpdatePlotlineValues = Omit<CommandPayload<"plotline.update">, "projectId">;
+export type CreatePlotlineNodeValues = Omit<CommandPayload<"plotline.createNode">, "projectId">;
+export type UpdatePlotlineNodeValues = Omit<CommandPayload<"plotline.updateNode">, "projectId">;
 
 export interface CreateForeshadowingValues {
   readonly description: string;
   readonly importance: number;
   readonly payoffExpectation?: string;
+  readonly payoffEventId?: string;
+  readonly seedEventId?: string;
+  readonly status?: CommandPayload<"foreshadowing.create">["status"];
   readonly title: string;
 }
+
+export type UpdateForeshadowingValues = Omit<CommandPayload<"foreshadowing.update">, "projectId">;
 
 interface CandidateFormValues {
   readonly constraints?: string[];
   readonly count: CountPresetValue;
+  readonly description?: string;
   readonly elementType: ElementTypePresetValue;
   readonly style?: string;
   readonly worldRuleIds?: string[];
@@ -216,6 +311,7 @@ export function CreativeElementsPanel({
                 const result = await onGenerateElementCandidates({
                   constraints: values.constraints ?? [],
                   count: values.count,
+                  ...(values.description?.trim() ? { description: values.description.trim() } : {}),
                   elementType: values.elementType,
                   genre: projectGenre,
                   ...(values.style === undefined ? {} : { style: values.style }),
@@ -253,6 +349,17 @@ export function CreativeElementsPanel({
                     optionFilterProp="label"
                     options={worldRuleOptions}
                     placeholder="选择世界规则"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item label="创作描述" name="description">
+                  <Input.TextArea
+                    aria-label="创作描述"
+                    autoSize={{ minRows: 3, maxRows: 5 }}
+                    maxLength={500}
+                    placeholder="例如：生成安全屋外部补给线上的地下势力名称。"
+                    showCount
                   />
                 </Form.Item>
               </Col>

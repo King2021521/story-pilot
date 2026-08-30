@@ -27,6 +27,7 @@ describe("CapabilityRegistry", () => {
     for (const capabilityName of AI_CAPABILITY_NAMES) {
       const capability = CapabilityRegistry.get(capabilityName);
       expect(capability.defaultPromptVersion).toBe("v1");
+      expect(capability.entrypoint).toMatch(/^(ai_generate|specialized_rpc|prompt_only)$/u);
       expect(capability.outputSchemaName).toMatch(/Output$/);
       expect(capability.promptCapability).toBeDefined();
 
@@ -36,6 +37,7 @@ describe("CapabilityRegistry", () => {
     }
 
     expect(CapabilityRegistry.get("chapter.draft")).toMatchObject({
+      entrypoint: "ai_generate",
       name: "chapter.draft",
       outputSchemaName: "ChapterDraftOutput",
       promptCapability: "chapter_draft",
@@ -48,22 +50,28 @@ describe("CapabilityRegistry", () => {
       purpose: "memory_extract",
     });
     expect(CapabilityRegistry.get("element.generateCandidates")).toMatchObject({
+      entrypoint: "specialized_rpc",
       name: "element.generateCandidates",
       outputSchemaName: "ElementCandidateOutput",
       promptCapability: "element_generate",
       purpose: "element_generate",
     });
     expect(CapabilityRegistry.get("bookPlan.generate")).toMatchObject({
+      entrypoint: "specialized_rpc",
       name: "bookPlan.generate",
       outputSchemaName: "BookPlanGenerateOutput",
       promptCapability: "book_plan_generate",
       purpose: "book_plan_generate",
     });
     expect(CapabilityRegistry.get("rollingOutline.generate")).toMatchObject({
+      entrypoint: "specialized_rpc",
       name: "rollingOutline.generate",
       outputSchemaName: "RollingChapterPlanGenerateOutput",
       promptCapability: "rolling_chapter_plan_generate",
       purpose: "rolling_chapter_plan_generate",
+    });
+    expect(CapabilityRegistry.get("character.generate")).toMatchObject({
+      entrypoint: "prompt_only",
     });
   });
 });

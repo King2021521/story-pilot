@@ -90,6 +90,7 @@ export class ProjectService {
         projectId: project.id,
         subgenres: [],
         now,
+        ...(input.wordCountGoal === undefined ? {} : { estimatedWordCount: input.wordCountGoal }),
         ...(input.logline === undefined ? {} : { initialIdea: input.logline }),
       });
       const domainEventRepository = new DomainEventRepository(projectDatabase);

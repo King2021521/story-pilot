@@ -11,6 +11,7 @@ import {
   ProjectRepository,
   ReviewIssueRepository,
   WorkflowRepository,
+  WorldbuildingRepository,
   WorldRepository,
 } from "@story-pilot/db";
 
@@ -35,7 +36,10 @@ export interface WorkbenchBoard {
   readonly project: unknown;
   readonly chapters: readonly unknown[];
   readonly characters: readonly unknown[];
+  readonly conflicts: readonly unknown[];
   readonly creativePath: unknown;
+  readonly entityRelations: readonly unknown[];
+  readonly eventRelations: readonly unknown[];
   readonly artifacts: readonly unknown[];
   readonly foreshadowings: readonly unknown[];
   readonly items: readonly unknown[];
@@ -44,6 +48,8 @@ export interface WorkbenchBoard {
   readonly organizations: readonly unknown[];
   readonly plotlines: readonly unknown[];
   readonly worldRules: readonly unknown[];
+  readonly worldbuildingProfile: unknown;
+  readonly storyEvents: readonly unknown[];
   readonly workOrders: readonly unknown[];
 }
 
@@ -97,14 +103,18 @@ export class WorkbenchService {
       const creativePathRepository = new CreativePathRepository(projectDatabase);
       const longformPlanRepository = new LongformPlanRepository(projectDatabase);
       const outlineRepository = new OutlineRepository(projectDatabase);
+      const characterRepository = new CharacterRepository(projectDatabase);
       if (creativePathRepository.listStages(projectId).length === 0) {
         creativePathRepository.initializePath(projectId);
       }
       const creativePath = creativePathRepository.getPath(projectId);
+      const plotRepository = new PlotRepository(projectDatabase);
+
       return {
         artifacts: new ArtifactRepository(projectDatabase).listByProject({ projectId }),
         chapters: new ChapterRepository(projectDatabase).listChapters({ projectId }),
-        characters: new CharacterRepository(projectDatabase).listCharacters(projectId),
+        characters: characterRepository.listCharacters(projectId),
+        conflicts: plotRepository.listConflicts(projectId),
         creativePath: {
           ...creativePath,
           arcPlans: longformPlanRepository.listArcPlans(projectId),
@@ -117,16 +127,22 @@ export class WorkbenchService {
             status: "open",
           }),
           scenePlans: longformPlanRepository.listScenePlans(projectId),
+          sceneOutlines: outlineRepository.listSceneOutlines(projectId),
+          volumeOutlines: outlineRepository.listVolumeOutlines(projectId),
           volumePlans: longformPlanRepository.listVolumePlans(projectId),
         },
-        foreshadowings: new PlotRepository(projectDatabase).listForeshadowings(projectId),
+        entityRelations: characterRepository.listRelations({ projectId }),
+        eventRelations: plotRepository.listEventRelations(projectId),
+        foreshadowings: plotRepository.listForeshadowings(projectId),
         items: worldRepository.listItems(projectId),
         locations: worldRepository.listLocations(projectId),
         memoryCandidates: new MemoryRepository(projectDatabase).listCandidates({ projectId }),
         organizations: worldRepository.listOrganizations(projectId),
-        plotlines: new PlotRepository(projectDatabase).listPlotlines(projectId),
+        plotlines: plotRepository.listPlotlines(projectId),
         project: getProjectOrThrow(new ProjectRepository(projectDatabase), projectId),
+        storyEvents: plotRepository.listStoryEvents(projectId),
         worldRules: worldRepository.listWorldRules(projectId),
+        worldbuildingProfile: new WorldbuildingRepository(projectDatabase).getProfile(projectId),
         workOrders: new WorkflowRepository(projectDatabase).listWorkOrders({ projectId }),
       };
     } finally {

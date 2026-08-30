@@ -14,6 +14,20 @@ describe("ElementCandidateOutputSchema", () => {
             tags: ["旧城", "雨夜", "线索"],
             type: "weapon",
           },
+          {
+            description: "活跃在安全屋外圈补给线上的半地下互助联盟。",
+            name: "白线同盟",
+            rationale: "能持续制造末世资源交易、背叛和秩序争夺。",
+            tags: ["末世", "补给线", "势力"],
+            type: "faction",
+          },
+          {
+            description: "把极寒修行和避难秩序绑定在一起的封闭门派。",
+            name: "玄霜门",
+            rationale: "适合作为长期世界观规则和角色成长的制度来源。",
+            tags: ["门派", "秩序"],
+            type: "sect",
+          },
         ],
       }),
     ).toEqual({
@@ -24,6 +38,20 @@ describe("ElementCandidateOutputSchema", () => {
           rationale: "适合作为悬疑玄幻作品中的线索武器。",
           tags: ["旧城", "雨夜", "线索"],
           type: "weapon",
+        },
+        {
+          description: "活跃在安全屋外圈补给线上的半地下互助联盟。",
+          name: "白线同盟",
+          rationale: "能持续制造末世资源交易、背叛和秩序争夺。",
+          tags: ["末世", "补给线", "势力"],
+          type: "faction",
+        },
+        {
+          description: "把极寒修行和避难秩序绑定在一起的封闭门派。",
+          name: "玄霜门",
+          rationale: "适合作为长期世界观规则和角色成长的制度来源。",
+          tags: ["门派", "秩序"],
+          type: "sect",
         },
       ],
     });

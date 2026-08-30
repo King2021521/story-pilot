@@ -1,5 +1,25 @@
 export const INITIAL_PROJECT_SCHEMA_MIGRATION_ID = "0001_project_schema_v1";
 
+export const WORLDBUILDING_PROFILE_SCHEMA_SQL = `
+create table if not exists worldbuilding_profiles (
+  project_id text primary key references projects(id) on delete cascade,
+  world_base text not null default '',
+  geography text not null default '',
+  history text not null default '',
+  power_system text not null default '',
+  social_structure text not null default '',
+  power_order text not null default '',
+  factions text not null default '',
+  economy text not null default '',
+  culture text not null default '',
+  rules text not null default '',
+  special_mechanism text not null default '',
+  core_conflict text not null default '',
+  created_at integer not null,
+  updated_at integer not null
+);
+`;
+
 export const CREATIVE_PATH_SCHEMA_SQL = `
 create table if not exists creative_stages (
   id text primary key,
@@ -23,6 +43,8 @@ create table if not exists project_briefs (
   target_audience text,
   platform_profile text,
   length_profile text,
+  estimated_word_count integer,
+  estimated_chapter_count integer,
   narrative_pov text,
   emotional_rewards_json text not null default '[]',
   initial_idea text,
@@ -39,9 +61,13 @@ create table if not exists story_blueprints (
   premise text not null,
   logline text not null,
   core_promise text not null,
+  main_goal text not null default '',
   main_conflict text not null,
   protagonist_arc text,
   antagonist_force text,
+  stakes text not null default '',
+  story_driver text not null default 'growth_reversal',
+  emotional_axes_json text not null default '[]',
   differentiators_json text not null default '[]',
   risks_json text not null default '[]',
   status text not null default 'draft',
@@ -425,9 +451,18 @@ create table if not exists characters (
   display_name text not null,
   role text not null default 'supporting',
   archetype text,
+  gender_age text,
+  importance text,
+  first_appearance text,
+  narrative_function text,
+  story_task text,
+  relationship_hook text,
   status text not null default 'active',
   profile text,
   appearance text,
+  arc_start text,
+  arc_turn text,
+  arc_end text,
   motivation text,
   created_at integer not null,
   updated_at integer not null
@@ -461,6 +496,8 @@ create table if not exists entity_relations (
   created_at integer not null,
   updated_at integer not null
 );
+
+${WORLDBUILDING_PROFILE_SCHEMA_SQL}
 
 create table if not exists world_rules (
   id text primary key,
@@ -515,7 +552,19 @@ create table if not exists plotlines (
   name text not null,
   type text not null default 'main',
   status text not null default 'planning',
+  narrative_role text not null default 'main_drive',
+  importance text not null default 'major',
   summary text,
+  central_question text,
+  driver text,
+  start_state text,
+  mid_escalation text,
+  payoff_plan text,
+  emotional_promise text,
+  related_character_ids_json text not null default '[]',
+  related_world_rule_ids_json text not null default '[]',
+  related_foreshadowing_ids_json text not null default '[]',
+  related_story_event_ids_json text not null default '[]',
   priority integer not null default 0,
   created_at integer not null,
   updated_at integer not null
@@ -530,6 +579,7 @@ create table if not exists plotline_nodes (
   kind text not null default 'beat',
   status text not null default 'planned',
   description text,
+  chapter_hint text,
   target_chapter_id text references chapters(id) on delete set null,
   created_at integer not null,
   updated_at integer not null
@@ -543,6 +593,7 @@ create table if not exists story_events (
   event_time text,
   position integer not null default 0,
   summary text not null,
+  outcome text,
   causal_importance real not null default 0.5,
   chapter_id text references chapters(id) on delete set null,
   scene_id text references scenes(id) on delete set null,
@@ -576,6 +627,7 @@ create table if not exists foreshadowings (
   project_id text not null references projects(id) on delete cascade,
   title text not null,
   status text not null default 'seeded',
+  importance integer not null default 3,
   seed_text text,
   payoff_text text,
   created_at integer not null,

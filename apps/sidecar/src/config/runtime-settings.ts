@@ -10,6 +10,12 @@ export const STORY_PILOT_PROJECTS_ROOT_ENV = "STORY_PILOT_PROJECTS_ROOT";
 export const STORY_PILOT_GLOBAL_DATABASE_PATH_ENV = "STORY_PILOT_GLOBAL_DATABASE_PATH";
 
 const DEFAULT_SETTINGS_FILE = "setting.json";
+const STORY_PILOT_LLM_API_KEY_ENV = "STORY_PILOT_LLM_API_KEY";
+const STORY_PILOT_LLM_BASE_URL_ENV = "STORY_PILOT_LLM_BASE_URL";
+const STORY_PILOT_LLM_EMBEDDING_MODEL_ENV = "STORY_PILOT_LLM_EMBEDDING_MODEL";
+const STORY_PILOT_LLM_MAX_RETRIES_ENV = "STORY_PILOT_LLM_MAX_RETRIES";
+const STORY_PILOT_LLM_MODEL_ENV = "STORY_PILOT_LLM_MODEL";
+const STORY_PILOT_LLM_TIMEOUT_MS_ENV = "STORY_PILOT_LLM_TIMEOUT_MS";
 
 export interface RuntimeModelSettings {
   readonly provider: "openai-compatible";
@@ -221,13 +227,29 @@ function readLegacyModel(inputRecord: Record<string, unknown>): Record<string, u
 }
 
 function applyDefaultModelProvider(settings: RuntimeSettings, env: NodeJS.ProcessEnv): void {
-  if (!settings.model.apiKey || !settings.model.baseUrl) {
+  const apiKey = settings.model.apiKey.trim();
+  const baseUrl = settings.model.baseUrl.trim();
+  const embeddingModel = settings.model.embeddingModel.trim();
+  const model = settings.model.model.trim() || "gpt-5.5";
+
+  env[STORY_PILOT_LLM_MODEL_ENV] = model;
+  env[STORY_PILOT_LLM_MAX_RETRIES_ENV] = String(settings.model.maxRetries);
+  env[STORY_PILOT_LLM_TIMEOUT_MS_ENV] = String(settings.model.timeoutMs);
+
+  if (embeddingModel) {
+    env[STORY_PILOT_LLM_EMBEDDING_MODEL_ENV] = embeddingModel;
+  } else {
+    delete env[STORY_PILOT_LLM_EMBEDDING_MODEL_ENV];
+  }
+
+  if (!apiKey || !baseUrl) {
+    delete env[STORY_PILOT_LLM_API_KEY_ENV];
+    delete env[STORY_PILOT_LLM_BASE_URL_ENV];
     return;
   }
 
-  env.STORY_PILOT_LLM_API_KEY = settings.model.apiKey;
-  env.STORY_PILOT_LLM_BASE_URL = settings.model.baseUrl;
-  env.STORY_PILOT_LLM_MODEL = settings.model.model;
+  env[STORY_PILOT_LLM_API_KEY_ENV] = apiKey;
+  env[STORY_PILOT_LLM_BASE_URL_ENV] = baseUrl;
 }
 
 function resolvePath(path: string, basePath: string): string {

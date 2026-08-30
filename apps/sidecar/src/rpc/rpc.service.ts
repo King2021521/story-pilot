@@ -27,6 +27,8 @@ import { GraphService } from "../graph/graph.service.js";
 import { HealthService } from "../health/health.service.js";
 import { MemoryService } from "../memory/memory.service.js";
 import { OutlineService } from "../outline/outline.service.js";
+import { ConflictService } from "../plot/conflict.service.js";
+import { EventRelationService } from "../plot/event-relation.service.js";
 import {
   ForeshadowingService,
   type CreateForeshadowingInput,
@@ -38,6 +40,7 @@ import { ProjectService, type CreateProjectInput } from "../project/project.serv
 import { SettingsService } from "../settings/settings.service.js";
 import { WorkflowService, type RunWorkflowInput } from "../workflow/workflow.service.js";
 import { WorkbenchService } from "../workbench/workbench.service.js";
+import { WorldbuildingService } from "../world/worldbuilding.service.js";
 import { WorldRuleService } from "../world/world-rule.service.js";
 
 @Injectable()
@@ -47,9 +50,11 @@ export class RpcService {
     private readonly aiCommandService: AiCommandService,
     private readonly characterService: CharacterService,
     private readonly chapterService: ChapterService,
+    private readonly conflictService: ConflictService,
     private readonly creativePathService: CreativePathService,
     private readonly diagnosticsService: DiagnosticsService,
     private readonly elementCandidateService: ElementCandidateService,
+    private readonly eventRelationService: EventRelationService,
     private readonly foreshadowingService: ForeshadowingService,
     private readonly graphService: GraphService,
     private readonly healthService: HealthService,
@@ -62,6 +67,7 @@ export class RpcService {
     private readonly storyEventService: StoryEventService,
     private readonly workflowService: WorkflowService,
     private readonly workbenchService: WorkbenchService,
+    private readonly worldbuildingService: WorldbuildingService,
     private readonly worldRuleService: WorldRuleService,
   ) {}
 
@@ -224,6 +230,12 @@ export class RpcService {
           genre: parsed.genre,
           projectId: parsed.projectId,
           subgenres: parsed.subgenres,
+          ...(parsed.estimatedChapterCount === undefined
+            ? {}
+            : { estimatedChapterCount: parsed.estimatedChapterCount }),
+          ...(parsed.estimatedWordCount === undefined
+            ? {}
+            : { estimatedWordCount: parsed.estimatedWordCount }),
           ...(parsed.initialIdea === undefined ? {} : { initialIdea: parsed.initialIdea }),
           ...(parsed.lengthProfile === undefined ? {} : { lengthProfile: parsed.lengthProfile }),
           ...(parsed.narrativePov === undefined ? {} : { narrativePov: parsed.narrativePov }),
@@ -241,6 +253,14 @@ export class RpcService {
         const parsed = payload as CommandPayload<"blueprint.generate">;
         return this.creativePathService.generateBlueprint(parsed);
       }
+      case "blueprint.saveForm": {
+        const parsed = payload as CommandPayload<"blueprint.saveForm">;
+        return this.creativePathService.saveBlueprintForm(parsed);
+      }
+      case "blueprint.completeForm": {
+        const parsed = payload as CommandPayload<"blueprint.completeForm">;
+        return this.creativePathService.completeBlueprintForm(parsed);
+      }
       case "blueprint.apply": {
         const parsed = payload as CommandPayload<"blueprint.apply">;
         return this.creativePathService.applyBlueprint(parsed);
@@ -248,6 +268,24 @@ export class RpcService {
       case "outline.generate": {
         const parsed = payload as CommandPayload<"outline.generate">;
         return this.outlineService.generate(parsed);
+      }
+      case "outline.saveDraft": {
+        return this.outlineService.saveOutlineDraft(payload as CommandPayload<"outline.saveDraft">);
+      }
+      case "outline.saveVolumeOutline": {
+        return this.outlineService.saveVolumeOutline(
+          payload as CommandPayload<"outline.saveVolumeOutline">,
+        );
+      }
+      case "outline.saveChapterOutline": {
+        return this.outlineService.saveChapterOutline(
+          payload as CommandPayload<"outline.saveChapterOutline">,
+        );
+      }
+      case "outline.saveSceneOutline": {
+        return this.outlineService.saveSceneOutline(
+          payload as CommandPayload<"outline.saveSceneOutline">,
+        );
       }
       case "outline.approveChapterOutline": {
         const parsed = payload as CommandPayload<"outline.approveChapterOutline">;
@@ -265,6 +303,29 @@ export class RpcService {
       case "plot.applyBookPlan": {
         return this.longformPlanService.applyBookPlan(
           payload as CommandPayload<"plot.applyBookPlan">,
+        );
+      }
+      case "plot.saveBookPlanDraft": {
+        return this.longformPlanService.saveBookPlanDraft(
+          payload as CommandPayload<"plot.saveBookPlanDraft">,
+        );
+      }
+      case "plot.saveVolumePlan": {
+        return this.longformPlanService.saveVolumePlan(
+          payload as CommandPayload<"plot.saveVolumePlan">,
+        );
+      }
+      case "plot.saveArcPlan": {
+        return this.longformPlanService.saveArcPlan(payload as CommandPayload<"plot.saveArcPlan">);
+      }
+      case "plot.saveChapterPlan": {
+        return this.longformPlanService.saveChapterPlan(
+          payload as CommandPayload<"plot.saveChapterPlan">,
+        );
+      }
+      case "plot.saveScenePlan": {
+        return this.longformPlanService.saveScenePlan(
+          payload as CommandPayload<"plot.saveScenePlan">,
         );
       }
       case "plot.generateRollingOutline": {
@@ -519,12 +580,28 @@ export class RpcService {
           name: parsed.name,
           projectId: parsed.projectId,
           role: parsed.role,
+          ...(parsed.appearance === undefined ? {} : { appearance: parsed.appearance }),
+          ...(parsed.arcEnd === undefined ? {} : { arcEnd: parsed.arcEnd }),
+          ...(parsed.arcStart === undefined ? {} : { arcStart: parsed.arcStart }),
+          ...(parsed.arcTurn === undefined ? {} : { arcTurn: parsed.arcTurn }),
           ...(parsed.archetype === undefined ? {} : { archetype: parsed.archetype }),
           ...(parsed.biography === undefined ? {} : { biography: parsed.biography }),
+          ...(parsed.firstAppearance === undefined
+            ? {}
+            : { firstAppearance: parsed.firstAppearance }),
           ...(parsed.flaw === undefined ? {} : { flaw: parsed.flaw }),
+          ...(parsed.genderAge === undefined ? {} : { genderAge: parsed.genderAge }),
           ...(parsed.goal === undefined ? {} : { goal: parsed.goal }),
+          ...(parsed.importance === undefined ? {} : { importance: parsed.importance }),
           ...(parsed.need === undefined ? {} : { need: parsed.need }),
+          ...(parsed.narrativeFunction === undefined
+            ? {}
+            : { narrativeFunction: parsed.narrativeFunction }),
+          ...(parsed.relationshipHook === undefined
+            ? {}
+            : { relationshipHook: parsed.relationshipHook }),
           ...(parsed.secret === undefined ? {} : { secret: parsed.secret }),
+          ...(parsed.storyTask === undefined ? {} : { storyTask: parsed.storyTask }),
           ...(parsed.voiceProfile === undefined ? {} : { voiceProfile: parsed.voiceProfile }),
         };
         return this.characterService.createCharacter(input);
@@ -535,6 +612,37 @@ export class RpcService {
       }
       case "character.update": {
         return this.characterService.updateCharacter(payload as CommandPayload<"character.update">);
+      }
+      case "entityRelation.list": {
+        const parsed = payload as CommandPayload<"entityRelation.list">;
+        return {
+          items: await this.characterService.listRelations({
+            projectId: parsed.projectId,
+            ...(parsed.entityId === undefined ? {} : { entityId: parsed.entityId }),
+            ...(parsed.entityType === undefined ? {} : { entityType: parsed.entityType }),
+            ...(parsed.status === undefined ? {} : { status: parsed.status }),
+          }),
+        };
+      }
+      case "entityRelation.create": {
+        const parsed = payload as CommandPayload<"entityRelation.create">;
+        return this.characterService.createRelation({
+          polarity: parsed.polarity,
+          projectId: parsed.projectId,
+          relationType: parsed.relationType,
+          sourceEntityId: parsed.sourceEntityId,
+          sourceEntityType: parsed.sourceEntityType,
+          status: parsed.status,
+          strength: parsed.strength,
+          targetEntityId: parsed.targetEntityId,
+          targetEntityType: parsed.targetEntityType,
+          ...(parsed.description === undefined ? {} : { description: parsed.description }),
+        });
+      }
+      case "entityRelation.update": {
+        return this.characterService.updateRelation(
+          payload as CommandPayload<"entityRelation.update">,
+        );
       }
       case "character.generateNames": {
         const parsed = payload as CommandPayload<"character.generateNames">;
@@ -564,12 +672,39 @@ export class RpcService {
       case "worldRule.update": {
         return this.worldRuleService.updateWorldRule(payload as CommandPayload<"worldRule.update">);
       }
+      case "worldbuilding.saveFields": {
+        return this.worldbuildingService.saveFields(
+          payload as CommandPayload<"worldbuilding.saveFields">,
+        );
+      }
+      case "worldbuilding.completeFields": {
+        return this.worldbuildingService.completeFields(
+          payload as CommandPayload<"worldbuilding.completeFields">,
+        );
+      }
       case "plotline.create": {
         const parsed = payload as CommandPayload<"plotline.create">;
         const input: CreatePlotlineInput = {
+          ...(parsed.centralQuestion === undefined
+            ? {}
+            : { centralQuestion: parsed.centralQuestion }),
+          ...(parsed.driver === undefined ? {} : { driver: parsed.driver }),
+          ...(parsed.emotionalPromise === undefined
+            ? {}
+            : { emotionalPromise: parsed.emotionalPromise }),
+          importance: parsed.importance,
           kind: parsed.kind,
+          ...(parsed.midEscalation === undefined ? {} : { midEscalation: parsed.midEscalation }),
+          narrativeRole: parsed.narrativeRole,
+          ...(parsed.payoffPlan === undefined ? {} : { payoffPlan: parsed.payoffPlan }),
           priority: parsed.priority,
           projectId: parsed.projectId,
+          relatedCharacterIds: parsed.relatedCharacterIds,
+          relatedForeshadowingIds: parsed.relatedForeshadowingIds,
+          relatedStoryEventIds: parsed.relatedStoryEventIds,
+          relatedWorldRuleIds: parsed.relatedWorldRuleIds,
+          ...(parsed.startState === undefined ? {} : { startState: parsed.startState }),
+          status: parsed.status,
           title: parsed.title,
           ...(parsed.summary === undefined ? {} : { summary: parsed.summary }),
         };
@@ -578,6 +713,25 @@ export class RpcService {
       case "plotline.list": {
         const parsed = payload as CommandPayload<"plotline.list">;
         return { items: await this.plotlineService.listPlotlines(parsed.projectId) };
+      }
+      case "plotline.update": {
+        return this.plotlineService.updatePlotline(payload as CommandPayload<"plotline.update">);
+      }
+      case "plotline.createNode": {
+        const parsed = payload as CommandPayload<"plotline.createNode">;
+        return this.plotlineService.createNode({
+          kind: parsed.kind,
+          plotlineId: parsed.plotlineId,
+          projectId: parsed.projectId,
+          status: parsed.status,
+          title: parsed.title,
+          ...(parsed.chapterHint === undefined ? {} : { chapterHint: parsed.chapterHint }),
+          ...(parsed.description === undefined ? {} : { description: parsed.description }),
+          ...(parsed.position === undefined ? {} : { position: parsed.position }),
+          ...(parsed.targetChapterId === undefined
+            ? {}
+            : { targetChapterId: parsed.targetChapterId }),
+        });
       }
       case "plotline.updateNode": {
         return this.plotlineService.updateNode(payload as CommandPayload<"plotline.updateNode">);
@@ -589,22 +743,61 @@ export class RpcService {
           eventType: parsed.eventType,
           participants: parsed.participants,
           projectId: parsed.projectId,
+          status: parsed.status,
           title: parsed.title,
           ...(parsed.chapterId === undefined ? {} : { chapterId: parsed.chapterId }),
+          ...(parsed.outcome === undefined ? {} : { outcome: parsed.outcome }),
           ...(parsed.sceneId === undefined ? {} : { sceneId: parsed.sceneId }),
           ...(parsed.storyTime === undefined ? {} : { storyTime: parsed.storyTime }),
         };
         return this.storyEventService.createStoryEvent(input);
       }
+      case "storyEvent.update": {
+        return this.storyEventService.updateStoryEvent(
+          payload as CommandPayload<"storyEvent.update">,
+        );
+      }
       case "storyEvent.list": {
         const parsed = payload as CommandPayload<"storyEvent.list">;
         return { items: await this.storyEventService.listStoryEvents(parsed.projectId) };
+      }
+      case "eventRelation.list": {
+        return {
+          items: await this.eventRelationService.listEventRelations(
+            payload as CommandPayload<"eventRelation.list">,
+          ),
+        };
+      }
+      case "eventRelation.create": {
+        return this.eventRelationService.createEventRelation(
+          payload as CommandPayload<"eventRelation.create">,
+        );
+      }
+      case "eventRelation.update": {
+        return this.eventRelationService.updateEventRelation(
+          payload as CommandPayload<"eventRelation.update">,
+        );
+      }
+      case "conflict.list": {
+        return {
+          items: await this.conflictService.listConflicts(
+            payload as CommandPayload<"conflict.list">,
+          ),
+        };
+      }
+      case "conflict.create": {
+        return this.conflictService.createConflict(payload as CommandPayload<"conflict.create">);
+      }
+      case "conflict.update": {
+        return this.conflictService.updateConflict(payload as CommandPayload<"conflict.update">);
       }
       case "foreshadowing.create": {
         const parsed = payload as CommandPayload<"foreshadowing.create">;
         const input: CreateForeshadowingInput = {
           description: parsed.description,
+          importance: parsed.importance,
           projectId: parsed.projectId,
+          status: parsed.status,
           title: parsed.title,
           ...(parsed.payoffEventId === undefined ? {} : { payoffEventId: parsed.payoffEventId }),
           ...(parsed.payoffExpectation === undefined
@@ -613,6 +806,11 @@ export class RpcService {
           ...(parsed.seedEventId === undefined ? {} : { seedEventId: parsed.seedEventId }),
         };
         return this.foreshadowingService.createForeshadowing(input);
+      }
+      case "foreshadowing.update": {
+        return this.foreshadowingService.updateForeshadowing(
+          payload as CommandPayload<"foreshadowing.update">,
+        );
       }
       case "foreshadowing.list": {
         const parsed = payload as CommandPayload<"foreshadowing.list">;

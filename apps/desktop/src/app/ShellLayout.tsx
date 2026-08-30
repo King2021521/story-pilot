@@ -1,20 +1,29 @@
 import {
-  AppstoreOutlined,
   BarsOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
   FileTextOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   RobotOutlined,
+  ThunderboltOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import type { CommandPayload } from "@story-pilot/contracts";
-import { GENRE_PRESETS, STYLE_PRESETS } from "@story-pilot/presets";
+import {
+  COUNT_PRESETS,
+  ELEMENT_TYPE_PRESETS,
+  GENRE_PRESETS,
+  STYLE_PRESETS,
+} from "@story-pilot/presets";
 import {
   App as AntApp,
   Button,
+  Checkbox,
   Descriptions,
-  Drawer,
+  Empty,
   Form,
   Input,
   Layout,
@@ -24,12 +33,12 @@ import {
   Tabs,
   Tag,
   Timeline,
+  Tooltip,
   Typography,
 } from "antd";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ArtifactReviewPanel, type ArtifactReviewItem } from "../features/ai/ArtifactReviewPanel";
-import { AiTaskDrawer } from "../features/ai/AiTaskDrawer";
 import type { ChapterVersionItem } from "../features/chapter/ChapterVersionDrawer";
 import type {
   CompletableCreativeStageKey,
@@ -38,6 +47,7 @@ import type {
 } from "../features/creative-path/CreativePathWorkbench";
 import type {
   AcceptElementCandidatesValues,
+  CreateForeshadowingValues,
   ElementCandidateItem,
   GenerateElementCandidatesResult,
   GenerateElementCandidatesValues,
@@ -51,15 +61,49 @@ import {
   type RuntimeSettingsView,
 } from "../features/settings/SettingsDrawer";
 import {
+  getWorkspaceModuleTitle,
+  type WorkspaceModuleKey,
+} from "../features/workbench/workspaceModules";
+import {
   WorkbenchHome,
+  type CompleteCoreStoryFieldsResult,
+  type CoreStoryFields,
+  type CreateStoryEventValues,
+  type SaveArcPlanValues,
+  type SaveBookPlanDraftValues,
+  type SaveCoreStoryFieldsResult,
+  type SaveVolumePlanValues,
+  type UpdateCharacterValues,
+  type UpdateForeshadowingValues,
+  type UpdateStoryEventValues,
   type WorkbenchBoard,
   type WorkbenchChapter,
   type WorkbenchProject,
+  type WorldbuildingFields,
 } from "../features/workbench/WorkbenchHome";
+import { formatUserError } from "../shared/errors/error-message";
 import { useStoryPilotApi } from "../shared/rpc/useStoryPilotApi";
 
 const { Content, Sider } = Layout;
 const { Text, Title } = Typography;
+
+type InspectorTabKey = "status" | "toolbox" | "artifacts" | "timeline" | "graph";
+type ShellCreativePath = NonNullable<WorkbenchBoard["creativePath"]>;
+type ShellStage = ShellCreativePath["stages"][number];
+
+const SHELL_WORLD_DIMENSION_COUNT = 12;
+
+const MODULE_STAGE_MAP: Partial<Record<WorkspaceModuleKey, CreativeStageKey>> = {
+  basic: "brief",
+  "book-outline": "outline",
+  characters: "characters",
+  "chapter-planning": "chapters",
+  manuscript: "chapters",
+  "plot-nodes": "outline",
+  "story-core": "blueprint",
+  storylines: "plot_arcs",
+  worldbuilding: "worldbuilding",
+};
 
 interface CreateProjectFormValues {
   readonly genre?: string;
@@ -68,13 +112,21 @@ interface CreateProjectFormValues {
   readonly title: string;
 }
 
+interface InspectorToolboxFormValues {
+  readonly constraints?: string[];
+  readonly count: GenerateElementCandidatesValues["count"];
+  readonly description?: string;
+  readonly elementType: GenerateElementCandidatesValues["elementType"];
+  readonly style?: string;
+  readonly worldRuleIds?: string[];
+}
+
 export function ShellLayout() {
   const { message } = AntApp.useApp();
   const storyPilotApi = useStoryPilotApi();
   const [activeProject, setActiveProject] = useState<WorkbenchProject | undefined>();
+  const [activeModuleKey, setActiveModuleKey] = useState<WorkspaceModuleKey>("dashboard");
   const [board, setBoard] = useState<WorkbenchBoard | undefined>();
-  const [boardOpen, setBoardOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [graphPreview, setGraphPreview] = useState<GraphPreviewData | undefined>();
@@ -89,7 +141,15 @@ export function ShellLayout() {
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettingsView | undefined>();
   const [diagnosticsHealth, setDiagnosticsHealth] = useState<DiagnosticsHealthView | undefined>();
   const [loadingSettings, setLoadingSettings] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [inspectorTabKey, setInspectorTabKey] = useState<InspectorTabKey>("status");
   const [createProjectForm] = Form.useForm<CreateProjectFormValues>();
+
+  const openInspectorTab = useCallback((tabKey: InspectorTabKey) => {
+    setInspectorCollapsed(false);
+    setInspectorTabKey(tabKey);
+  }, []);
 
   const selectChapter = useCallback((chapterId: string) => {
     setSelectedChapterId(chapterId);
@@ -140,6 +200,7 @@ export function ShellLayout() {
       const project = (await storyPilotApi.openProject({ projectId })) as WorkbenchProject;
       setActiveProject(project);
       setProjects((currentProjects) => upsertProject(currentProjects, project));
+      setActiveModuleKey("dashboard");
       await refreshBoard(project.id);
     },
     [refreshBoard, storyPilotApi],
@@ -178,6 +239,7 @@ export function ShellLayout() {
         setActiveProject(project);
         setBoard(nextBoard);
         setProjects((currentProjects) => upsertProject(currentProjects, project));
+        setActiveModuleKey("dashboard");
         setSelectedChapterId(nextBoard.chapters[0]?.id);
         setChapterVersions([]);
       } catch (error) {
@@ -206,6 +268,7 @@ export function ShellLayout() {
           createProjectPayload(values),
         )) as WorkbenchProject;
         setProjects((currentProjects) => upsertProject(currentProjects, project));
+        setActiveModuleKey("dashboard");
         await refreshBoard(project.id);
         setCreateProjectOpen(false);
         createProjectForm.resetFields();
@@ -328,14 +391,14 @@ export function ShellLayout() {
           ...input,
           projectId: activeProject.id,
         });
-        setAiOpen(true);
+        openInspectorTab("artifacts");
         await refreshBoard(activeProject.id);
         message.success("AI 草稿已进入产物区");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
     },
-    [activeProject, message, refreshBoard, storyPilotApi],
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
   );
 
   const applyArtifact = useCallback(
@@ -411,6 +474,26 @@ export function ShellLayout() {
     }
   }, [activeProject, message, selectedChapterId, storyPilotApi]);
 
+  const selectInspectorTab = useCallback(
+    (tabKey: InspectorTabKey) => {
+      setInspectorTabKey(tabKey);
+      if (tabKey === "graph") {
+        void loadGraphPreview();
+      }
+    },
+    [loadGraphPreview],
+  );
+
+  const openInspectorFromRail = useCallback(
+    (tabKey: InspectorTabKey) => {
+      openInspectorTab(tabKey);
+      if (tabKey === "graph") {
+        void loadGraphPreview();
+      }
+    },
+    [loadGraphPreview, openInspectorTab],
+  );
+
   const confirmMemory = useCallback(
     async (input: MemoryCandidateDecisionInput) => {
       if (!activeProject) {
@@ -474,6 +557,27 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const updateCharacter = useCallback(
+    async (input: UpdateCharacterValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updateCharacter({
+          characterId: input.characterId,
+          patch: input.patch,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("人物已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const createWorldRule = useCallback(
     async (input: Omit<CommandPayload<"worldRule.create">, "projectId">) => {
       if (!activeProject) {
@@ -492,6 +596,49 @@ export function ShellLayout() {
       }
     },
     [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const saveWorldbuildingFields = useCallback(
+    async (input: Omit<CommandPayload<"worldbuilding.saveFields">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveWorldbuildingFields({
+          fields: input.fields,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("世界观已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const completeWorldbuildingFields = useCallback(
+    async (
+      input: Omit<CommandPayload<"worldbuilding.completeFields">, "projectId">,
+    ): Promise<{ readonly fields: CommandPayload<"worldbuilding.completeFields">["fields"] }> => {
+      if (!activeProject) {
+        return { fields: input.fields };
+      }
+
+      try {
+        const result = (await storyPilotApi.completeWorldbuildingFields({
+          fields: input.fields,
+          projectId: activeProject.id,
+        })) as { readonly fields: CommandPayload<"worldbuilding.completeFields">["fields"] };
+        message.success("AI 已补全世界观");
+        return result;
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        return { fields: input.fields };
+      }
+    },
+    [activeProject, message, storyPilotApi],
   );
 
   const createPlotline = useCallback(
@@ -514,19 +661,171 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const updatePlotline = useCallback(
+    async (input: Omit<CommandPayload<"plotline.update">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updatePlotline({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const createPlotlineNode = useCallback(
+    async (input: Omit<CommandPayload<"plotline.createNode">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createPlotlineNode({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线节点已添加");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const updatePlotlineNode = useCallback(
+    async (input: Omit<CommandPayload<"plotline.updateNode">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updatePlotlineNode({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线节点已更新");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const createForeshadowing = useCallback(
-    async (input: Omit<CommandPayload<"foreshadowing.create">, "projectId">) => {
+    async (input: CreateForeshadowingValues) => {
       if (!activeProject) {
         return;
       }
 
       try {
         await storyPilotApi.createForeshadowing({
+          description: input.description,
+          importance: input.importance,
+          ...optionalText("payoffExpectation", input.payoffExpectation),
+          ...optionalText("payoffEventId", input.payoffEventId),
+          projectId: activeProject.id,
+          ...optionalText("seedEventId", input.seedEventId),
+          status: input.status ?? "seeded",
+          title: input.title,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("伏笔已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const createStoryEvent = useCallback(
+    async (input: CreateStoryEventValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.createStoryEvent({
+          ...optionalText("chapterId", input.chapterId),
+          description: input.description,
+          eventType: input.eventType,
+          participants: [...(input.participants ?? [])],
+          projectId: activeProject.id,
+          status: input.status ?? "draft",
+          title: input.title,
+          ...optionalText("storyTime", input.storyTime),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("剧情节点已创建");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const updateStoryEvent = useCallback(
+    async (input: UpdateStoryEventValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updateStoryEvent({
           ...input,
           projectId: activeProject.id,
         });
         await refreshBoard(activeProject.id);
-        message.success("伏笔已创建");
+        message.success("剧情节点已更新");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const updateForeshadowing = useCallback(
+    async (input: UpdateForeshadowingValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.updateForeshadowing({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("伏笔已更新");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const planForeshadowing = useCallback(
+    async (input: Omit<CommandPayload<"foreshadowing.plan">, "projectId">) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.planForeshadowing({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("伏笔回收规划已提交");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -540,10 +839,12 @@ export function ShellLayout() {
         return { items: [] };
       }
 
+      const description = input.description?.trim();
       try {
         return (await storyPilotApi.generateElementCandidates({
           constraints: [...input.constraints],
           count: input.count,
+          ...(description ? { description } : {}),
           elementType: input.elementType,
           genre: input.genre,
           projectId: activeProject.id,
@@ -602,6 +903,8 @@ export function ShellLayout() {
           genre: input.genre,
           projectId: activeProject.id,
           subgenres: [...input.subgenres],
+          ...optionalNumber("estimatedChapterCount", input.estimatedChapterCount),
+          ...optionalNumber("estimatedWordCount", input.estimatedWordCount),
           ...optionalText("targetAudience", input.targetAudience),
           ...optionalText("platformProfile", input.platformProfile),
           ...optionalText("lengthProfile", input.lengthProfile),
@@ -766,6 +1069,49 @@ export function ShellLayout() {
     }
   }, [activeProject, message, refreshBoard, storyPilotApi]);
 
+  const saveCoreStoryFields = useCallback(
+    async (input: { readonly fields: CoreStoryFields }): Promise<SaveCoreStoryFieldsResult> => {
+      if (!activeProject) {
+        throw new Error("未打开作品");
+      }
+
+      try {
+        const result = (await storyPilotApi.saveBlueprintForm({
+          fields: input.fields,
+          projectId: activeProject.id,
+        })) as SaveCoreStoryFieldsResult;
+        await refreshBoard(activeProject.id);
+        message.success("核心故事草稿已保存");
+        return result;
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        throw error;
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const completeCoreStoryFields = useCallback(
+    async (input: { readonly fields: CoreStoryFields }): Promise<CompleteCoreStoryFieldsResult> => {
+      if (!activeProject) {
+        return { fields: input.fields };
+      }
+
+      try {
+        const result = (await storyPilotApi.completeBlueprintForm({
+          fields: input.fields,
+          projectId: activeProject.id,
+        })) as CompleteCoreStoryFieldsResult;
+        message.success("AI 已补全核心故事");
+        return result;
+      } catch (error) {
+        message.error(getErrorMessage(error));
+        return { fields: input.fields };
+      }
+    },
+    [activeProject, message, storyPilotApi],
+  );
+
   const applyBlueprint = useCallback(
     async (input: { readonly blueprintId: string }) => {
       if (!activeProject) {
@@ -778,7 +1124,7 @@ export function ShellLayout() {
           projectId: activeProject.id,
         });
         await refreshBoard(activeProject.id);
-        message.success("创作蓝图已应用");
+        message.success("核心故事已确认");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -823,9 +1169,93 @@ export function ShellLayout() {
           targetWordCount: input.targetWordCount,
           volumeCount: input.volumeCount,
         });
-        setAiOpen(true);
+        openInspectorTab("artifacts");
         await refreshBoard(activeProject.id);
         message.success("全书规划已生成");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
+  );
+
+  const saveBookPlanDraft = useCallback(
+    async (input: SaveBookPlanDraftValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveBookPlanDraft({
+          corePromise: input.corePromise.trim(),
+          endingDirection: nullableText(input.endingDirection),
+          mainPlotlineId: nullableText(input.mainPlotlineId),
+          projectId: activeProject.id,
+          status: input.status,
+          targetWordCount: input.targetWordCount,
+          title: input.title.trim(),
+          ...optionalText("bookPlanId", input.bookPlanId),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("全书规划已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const saveVolumePlan = useCallback(
+    async (input: SaveVolumePlanValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveVolumePlan({
+          bookPlanId: input.bookPlanId,
+          climax: nullableText(input.climax),
+          majorConflict: input.majorConflict.trim(),
+          projectId: activeProject.id,
+          purpose: input.purpose.trim(),
+          status: input.status,
+          targetWordCount: input.targetWordCount,
+          title: input.title.trim(),
+          volumeIndex: input.volumeIndex,
+          ...optionalText("volumePlanId", input.volumePlanId),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("卷规划已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const saveArcPlan = useCallback(
+    async (input: SaveArcPlanValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.saveArcPlan({
+          arcIndex: input.arcIndex,
+          characterArcId: nullableText(input.characterArcId),
+          endChapterIndex: nullableNumber(input.endChapterIndex),
+          escalation: input.escalation,
+          plotlineId: nullableText(input.plotlineId),
+          projectId: activeProject.id,
+          purpose: input.purpose.trim(),
+          startChapterIndex: nullableNumber(input.startChapterIndex),
+          status: input.status,
+          title: input.title.trim(),
+          volumePlanId: input.volumePlanId,
+          ...optionalText("arcPlanId", input.arcPlanId),
+        });
+        await refreshBoard(activeProject.id);
+        message.success("阶段弧线已保存");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -852,14 +1282,14 @@ export function ShellLayout() {
           ...optionalText("arcPlanId", input.arcPlanId),
           ...optionalText("volumePlanId", input.volumePlanId),
         });
-        setAiOpen(true);
+        openInspectorTab("artifacts");
         await refreshBoard(activeProject.id);
         message.success("滚动章纲已生成");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
     },
-    [activeProject, message, refreshBoard, storyPilotApi],
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
   );
 
   const approveChapterOutline = useCallback(
@@ -916,14 +1346,14 @@ export function ShellLayout() {
           chapterOutlineId: input.chapterOutlineId,
           projectId: activeProject.id,
         });
-        setAiOpen(true);
+        openInspectorTab("artifacts");
         await refreshBoard(activeProject.id);
         message.success("章纲草稿已进入产物区");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
     },
-    [activeProject, message, refreshBoard, storyPilotApi],
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
   );
 
   const generateDraftFromPlan = useCallback(
@@ -937,14 +1367,14 @@ export function ShellLayout() {
           chapterPlanId: input.chapterPlanId,
           projectId: activeProject.id,
         });
-        setAiOpen(true);
+        openInspectorTab("artifacts");
         await refreshBoard(activeProject.id);
         message.success("结构章纲草稿已进入产物区");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
     },
-    [activeProject, message, refreshBoard, storyPilotApi],
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
   );
 
   const saveModelSettings = useCallback(
@@ -980,6 +1410,7 @@ export function ShellLayout() {
           readonly errorCode?: string;
           readonly missingFields?: readonly string[];
           readonly ok: boolean;
+          readonly statusCode?: number;
         };
         if (result.ok) {
           message.success("模型校验通过");
@@ -987,7 +1418,13 @@ export function ShellLayout() {
           message.warning(
             result.missingFields?.length
               ? `模型配置缺失：${result.missingFields.join(", ")}`
-              : (result.errorCode ?? "模型校验失败"),
+              : getErrorMessage(
+                  new Error(
+                    result.statusCode
+                      ? `OPENAI_COMPATIBLE_HTTP_ERROR: ${result.statusCode}`
+                      : (result.errorCode ?? "模型校验失败"),
+                  ),
+                ),
           );
         }
         await loadRuntimeSettings();
@@ -1012,182 +1449,152 @@ export function ShellLayout() {
 
   return (
     <Layout className="story-shell">
-      <Sider aria-label="作品管理区" className="story-shell__sidebar" width={292}>
-        <ProjectSidebar
-          activeProjectId={activeProject?.id}
-          chapters={board?.chapters ?? []}
-          onCreateProject={() => setCreateProjectOpen(true)}
-          onOpenProject={(projectId) => {
-            void openProject(projectId).catch((error: unknown) => {
-              message.error(getErrorMessage(error));
-            });
-          }}
-          onOpenSettings={openSettings}
-          onSelectChapter={selectChapter}
-          projects={projects}
-          selectedChapterId={selectedChapterId}
-        />
-      </Sider>
-
-      <Content aria-label="工作台" className="story-shell__content">
-        <header className="story-toolbar">
-          <div>
-            <Text className="story-eyebrow">工作台</Text>
-            <Title level={3}>{activeProject?.title ?? "Story Pilot"}</Title>
-          </div>
-          <Space wrap>
+      <header aria-label="应用标题栏" className="story-app-titlebar">
+        <div className="story-app-titlebar__left">
+          <Tooltip title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"}>
             <Button
-              aria-label="项目看板"
-              icon={<AppstoreOutlined />}
-              onClick={() => setBoardOpen(true)}
-            >
-              项目看板
-            </Button>
+              aria-label={sidebarCollapsed ? "展开侧栏" : "收起侧栏"}
+              className="story-app-titlebar__control"
+              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              type="text"
+            />
+          </Tooltip>
+          <span className="story-app-titlebar__divider" />
+          <span className="story-app-titlebar__title">
+            <FileTextOutlined />
+            <span>{activeProject?.title ?? "Story Pilot"}</span>
+          </span>
+        </div>
+        <div className="story-app-titlebar__right">
+          <Text className="story-app-titlebar__module">
+            {getWorkspaceModuleTitle(activeModuleKey)}
+          </Text>
+          <Tooltip title={inspectorCollapsed ? "展开检查器" : "收起检查器"}>
             <Button
-              aria-label="AI 任务"
-              icon={<RobotOutlined />}
-              onClick={() => setAiOpen(true)}
-              type="primary"
-            >
-              AI 任务
-            </Button>
-          </Space>
-        </header>
+              aria-label={inspectorCollapsed ? "展开检查器" : "收起检查器"}
+              className="story-app-titlebar__control"
+              icon={inspectorCollapsed ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+              onClick={() => setInspectorCollapsed(!inspectorCollapsed)}
+              type="text"
+            />
+          </Tooltip>
+        </div>
+      </header>
 
-        <WorkbenchHome
-          board={board}
-          chapterVersions={chapterVersions}
-          loadingChapterVersions={loadingChapterVersions}
-          loading={loadingWorkbench}
-          onApplyBlueprint={applyBlueprint}
-          onApplyChapterOutline={applyChapterOutline}
-          onApproveChapterOutline={approveChapterOutline}
-          onAdvanceStage={advanceStage}
-          onCompleteStage={completeStage}
-          onConfirmBrief={confirmBrief}
-          onConfirmMemory={confirmMemory}
-          onAcceptElementCandidates={acceptElementCandidates}
-          onCreateChapter={createChapter}
-          onCreateCharacter={createCharacter}
-          onCreateForeshadowing={createForeshadowing}
-          onCreatePlotline={createPlotline}
-          onCreateWorldRule={createWorldRule}
-          onEvaluateStageGate={evaluateStageGate}
-          onGenerateBlueprint={generateBlueprint}
-          onGenerateBookPlan={generateBookPlan}
-          onGenerateDraft={generateDraft}
-          onGenerateDraftFromOutline={generateDraftFromOutline}
-          onGenerateDraftFromPlan={generateDraftFromPlan}
-          onGenerateElementCandidates={generateElementCandidates}
-          onGenerateOutline={generateOutline}
-          onGenerateRollingOutline={generateRollingOutline}
-          onLoadChapterVersions={loadChapterVersions}
-          onRejectMemory={rejectMemory}
-          onReopenStage={reopenStage}
-          onRestoreChapterVersion={restoreChapterVersion}
-          onSaveChapter={saveChapter}
-          onSaveBrief={saveBrief}
-          onSelectChapter={selectChapter}
-          onSkipStage={skipStage}
-          savingChapter={savingChapter}
-          selectedChapterId={selectedChapterId}
-        />
-      </Content>
+      <Layout className="story-shell__body">
+        <Sider
+          aria-label="作品管理区"
+          className="story-shell__sidebar"
+          collapsed={sidebarCollapsed}
+          collapsedWidth={76}
+          trigger={null}
+          width={292}
+        >
+          <ProjectSidebar
+            activeModuleKey={activeModuleKey}
+            activeProjectId={activeProject?.id}
+            chapters={board?.chapters ?? []}
+            collapsed={sidebarCollapsed}
+            onCreateProject={() => setCreateProjectOpen(true)}
+            onOpenProject={(projectId) => {
+              void openProject(projectId).catch((error: unknown) => {
+                message.error(getErrorMessage(error));
+              });
+            }}
+            onOpenSettings={openSettings}
+            onSelectChapter={selectChapter}
+            onSelectModule={setActiveModuleKey}
+            onToggleCollapsed={setSidebarCollapsed}
+            projects={projects}
+            selectedChapterId={selectedChapterId}
+            showCollapseControl={false}
+          />
+        </Sider>
 
-      <Drawer
-        onClose={() => setBoardOpen(false)}
-        open={boardOpen}
-        placement="right"
-        size="default"
-        title="项目看板"
-      >
-        <Tabs
-          onChange={(key) => {
-            if (key === "graph") {
-              void loadGraphPreview();
-            }
-          }}
-          items={[
-            {
-              children: (
-                <Descriptions column={1} size="small">
-                  <Descriptions.Item label="章节状态">
-                    <Tag color={activeProject ? "processing" : "default"}>
-                      {activeProject ? `${board?.chapters.length ?? 0} 章` : "未打开作品"}
-                    </Tag>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="待确认记忆">
-                    {board?.memoryCandidates.length ?? 0} 条
-                  </Descriptions.Item>
-                  <Descriptions.Item label="待审产物">
-                    {board?.artifacts.length ?? 0} 条
-                  </Descriptions.Item>
-                  <Descriptions.Item label="AI 任务">
-                    {board?.workOrders.length ?? 0} 个
-                  </Descriptions.Item>
-                </Descriptions>
-              ),
-              key: "overview",
-              label: (
-                <span>
-                  <BarsOutlined /> 概览
-                </span>
-              ),
-            },
-            {
-              children: (
-                <ArtifactReviewPanel
-                  artifacts={board?.artifacts ?? []}
-                  onApply={applyArtifact}
-                  onReject={rejectArtifact}
-                />
-              ),
-              key: "artifacts",
-              label: (
-                <span>
-                  <RobotOutlined /> AI 产物
-                </span>
-              ),
-            },
-            {
-              children: (
-                <Timeline
-                  items={(board?.chapters ?? []).map((chapter, index) => ({
-                    children: chapter.title,
-                    dot:
-                      chapter.id === selectedChapterId ? (
-                        <CheckCircleOutlined />
-                      ) : index === 0 ? (
-                        <ClockCircleOutlined />
-                      ) : (
-                        <FileTextOutlined />
-                      ),
-                  }))}
-                />
-              ),
-              key: "timeline",
-              label: (
-                <span>
-                  <DatabaseOutlined /> 脉络
-                </span>
-              ),
-            },
-            {
-              children: (
-                <GraphPreviewPanel loading={loadingGraphPreview} neighborhood={graphPreview} />
-              ),
-              key: "graph",
-              label: (
-                <span>
-                  <DeploymentUnitOutlined /> 图谱
-                </span>
-              ),
-            },
-          ]}
-        />
-      </Drawer>
+        <Content aria-label="工作台" className="story-shell__content">
+          <header className="story-toolbar">
+            <div>
+              <Text className="story-eyebrow">{getWorkspaceModuleTitle(activeModuleKey)}</Text>
+              <Title level={3}>{activeProject?.title ?? "Story Pilot"}</Title>
+            </div>
+          </header>
 
-      <AiTaskDrawer onClose={() => setAiOpen(false)} open={aiOpen} />
+          <WorkbenchHome
+            activeModuleKey={activeModuleKey}
+            board={board}
+            chapterVersions={chapterVersions}
+            loading={loadingWorkbench}
+            loadingChapterVersions={loadingChapterVersions}
+            onAcceptElementCandidates={acceptElementCandidates}
+            onAdvanceStage={advanceStage}
+            onApplyBlueprint={applyBlueprint}
+            onApplyChapterOutline={applyChapterOutline}
+            onApproveChapterOutline={approveChapterOutline}
+            onCompleteCoreStoryFields={completeCoreStoryFields}
+            onCompleteStage={completeStage}
+            onCompleteWorldbuildingFields={completeWorldbuildingFields}
+            onConfirmBrief={confirmBrief}
+            onConfirmMemory={confirmMemory}
+            onCreateChapter={createChapter}
+            onCreateCharacter={createCharacter}
+            onCreateForeshadowing={createForeshadowing}
+            onCreatePlotline={createPlotline}
+            onCreatePlotlineNode={createPlotlineNode}
+            onCreateStoryEvent={createStoryEvent}
+            onCreateWorldRule={createWorldRule}
+            onEvaluateStageGate={evaluateStageGate}
+            onGenerateBlueprint={generateBlueprint}
+            onGenerateBookPlan={generateBookPlan}
+            onGenerateDraft={generateDraft}
+            onGenerateDraftFromOutline={generateDraftFromOutline}
+            onGenerateDraftFromPlan={generateDraftFromPlan}
+            onGenerateElementCandidates={generateElementCandidates}
+            onGenerateOutline={generateOutline}
+            onGenerateRollingOutline={generateRollingOutline}
+            onLoadChapterVersions={loadChapterVersions}
+            onPlanForeshadowing={planForeshadowing}
+            onRejectMemory={rejectMemory}
+            onReopenStage={reopenStage}
+            onRestoreChapterVersion={restoreChapterVersion}
+            onSaveArcPlan={saveArcPlan}
+            onSaveBookPlanDraft={saveBookPlanDraft}
+            onSaveBrief={saveBrief}
+            onSaveChapter={saveChapter}
+            onSaveCoreStoryFields={saveCoreStoryFields}
+            onSaveVolumePlan={saveVolumePlan}
+            onSaveWorldbuildingFields={saveWorldbuildingFields}
+            onSelectChapter={selectChapter}
+            onSkipStage={skipStage}
+            onUpdateCharacter={updateCharacter}
+            onUpdateForeshadowing={updateForeshadowing}
+            onUpdatePlotline={updatePlotline}
+            onUpdatePlotlineNode={updatePlotlineNode}
+            onUpdateStoryEvent={updateStoryEvent}
+            savingChapter={savingChapter}
+            selectedChapterId={selectedChapterId}
+          />
+        </Content>
+
+        {inspectorCollapsed ? (
+          <InspectorRail activeTabKey={inspectorTabKey} onSelectTab={openInspectorFromRail} />
+        ) : (
+          <WorkspaceInspector
+            activeModuleKey={activeModuleKey}
+            board={board}
+            graphPreview={graphPreview}
+            loadingGraphPreview={loadingGraphPreview}
+            onAcceptElementCandidates={acceptElementCandidates}
+            onApplyArtifact={applyArtifact}
+            onGenerateElementCandidates={generateElementCandidates}
+            onLoadGraphPreview={loadGraphPreview}
+            onRejectArtifact={rejectArtifact}
+            onTabChange={selectInspectorTab}
+            selectedChapterId={selectedChapterId}
+            tabKey={inspectorTabKey}
+          />
+        )}
+      </Layout>
 
       <SettingsDrawer
         health={diagnosticsHealth}
@@ -1241,6 +1648,569 @@ export function ShellLayout() {
   );
 }
 
+function WorkspaceInspector({
+  activeModuleKey,
+  board,
+  graphPreview,
+  loadingGraphPreview,
+  onAcceptElementCandidates,
+  onApplyArtifact,
+  onGenerateElementCandidates,
+  onLoadGraphPreview,
+  onRejectArtifact,
+  onTabChange,
+  selectedChapterId,
+  tabKey,
+}: {
+  readonly activeModuleKey: WorkspaceModuleKey;
+  readonly board?: WorkbenchBoard | undefined;
+  readonly graphPreview?: GraphPreviewData | undefined;
+  readonly loadingGraphPreview: boolean;
+  readonly selectedChapterId?: string | undefined;
+  readonly tabKey: InspectorTabKey;
+  onAcceptElementCandidates(input: AcceptElementCandidatesValues): Promise<void> | void;
+  onApplyArtifact(artifact: ArtifactReviewItem): Promise<void> | void;
+  onGenerateElementCandidates(
+    input: GenerateElementCandidatesValues,
+  ): Promise<GenerateElementCandidatesResult>;
+  onLoadGraphPreview(): Promise<void> | void;
+  onRejectArtifact(artifact: ArtifactReviewItem): Promise<void> | void;
+  onTabChange(tabKey: InspectorTabKey): void;
+}) {
+  return (
+    <aside aria-label="创作检查器" className="story-inspector">
+      <header className="story-inspector__header">
+        <div>
+          <Text className="story-section-title">Inspector</Text>
+          <Title level={5}>创作检查器</Title>
+        </div>
+      </header>
+      <Tabs
+        activeKey={tabKey}
+        className="story-inspector__tabs"
+        onChange={(key) => onTabChange(key as InspectorTabKey)}
+        size="small"
+        items={[
+          {
+            children: <InspectorStatus activeModuleKey={activeModuleKey} board={board} />,
+            key: "status",
+            label: (
+              <span>
+                <BarsOutlined /> 状态
+              </span>
+            ),
+          },
+          {
+            children: (
+              <InspectorToolbox
+                board={board}
+                onAcceptElementCandidates={onAcceptElementCandidates}
+                onGenerateElementCandidates={onGenerateElementCandidates}
+              />
+            ),
+            key: "toolbox",
+            label: (
+              <span>
+                <ToolOutlined /> 工具箱
+              </span>
+            ),
+          },
+          {
+            children: (
+              <InspectorArtifacts
+                artifacts={board?.artifacts ?? []}
+                workOrderCount={board?.workOrders.length ?? 0}
+                onApplyArtifact={onApplyArtifact}
+                onRejectArtifact={onRejectArtifact}
+              />
+            ),
+            key: "artifacts",
+            label: (
+              <span>
+                <RobotOutlined /> AI 产物
+              </span>
+            ),
+          },
+          {
+            children: (
+              <InspectorTimeline
+                chapters={board?.chapters ?? []}
+                selectedChapterId={selectedChapterId}
+              />
+            ),
+            key: "timeline",
+            label: (
+              <span>
+                <DatabaseOutlined /> 脉络
+              </span>
+            ),
+          },
+          {
+            children: (
+              <InspectorGraph
+                disabled={!board || !selectedChapterId}
+                graphPreview={graphPreview}
+                loading={loadingGraphPreview}
+                onLoadGraphPreview={onLoadGraphPreview}
+              />
+            ),
+            key: "graph",
+            label: (
+              <span>
+                <DeploymentUnitOutlined /> 图谱
+              </span>
+            ),
+          },
+        ]}
+      />
+    </aside>
+  );
+}
+
+function InspectorRail({
+  activeTabKey,
+  onSelectTab,
+}: {
+  readonly activeTabKey: InspectorTabKey;
+  onSelectTab(tabKey: InspectorTabKey): void;
+}) {
+  const items = [
+    { icon: <BarsOutlined />, key: "status", label: "状态" },
+    { icon: <ToolOutlined />, key: "toolbox", label: "工具箱" },
+    { icon: <RobotOutlined />, key: "artifacts", label: "AI 产物" },
+    { icon: <DatabaseOutlined />, key: "timeline", label: "脉络" },
+    { icon: <DeploymentUnitOutlined />, key: "graph", label: "图谱" },
+  ] as const;
+
+  return (
+    <aside aria-label="检查器快捷栏" className="story-inspector-rail">
+      {items.map((item) => (
+        <Tooltip key={item.key} placement="left" title={item.label}>
+          <Button
+            aria-label={`打开检查器：${item.label}`}
+            icon={item.icon}
+            onClick={() => onSelectTab(item.key)}
+            type={activeTabKey === item.key ? "primary" : "text"}
+          />
+        </Tooltip>
+      ))}
+    </aside>
+  );
+}
+
+function InspectorToolbox({
+  board,
+  onAcceptElementCandidates,
+  onGenerateElementCandidates,
+}: {
+  readonly board?: WorkbenchBoard | undefined;
+  onAcceptElementCandidates(input: AcceptElementCandidatesValues): Promise<void> | void;
+  onGenerateElementCandidates(
+    input: GenerateElementCandidatesValues,
+  ): Promise<GenerateElementCandidatesResult>;
+}) {
+  const [form] = Form.useForm<InspectorToolboxFormValues>();
+  const [candidateItems, setCandidateItems] = useState<readonly ElementCandidateItem[]>([]);
+  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<readonly string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const previousProjectIdRef = useRef<string | undefined>(board?.project.id);
+  const worldRuleItems = board?.worldRules ?? [];
+  const defaultStyle = board?.project.style?.trim() || "通用";
+  const selectedCandidates = candidateItems.filter((candidate, index) =>
+    selectedCandidateKeys.includes(inspectorCandidateKey(candidate, index)),
+  );
+
+  useEffect(() => {
+    if (previousProjectIdRef.current !== board?.project.id) {
+      previousProjectIdRef.current = board?.project.id;
+      setCandidateItems([]);
+      setSelectedCandidateKeys([]);
+    }
+
+    form.setFieldsValue({
+      style: defaultStyle,
+      worldRuleIds: (board?.worldRules ?? []).map((rule) => rule.id),
+    });
+  }, [board, defaultStyle, form]);
+
+  return (
+    <div className="story-inspector__stack inspector-toolbox">
+      <section
+        aria-label="AI 生成工具箱"
+        className="story-inspector__section inspector-toolbox__panel"
+      >
+        <Form
+          className="inspector-toolbox__form"
+          form={form}
+          initialValues={{
+            constraints: [],
+            count: 10,
+            elementType: "character_name",
+            style: defaultStyle,
+            worldRuleIds: worldRuleItems.map((rule) => rule.id),
+          }}
+          layout="vertical"
+          name="inspectorToolboxForm"
+          onFinish={async (values) => {
+            if (!board) {
+              setCandidateItems([]);
+              setSelectedCandidateKeys([]);
+              return;
+            }
+
+            setGenerating(true);
+            try {
+              const description = values.description?.trim();
+              const result = await onGenerateElementCandidates({
+                constraints: values.constraints ?? [],
+                count: values.count,
+                ...(description ? { description } : {}),
+                elementType: values.elementType,
+                genre: board.project.genre,
+                style: values.style?.trim() || defaultStyle,
+                worldRuleIds: values.worldRuleIds ?? [],
+              });
+              setCandidateItems(result.items);
+              setSelectedCandidateKeys([]);
+            } finally {
+              setGenerating(false);
+            }
+          }}
+        >
+          <div className="inspector-toolbox__fields">
+            <div className="inspector-toolbox__quick-grid">
+              <Form.Item label="生成类型" name="elementType">
+                <Select
+                  aria-label="生成类型"
+                  disabled={!board}
+                  optionFilterProp="label"
+                  options={[...ELEMENT_TYPE_PRESETS]}
+                />
+              </Form.Item>
+              <Form.Item label="数量" name="count">
+                <Select aria-label="数量" disabled={!board} options={[...COUNT_PRESETS]} />
+              </Form.Item>
+            </div>
+            <Form.Item label="创作描述" name="description">
+              <Input.TextArea
+                aria-label="创作描述"
+                autoSize={{ minRows: 3, maxRows: 5 }}
+                disabled={!board}
+                maxLength={500}
+                placeholder="例如：围绕安全屋外部补给线生成可长期博弈的地下势力名称。"
+                showCount
+              />
+            </Form.Item>
+            <Form.Item label="风格" name="style">
+              <Select
+                aria-label="风格"
+                disabled={!board}
+                optionFilterProp="label"
+                options={[...STYLE_PRESETS]}
+              />
+            </Form.Item>
+            <Form.Item label="世界观约束" name="worldRuleIds">
+              <Select
+                aria-label="世界观约束"
+                disabled={!board || worldRuleItems.length === 0}
+                mode="multiple"
+                optionFilterProp="label"
+                options={worldRuleItems.map((rule) => ({ label: rule.title, value: rule.id }))}
+                placeholder={worldRuleItems.length === 0 ? "暂无世界规则" : "默认使用全部世界规则"}
+              />
+            </Form.Item>
+            <Form.Item label="额外约束" name="constraints">
+              <Select
+                aria-label="额外约束"
+                disabled={!board}
+                mode="tags"
+                options={[
+                  { label: "避免现代感", value: "避免现代感" },
+                  { label: "适合长期伏笔", value: "适合长期伏笔" },
+                  { label: "能推动冲突升级", value: "能推动冲突升级" },
+                ]}
+                placeholder="选择或输入约束"
+                tokenSeparators={["，", ","]}
+              />
+            </Form.Item>
+          </div>
+          <Space className="inspector-toolbox__actions" wrap>
+            <Button
+              aria-label="生成候选"
+              disabled={!board}
+              htmlType="submit"
+              icon={<ThunderboltOutlined />}
+              loading={generating}
+              type="primary"
+            >
+              生成候选
+            </Button>
+            <Button
+              aria-label="采纳选中"
+              disabled={selectedCandidates.length === 0}
+              loading={accepting}
+              onClick={async () => {
+                if (selectedCandidates.length === 0) {
+                  return;
+                }
+                setAccepting(true);
+                try {
+                  await onAcceptElementCandidates({ items: selectedCandidates });
+                  setCandidateItems((currentItems) =>
+                    currentItems.filter(
+                      (candidate, index) =>
+                        !selectedCandidateKeys.includes(inspectorCandidateKey(candidate, index)),
+                    ),
+                  );
+                  setSelectedCandidateKeys([]);
+                } finally {
+                  setAccepting(false);
+                }
+              }}
+            >
+              采纳选中
+            </Button>
+          </Space>
+        </Form>
+      </section>
+
+      <section
+        aria-label="工具箱候选结果"
+        className="story-inspector__section inspector-toolbox__results"
+      >
+        <div className="inspector-toolbox__result-header">
+          <Text className="story-section-title">候选结果</Text>
+          <Text type="secondary">{candidateItems.length} 个</Text>
+        </div>
+        {candidateItems.length === 0 ? (
+          <Empty description="暂无候选" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <ul className="inspector-toolbox__list">
+            {candidateItems.map((candidate, index) => {
+              const key = inspectorCandidateKey(candidate, index);
+              const checked = selectedCandidateKeys.includes(key);
+
+              return (
+                <li className="inspector-toolbox__candidate" key={key}>
+                  <Checkbox
+                    aria-label={`选择候选 ${candidate.name}`}
+                    checked={checked}
+                    onChange={(event) => {
+                      setSelectedCandidateKeys((currentKeys) =>
+                        event.target.checked
+                          ? [...currentKeys, key]
+                          : currentKeys.filter((candidateKey) => candidateKey !== key),
+                      );
+                    }}
+                  />
+                  <div className="inspector-toolbox__candidate-body">
+                    <div className="inspector-toolbox__candidate-title">
+                      <Text strong>{candidate.name}</Text>
+                      <Tag>{getInspectorCandidateTypeLabel(candidate.type)}</Tag>
+                    </div>
+                    {candidate.description ? (
+                      <Text type="secondary">{candidate.description}</Text>
+                    ) : null}
+                    {candidate.rationale ? <Text>{candidate.rationale}</Text> : null}
+                    {candidate.tags && candidate.tags.length > 0 ? (
+                      <Space size={[4, 4]} wrap>
+                        {candidate.tags.map((tag) => (
+                          <Tag key={tag}>{tag}</Tag>
+                        ))}
+                      </Space>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function InspectorStatus({
+  activeModuleKey,
+  board,
+}: {
+  readonly activeModuleKey: WorkspaceModuleKey;
+  readonly board?: WorkbenchBoard | undefined;
+}) {
+  if (!board) {
+    return <Empty description="暂无打开的作品" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  const stage = getShellStageForModule(board.creativePath, activeModuleKey);
+  const foreshadowings = board.foreshadowings ?? [];
+  const readyForeshadowingCount = foreshadowings.filter(
+    (foreshadowing) => foreshadowing.status === "payoff_ready",
+  ).length;
+  const paidForeshadowingCount = foreshadowings.filter(
+    (foreshadowing) => foreshadowing.status === "paid_off",
+  ).length;
+  const filledWorldbuildingFieldCount = countShellFilledWorldbuildingFields(
+    board.worldbuildingProfile?.fields,
+  );
+  const estimatedWordCount =
+    board.creativePath?.brief?.estimatedWordCount ?? board.project.wordCountGoal ?? null;
+  const estimatedChapterCount = board.creativePath?.brief?.estimatedChapterCount ?? null;
+
+  return (
+    <div className="story-inspector__stack">
+      <Descriptions column={1} size="small">
+        <Descriptions.Item label="当前模块">
+          <Text strong>{getWorkspaceModuleTitle(activeModuleKey)}</Text>
+        </Descriptions.Item>
+        <Descriptions.Item label="阶段状态">
+          <Tag color={getShellStatusColor(stage?.status)}>{stage?.status ?? "available"}</Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label="完成度">{stage?.readinessScore ?? 0}%</Descriptions.Item>
+        <Descriptions.Item label="世界观">
+          {filledWorldbuildingFieldCount}/{SHELL_WORLD_DIMENSION_COUNT}
+        </Descriptions.Item>
+        <Descriptions.Item label="人物">{board.characters?.length ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="故事线">{board.plotlines?.length ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="剧情节点">{board.storyEvents?.length ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="伏笔">{foreshadowings.length}</Descriptions.Item>
+        <Descriptions.Item label="待回收">{readyForeshadowingCount}</Descriptions.Item>
+        <Descriptions.Item label="已回收">{paidForeshadowingCount}</Descriptions.Item>
+        <Descriptions.Item label="待审产物">{board.artifacts.length}</Descriptions.Item>
+      </Descriptions>
+      <section className="story-inspector__section" aria-label="写作上下文">
+        <Text className="story-section-title">写作上下文</Text>
+        <ul className="context-fact-list">
+          <li>题材：{board.project.genre}</li>
+          <li>风格：{board.project.style ?? "通用"}</li>
+          <li>章节：{board.chapters.length}</li>
+          <li>预计字数：{formatInspectorNumber(estimatedWordCount)}</li>
+          <li>预计章节：{formatInspectorNumber(estimatedChapterCount)}</li>
+          <li>待确认记忆：{board.memoryCandidates.length}</li>
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+function InspectorArtifacts({
+  artifacts,
+  onApplyArtifact,
+  onRejectArtifact,
+  workOrderCount,
+}: {
+  readonly artifacts: readonly ArtifactReviewItem[];
+  readonly workOrderCount: number;
+  onApplyArtifact(artifact: ArtifactReviewItem): Promise<void> | void;
+  onRejectArtifact(artifact: ArtifactReviewItem): Promise<void> | void;
+}) {
+  return (
+    <div className="story-inspector__stack">
+      <Descriptions column={1} size="small">
+        <Descriptions.Item label="运行任务">{workOrderCount} 个</Descriptions.Item>
+        <Descriptions.Item label="待审产物">{artifacts.length} 条</Descriptions.Item>
+      </Descriptions>
+      <ArtifactReviewPanel
+        artifacts={artifacts}
+        onApply={onApplyArtifact}
+        onReject={onRejectArtifact}
+      />
+    </div>
+  );
+}
+
+function InspectorTimeline({
+  chapters,
+  selectedChapterId,
+}: {
+  readonly chapters: readonly WorkbenchChapter[];
+  readonly selectedChapterId?: string | undefined;
+}) {
+  if (chapters.length === 0) {
+    return <Empty description="暂无章节脉络" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <Timeline
+      items={chapters.map((chapter, index) => ({
+        children: chapter.title,
+        dot:
+          chapter.id === selectedChapterId ? (
+            <CheckCircleOutlined />
+          ) : index === 0 ? (
+            <ClockCircleOutlined />
+          ) : (
+            <FileTextOutlined />
+          ),
+      }))}
+    />
+  );
+}
+
+function InspectorGraph({
+  disabled,
+  graphPreview,
+  loading,
+  onLoadGraphPreview,
+}: {
+  readonly disabled: boolean;
+  readonly graphPreview?: GraphPreviewData | undefined;
+  readonly loading: boolean;
+  onLoadGraphPreview(): Promise<void> | void;
+}) {
+  return (
+    <div className="story-inspector__stack">
+      <Button disabled={disabled} onClick={onLoadGraphPreview}>
+        刷新图谱
+      </Button>
+      <GraphPreviewPanel loading={loading} neighborhood={graphPreview} />
+    </div>
+  );
+}
+
+function inspectorCandidateKey(candidate: ElementCandidateItem, index: number): string {
+  return `${index}:${candidate.type}:${candidate.name}`;
+}
+
+function getInspectorCandidateTypeLabel(type: ElementCandidateItem["type"]): string {
+  return ELEMENT_TYPE_PRESETS.find((option) => option.value === type)?.label ?? type;
+}
+
+function getShellStageForModule(
+  creativePath: WorkbenchBoard["creativePath"],
+  moduleKey: WorkspaceModuleKey,
+): ShellStage | undefined {
+  const stageKey = MODULE_STAGE_MAP[moduleKey];
+  return stageKey ? creativePath?.stages.find((stage) => stage.stageKey === stageKey) : undefined;
+}
+
+function getShellStatusColor(status: string | undefined): string {
+  if (status === "completed") {
+    return "green";
+  }
+  if (status === "available") {
+    return "blue";
+  }
+  if (status === "blocked" || status === "locked") {
+    return "default";
+  }
+  return "gold";
+}
+
+function countShellFilledWorldbuildingFields(
+  fields: WorldbuildingFields | null | undefined,
+): number {
+  if (!fields) {
+    return 0;
+  }
+
+  return Object.values(fields).filter((value) => value.trim().length > 0).length;
+}
+
+function formatInspectorNumber(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("zh-CN") : "-";
+}
+
 function createProjectPayload(values: CreateProjectFormValues): CommandPayload<"project.create"> {
   const genre = values.genre?.trim();
   const logline = values.logline?.trim();
@@ -1260,6 +2230,24 @@ function optionalText<TKey extends string>(
 ): Partial<Record<TKey, string>> {
   const trimmed = value?.trim();
   return trimmed ? ({ [key]: trimmed } as Record<TKey, string>) : {};
+}
+
+function nullableText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function nullableNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : null;
+}
+
+function optionalNumber<TKey extends string>(
+  key: TKey,
+  value: number | null | undefined,
+): Partial<Record<TKey, number>> {
+  return typeof value === "number" && Number.isFinite(value)
+    ? ({ [key]: Math.trunc(value) } as Record<TKey, number>)
+    : {};
 }
 
 function upsertProject(
@@ -1308,9 +2296,5 @@ function resolveMemoryDecisionMessage(decision: MemoryCandidateDecisionInput["de
 }
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "操作失败";
+  return formatUserError(error);
 }
