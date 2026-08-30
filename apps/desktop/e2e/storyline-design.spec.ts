@@ -126,6 +126,7 @@ test.beforeEach(async ({ page }) => {
 
 test("storyline design uses a stable form-first layout and persists nodes", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "作品总控台" })).toBeVisible();
   await page.getByRole("button", { name: "5. 故事线设计" }).click();
 
   await expect(page.getByRole("heading", { name: "故事线设计" })).toBeVisible();
@@ -165,9 +166,16 @@ test("storyline design uses a stable form-first layout and persists nodes", asyn
       projectId: "project_1",
     });
 
-  await page.getByLabel("节点标题").fill("信纸水印出现");
-  await page.getByLabel("章节提示").fill("第 3 章");
-  await page.getByLabel("节点说明").fill("让读者看到水印，但暂时不解释来源。");
+  const nodeTitleInput = page.getByRole("textbox", { name: "节点标题" });
+  const nodeChapterHintInput = page.getByRole("textbox", { name: "章节提示" });
+  const nodeDescriptionInput = page.getByRole("textbox", { name: "节点说明" });
+  await expect(nodeTitleInput).toHaveValue("");
+  await nodeTitleInput.fill("信纸水印出现");
+  await nodeChapterHintInput.fill("第 3 章");
+  await nodeDescriptionInput.fill("让读者看到水印，但暂时不解释来源。");
+  await expect(nodeTitleInput).toHaveValue("信纸水印出现");
+  await expect(nodeChapterHintInput).toHaveValue("第 3 章");
+  await expect(nodeDescriptionInput).toHaveValue("让读者看到水印，但暂时不解释来源。");
   await page.getByRole("button", { name: "添加节点" }).click();
 
   await expect(page.getByText("信纸水印出现")).toBeVisible();

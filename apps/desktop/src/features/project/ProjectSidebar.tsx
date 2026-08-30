@@ -64,6 +64,7 @@ export interface ProjectSidebarProps {
   readonly collapsed?: boolean;
   readonly projects?: readonly ProjectSidebarProject[];
   readonly selectedChapterId?: string | undefined;
+  readonly showCollapseControl?: boolean;
   onCreateProject?(): void;
   onOpenProject?(projectId: string): void;
   onOpenSettings?(): void;
@@ -79,6 +80,7 @@ export function ProjectSidebar({
   collapsed = false,
   projects = [],
   selectedChapterId,
+  showCollapseControl = true,
   onCreateProject,
   onOpenProject,
   onOpenSettings,
@@ -133,15 +135,17 @@ export function ProjectSidebar({
               <Text type="secondary">小说创作工作台</Text>
             </div>
           )}
-          <Tooltip title={collapsed ? "展开侧栏" : "收起侧栏"}>
-            <Button
-              aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
-              className="project-sidebar__collapse-button"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => onToggleCollapsed?.(!collapsed)}
-              type="text"
-            />
-          </Tooltip>
+          {showCollapseControl ? (
+            <Tooltip title={collapsed ? "展开侧栏" : "收起侧栏"}>
+              <Button
+                aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
+                className="project-sidebar__collapse-button"
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => onToggleCollapsed?.(!collapsed)}
+                type="text"
+              />
+            </Tooltip>
+          ) : null}
         </div>
 
         <Tooltip title={collapsed ? "新建作品" : undefined}>

@@ -27,6 +27,8 @@ import { GraphService } from "../graph/graph.service.js";
 import { HealthService } from "../health/health.service.js";
 import { MemoryService } from "../memory/memory.service.js";
 import { OutlineService } from "../outline/outline.service.js";
+import { ConflictService } from "../plot/conflict.service.js";
+import { EventRelationService } from "../plot/event-relation.service.js";
 import {
   ForeshadowingService,
   type CreateForeshadowingInput,
@@ -48,9 +50,11 @@ export class RpcService {
     private readonly aiCommandService: AiCommandService,
     private readonly characterService: CharacterService,
     private readonly chapterService: ChapterService,
+    private readonly conflictService: ConflictService,
     private readonly creativePathService: CreativePathService,
     private readonly diagnosticsService: DiagnosticsService,
     private readonly elementCandidateService: ElementCandidateService,
+    private readonly eventRelationService: EventRelationService,
     private readonly foreshadowingService: ForeshadowingService,
     private readonly graphService: GraphService,
     private readonly healthService: HealthService,
@@ -265,6 +269,24 @@ export class RpcService {
         const parsed = payload as CommandPayload<"outline.generate">;
         return this.outlineService.generate(parsed);
       }
+      case "outline.saveDraft": {
+        return this.outlineService.saveOutlineDraft(payload as CommandPayload<"outline.saveDraft">);
+      }
+      case "outline.saveVolumeOutline": {
+        return this.outlineService.saveVolumeOutline(
+          payload as CommandPayload<"outline.saveVolumeOutline">,
+        );
+      }
+      case "outline.saveChapterOutline": {
+        return this.outlineService.saveChapterOutline(
+          payload as CommandPayload<"outline.saveChapterOutline">,
+        );
+      }
+      case "outline.saveSceneOutline": {
+        return this.outlineService.saveSceneOutline(
+          payload as CommandPayload<"outline.saveSceneOutline">,
+        );
+      }
       case "outline.approveChapterOutline": {
         const parsed = payload as CommandPayload<"outline.approveChapterOutline">;
         return this.outlineService.approveChapterOutline(parsed);
@@ -295,6 +317,16 @@ export class RpcService {
       }
       case "plot.saveArcPlan": {
         return this.longformPlanService.saveArcPlan(payload as CommandPayload<"plot.saveArcPlan">);
+      }
+      case "plot.saveChapterPlan": {
+        return this.longformPlanService.saveChapterPlan(
+          payload as CommandPayload<"plot.saveChapterPlan">,
+        );
+      }
+      case "plot.saveScenePlan": {
+        return this.longformPlanService.saveScenePlan(
+          payload as CommandPayload<"plot.saveScenePlan">,
+        );
       }
       case "plot.generateRollingOutline": {
         return this.longformPlanService.generateRollingOutline(
@@ -581,6 +613,37 @@ export class RpcService {
       case "character.update": {
         return this.characterService.updateCharacter(payload as CommandPayload<"character.update">);
       }
+      case "entityRelation.list": {
+        const parsed = payload as CommandPayload<"entityRelation.list">;
+        return {
+          items: await this.characterService.listRelations({
+            projectId: parsed.projectId,
+            ...(parsed.entityId === undefined ? {} : { entityId: parsed.entityId }),
+            ...(parsed.entityType === undefined ? {} : { entityType: parsed.entityType }),
+            ...(parsed.status === undefined ? {} : { status: parsed.status }),
+          }),
+        };
+      }
+      case "entityRelation.create": {
+        const parsed = payload as CommandPayload<"entityRelation.create">;
+        return this.characterService.createRelation({
+          polarity: parsed.polarity,
+          projectId: parsed.projectId,
+          relationType: parsed.relationType,
+          sourceEntityId: parsed.sourceEntityId,
+          sourceEntityType: parsed.sourceEntityType,
+          status: parsed.status,
+          strength: parsed.strength,
+          targetEntityId: parsed.targetEntityId,
+          targetEntityType: parsed.targetEntityType,
+          ...(parsed.description === undefined ? {} : { description: parsed.description }),
+        });
+      }
+      case "entityRelation.update": {
+        return this.characterService.updateRelation(
+          payload as CommandPayload<"entityRelation.update">,
+        );
+      }
       case "character.generateNames": {
         const parsed = payload as CommandPayload<"character.generateNames">;
         return this.characterService.generateNames({
@@ -683,6 +746,7 @@ export class RpcService {
           status: parsed.status,
           title: parsed.title,
           ...(parsed.chapterId === undefined ? {} : { chapterId: parsed.chapterId }),
+          ...(parsed.outcome === undefined ? {} : { outcome: parsed.outcome }),
           ...(parsed.sceneId === undefined ? {} : { sceneId: parsed.sceneId }),
           ...(parsed.storyTime === undefined ? {} : { storyTime: parsed.storyTime }),
         };
@@ -696,6 +760,36 @@ export class RpcService {
       case "storyEvent.list": {
         const parsed = payload as CommandPayload<"storyEvent.list">;
         return { items: await this.storyEventService.listStoryEvents(parsed.projectId) };
+      }
+      case "eventRelation.list": {
+        return {
+          items: await this.eventRelationService.listEventRelations(
+            payload as CommandPayload<"eventRelation.list">,
+          ),
+        };
+      }
+      case "eventRelation.create": {
+        return this.eventRelationService.createEventRelation(
+          payload as CommandPayload<"eventRelation.create">,
+        );
+      }
+      case "eventRelation.update": {
+        return this.eventRelationService.updateEventRelation(
+          payload as CommandPayload<"eventRelation.update">,
+        );
+      }
+      case "conflict.list": {
+        return {
+          items: await this.conflictService.listConflicts(
+            payload as CommandPayload<"conflict.list">,
+          ),
+        };
+      }
+      case "conflict.create": {
+        return this.conflictService.createConflict(payload as CommandPayload<"conflict.create">);
+      }
+      case "conflict.update": {
+        return this.conflictService.updateConflict(payload as CommandPayload<"conflict.update">);
       }
       case "foreshadowing.create": {
         const parsed = payload as CommandPayload<"foreshadowing.create">;

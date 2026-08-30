@@ -257,6 +257,84 @@ describe("StoryPilotApiClient", () => {
       title: "旧信追查",
       volumePlanId: "volume_plan_1",
     });
+    await api.saveOutlineDraft({
+      basis: { strategy: "三幕式推进" },
+      outlineId: "outline_1",
+      projectId: "project_1",
+      scope: "full_book",
+      status: "draft",
+      title: "全书手工大纲",
+    });
+    await api.saveVolumeOutline({
+      climax: "极寒夜主角守住核心安全屋。",
+      majorConflict: "资源暴露后，外部幸存者联盟不断逼近。",
+      outlineId: "outline_1",
+      projectId: "project_1",
+      purpose: "建立末世压迫、据点经营和第一次大规模攻防。",
+      sortOrder: 1,
+      status: "draft",
+      title: "第一卷 暴雪降临",
+      volumeId: "volume_1",
+      wordCountGoal: 600_000,
+    });
+    await api.saveChapterOutline({
+      chapterId: "chapter_1",
+      chapterGoal: "主角收到极寒预警并启动安全屋改造。",
+      conflict: "主角必须在断电前完成安全屋最后加固。",
+      emotionalTurn: "从怀疑变成确认灾难临近。",
+      hook: "天气预警从三天变成三小时。",
+      informationGain: "极寒不是普通寒潮。",
+      outlineId: "outline_1",
+      projectId: "project_1",
+      relatedForeshadowingIds: ["foreshadowing_1"],
+      relatedPlotlineNodeIds: ["node_1"],
+      requiredCharacterIds: ["char_1"],
+      requiredLocationIds: ["location_1"],
+      sortOrder: 1,
+      status: "draft",
+      title: "第 1 章 暴雪预警",
+      volumeOutlineId: "volume_outline_1",
+      targetWordCount: 3500,
+    });
+    await api.saveSceneOutline({
+      beatType: "opening_hook",
+      chapterOutlineId: "chapter_outline_1",
+      conflict: "门禁短暂失效，求助者看见内部门廊。",
+      entryState: "主角以为只要关门就能独善其身。",
+      exitState: "主角保住门禁，却留下人情债。",
+      projectId: "project_1",
+      purpose: "把安全屋优势和道德压力同时展示出来。",
+      sceneOutlineId: "scene_outline_1",
+      sortOrder: 1,
+      status: "draft",
+      title: "门外求救",
+    });
+    await api.saveChapterPlan({
+      arcPlanId: "arc_plan_1",
+      chapterGoal: "主角启动安全屋，并第一次面对求助压力。",
+      chapterIndex: 1,
+      conflict: "主角必须在救人和暴露据点之间选择。",
+      emotionalTurn: "从独善其身到被迫承担。",
+      hook: "门外传来熟悉的求救声。",
+      informationGain: "安全屋入口可能被追踪。",
+      projectId: "project_1",
+      relatedCharacterIds: ["char_1"],
+      relatedForeshadowingIds: ["foreshadowing_1"],
+      relatedPlotlineIds: ["plotline_1"],
+      status: "draft",
+      targetWordCount: 3200,
+      title: "第 1 章 暴雪预警",
+    });
+    await api.saveScenePlan({
+      chapterPlanId: "chapter_plan_1",
+      conflictTurn: "电力切换失败，邻居开始敲门。",
+      memoryTargets: ["安全屋首次暴露热源"],
+      outcome: "主角守住入口，但留下门禁破绽。",
+      projectId: "project_1",
+      sceneGoal: "把安全屋危机具体化。",
+      sceneIndex: 1,
+      status: "draft",
+    });
     await api.generateRollingOutline({
       chapterCount: 10,
       projectId: "project_1",
@@ -328,6 +406,27 @@ describe("StoryPilotApiClient", () => {
       patch: { goal: "找真相" },
       projectId: "project_1",
     });
+    await api.listEntityRelations({ projectId: "project_1" });
+    await api.createEntityRelation({
+      description: "主角保护医生，医生提供医疗秩序。",
+      polarity: 1,
+      projectId: "project_1",
+      relationType: "protects",
+      sourceEntityId: "char_1",
+      sourceEntityType: "character",
+      status: "confirmed",
+      strength: 0.8,
+      targetEntityId: "char_2",
+      targetEntityType: "character",
+    });
+    await api.updateEntityRelation({
+      entityRelationId: "relation_1",
+      patch: {
+        description: "关系从互利变成稳定同盟。",
+        strength: 0.95,
+      },
+      projectId: "project_1",
+    });
     await api.generateCharacterNames({ constraints: ["悬疑"], count: 3, projectId: "project_1" });
     await api.saveBlueprintForm({
       fields: coreStoryFields({
@@ -346,6 +445,7 @@ describe("StoryPilotApiClient", () => {
     await api.generateElementCandidates({
       constraints: [],
       count: 5,
+      description: "生成安全屋外部资源争夺中的关键武器名称。",
       elementType: "weapon",
       genre: "玄幻",
       projectId: "project_1",
@@ -392,6 +492,7 @@ describe("StoryPilotApiClient", () => {
     await api.createStoryEvent({
       description: "发现旧信",
       eventType: "discovery",
+      outcome: "主角决定追查旧案。",
       participants: [],
       projectId: "project_1",
       status: "draft",
@@ -405,6 +506,40 @@ describe("StoryPilotApiClient", () => {
       },
       projectId: "project_1",
       storyEventId: "event_1",
+    });
+    await api.listEventRelations({ projectId: "project_1" });
+    await api.createEventRelation({
+      description: "旧信导致主角进入钟楼。",
+      projectId: "project_1",
+      relationType: "causes",
+      sourceEventId: "event_1",
+      targetEventId: "event_2",
+    });
+    await api.updateEventRelation({
+      eventRelationId: "event_relation_1",
+      patch: {
+        description: "因果关系改为递进升级。",
+        relationType: "escalates",
+      },
+      projectId: "project_1",
+    });
+    await api.listConflicts({ projectId: "project_1" });
+    await api.createConflict({
+      conflictType: "survival",
+      escalationPath: ["断电", "邻里围门"],
+      opposingForces: ["安全屋", "失控幸存者"],
+      projectId: "project_1",
+      relatedPlotlineId: "plotline_1",
+      stakes: "安全屋一旦暴露，主角会失去唯一生存优势。",
+      status: "active",
+      title: "暖源暴露危机",
+    });
+    await api.updateConflict({
+      conflictId: "conflict_1",
+      patch: {
+        status: "resolved",
+      },
+      projectId: "project_1",
     });
     await api.listForeshadowings({ projectId: "project_1" });
     await api.createForeshadowing({
@@ -438,6 +573,12 @@ describe("StoryPilotApiClient", () => {
       "plot.saveBookPlanDraft",
       "plot.saveVolumePlan",
       "plot.saveArcPlan",
+      "outline.saveDraft",
+      "outline.saveVolumeOutline",
+      "outline.saveChapterOutline",
+      "outline.saveSceneOutline",
+      "plot.saveChapterPlan",
+      "plot.saveScenePlan",
       "plot.generateRollingOutline",
       "plot.applyChapterPlans",
       "plot.analyzeOutlineImpact",
@@ -464,6 +605,9 @@ describe("StoryPilotApiClient", () => {
       "workflow.retry",
       "character.list",
       "character.update",
+      "entityRelation.list",
+      "entityRelation.create",
+      "entityRelation.update",
       "character.generateNames",
       "blueprint.saveForm",
       "blueprint.completeForm",
@@ -478,6 +622,12 @@ describe("StoryPilotApiClient", () => {
       "storyEvent.list",
       "storyEvent.create",
       "storyEvent.update",
+      "eventRelation.list",
+      "eventRelation.create",
+      "eventRelation.update",
+      "conflict.list",
+      "conflict.create",
+      "conflict.update",
       "foreshadowing.list",
       "foreshadowing.create",
       "foreshadowing.update",

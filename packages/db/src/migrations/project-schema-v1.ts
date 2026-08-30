@@ -593,6 +593,7 @@ create table if not exists story_events (
   event_time text,
   position integer not null default 0,
   summary text not null,
+  outcome text,
   causal_importance real not null default 0.5,
   chapter_id text references chapters(id) on delete set null,
   scene_id text references scenes(id) on delete set null,

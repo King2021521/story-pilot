@@ -33,6 +33,7 @@ import {
 } from "@story-pilot/workflow-runtime";
 
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
+import { buildCreativeContextItems, toContextBuilderItems } from "../ai/creative-context.js";
 import { GraphService } from "../graph/graph.service.js";
 import { ProjectStorageService } from "../storage/project-storage.service.js";
 
@@ -267,6 +268,11 @@ export class ChapterService {
       const registry = new WorkflowRegistry().register(
         createChapterDraftWorkflow({
           buildContext: async ({ chapterId, instruction: taskInstruction, projectId }) => {
+            const creativeContextItems = buildCreativeContextItems({
+              includeLongformPlans: true,
+              projectDatabase,
+              projectId,
+            });
             const context = await new ContextBuilder({
               getChapter: async (contextProjectId, contextChapterId) => {
                 const contextChapter = chapterRepository.getById(
@@ -297,7 +303,10 @@ export class ChapterService {
                   statuses,
                 }),
             }).buildChapterDraftContext({
-              additionalItems: input.additionalContextItems ?? [],
+              additionalItems: [
+                ...toContextBuilderItems(creativeContextItems),
+                ...(input.additionalContextItems ?? []),
+              ],
               chapterId,
               instruction: taskInstruction,
               projectId,

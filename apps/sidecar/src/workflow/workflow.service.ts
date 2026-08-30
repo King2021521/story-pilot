@@ -3,17 +3,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import {
   ArtifactRepository,
-  CharacterRepository,
   ChapterRepository,
   ContextRepository,
   DomainEventRepository,
   MemoryRepository,
   ModelCallRepository,
-  PlotRepository,
-  ProjectRepository,
   ReviewIssueRepository,
   WorkflowRepository,
-  WorldRepository,
   type ArtifactRecord,
   type ProjectDatabase,
   type WorkflowRunRecord,
@@ -38,6 +34,7 @@ import {
   type WorkflowRunState,
 } from "@story-pilot/workflow-runtime";
 
+import { buildCreativeContextItems } from "../ai/creative-context.js";
 import { MODEL_GATEWAY } from "../ai/model-gateway.provider.js";
 import { GraphService } from "../graph/graph.service.js";
 import { ProjectStorageService } from "../storage/project-storage.service.js";
@@ -694,19 +691,14 @@ async function buildWorkflowContextItems(input: {
   readonly targetType?: string | undefined;
   readonly targetId?: string | undefined;
 }): Promise<WorkflowContextItem[]> {
-  const projectRepository = new ProjectRepository(input.projectDatabase);
   const chapterRepository = new ChapterRepository(input.projectDatabase);
-  const characterRepository = new CharacterRepository(input.projectDatabase);
   const memoryRepository = new MemoryRepository(input.projectDatabase);
-  const plotRepository = new PlotRepository(input.projectDatabase);
-  const worldRepository = new WorldRepository(input.projectDatabase);
-  const project = projectRepository.getOverview(input.projectId);
   const chapters = chapterRepository.listChapters({ projectId: input.projectId });
-  const characters = characterRepository.listCharacters(input.projectId);
-  const worldRules = worldRepository.listWorldRules(input.projectId);
-  const plotlines = plotRepository.listPlotlines(input.projectId);
-  const storyEvents = plotRepository.listStoryEvents(input.projectId);
-  const foreshadowings = plotRepository.listForeshadowings(input.projectId);
+  const creativeContextItems = buildCreativeContextItems({
+    includeLongformPlans: true,
+    projectDatabase: input.projectDatabase,
+    projectId: input.projectId,
+  });
   const memories = memoryRepository.listMemories({
     limit: 120,
     projectId: input.projectId,
@@ -724,20 +716,19 @@ async function buildWorkflowContextItems(input: {
     : undefined;
 
   const items: Array<WorkflowContextItem | undefined> = [
-    project
-      ? {
-          content: `project: ${project.title}\ngenre: ${project.genre}\nstatus: ${project.status}`,
-          itemId: project.id,
-          itemType: "project",
-          rank: 1,
-        }
-      : undefined,
+    ...creativeContextItems.map((item) => ({
+      content: item.content,
+      itemId: item.itemId,
+      itemType: item.itemType,
+      rank: item.rank,
+      ...(item.metadata === undefined ? {} : { metadata: item.metadata }),
+    })),
     input.scope
       ? {
           content: `review scope: ${input.scope}`,
           itemId: `${input.projectId}:scope`,
           itemType: "scope",
-          rank: 2,
+          rank: 12,
         }
       : undefined,
     ...chapters.map((chapter, index) => ({
@@ -766,64 +757,6 @@ async function buildWorkflowContextItems(input: {
         status: memory.status,
       },
       rank: memory.status === "canon" ? 100 + index : 300 + index,
-    })),
-    ...characters.map((character, index) => ({
-      content: [
-        `character: ${character.name}`,
-        `id: ${character.id}`,
-        `role: ${character.role}`,
-        character.archetype ? `archetype: ${character.archetype}` : undefined,
-        character.motivation ? `motivation: ${character.motivation}` : undefined,
-        character.profile ? `profile: ${character.profile}` : undefined,
-      ]
-        .filter((line): line is string => line !== undefined)
-        .join("\n"),
-      itemId: character.id,
-      itemType: "character",
-      rank: 400 + index,
-    })),
-    ...worldRules.map((rule, index) => ({
-      content: `world rule: ${rule.title}\ncategory: ${rule.category}\nstatus: ${rule.status}\nstatement: ${rule.content}`,
-      itemId: rule.id,
-      itemType: "world_rule",
-      rank: 500 + index,
-    })),
-    ...plotlines.map((plotline, index) => ({
-      content: `plotline: ${plotline.name}\ntype: ${plotline.type}\nstatus: ${plotline.status}\nsummary: ${plotline.summary ?? ""}`,
-      itemId: plotline.id,
-      itemType: "plotline",
-      rank: 600 + index,
-    })),
-    ...storyEvents.map((event, index) => ({
-      content: [
-        `story event: ${event.title}`,
-        `type: ${event.eventType}`,
-        `status: ${event.status}`,
-        `summary: ${event.summary}`,
-        `participants: ${event.participants
-          .map(
-            (participant) =>
-              `${participant.entityType}:${participant.entityId}/${participant.role}`,
-          )
-          .join(", ")}`,
-      ].join("\n"),
-      itemId: event.id,
-      itemType: "story_event",
-      rank: 700 + index,
-    })),
-    ...foreshadowings.map((foreshadowing, index) => ({
-      content: [
-        `foreshadowing: ${foreshadowing.title}`,
-        `status: ${foreshadowing.status}`,
-        foreshadowing.seedText ? `seed: ${foreshadowing.seedText}` : undefined,
-        foreshadowing.payoffText ? `payoff: ${foreshadowing.payoffText}` : undefined,
-        `links: ${foreshadowing.links.map((link) => `${link.role}:${link.eventId}`).join(", ")}`,
-      ]
-        .filter((line): line is string => line !== undefined)
-        .join("\n"),
-      itemId: foreshadowing.id,
-      itemType: "foreshadowing",
-      rank: 800 + index,
     })),
     graphNeighborhood && graphNeighborhood.nodes.length > 0
       ? {

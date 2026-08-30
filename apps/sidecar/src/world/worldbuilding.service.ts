@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { Inject, Injectable } from "@nestjs/common";
 import {
-  buildPromptMessages,
+  buildPromptTemplateMessages,
   type ModelGateway,
   WorldbuildingFieldCompletionOutputSchema,
   type WorldbuildingFieldCompletionOutput,
@@ -27,6 +27,7 @@ export type SaveWorldbuildingFieldsInput = CommandPayload<"worldbuilding.saveFie
 export type CompleteWorldbuildingFieldsInput = CommandPayload<"worldbuilding.completeFields">;
 
 const WORLDBUILDING_COMPLETION_TEMPERATURE = 0.65;
+const WORLDBUILDING_COMPLETION_PROMPT_VERSION = "worldbuilding.complete.v1";
 
 @Injectable()
 export class WorldbuildingService {
@@ -84,23 +85,20 @@ export class WorldbuildingService {
 
       const creativePathRepository = new CreativePathRepository(projectDatabase);
       const profile = new WorldbuildingRepository(projectDatabase).getProfile(input.projectId);
-      const context = buildWorldbuildingCompletionContext({
+      const variables = buildWorldbuildingCompletionVariables({
         currentFields: input.fields,
         profile,
         project,
         repository: new WorldRepository(projectDatabase),
         pathRepository: creativePathRepository,
       });
-      const messages = buildPromptMessages({
-        capability: "worldbuilding_generate",
-        context,
-        instruction:
-          "基于动态上下文补全 12 个世界观表单字段。保留用户已填写内容的核心含义，返回可直接填入表单的 JSON。",
-        version: "v1",
+      const messages = buildPromptTemplateMessages({
+        templateId: "worldbuilding.complete",
+        variables,
       });
       const modelResult = await this.modelGateway.generateObject({
         messages,
-        promptVersion: "worldbuilding-form.v1",
+        promptVersion: WORLDBUILDING_COMPLETION_PROMPT_VERSION,
         purpose: "worldbuilding_generate",
         schema: WorldbuildingFieldCompletionOutputSchema,
         schemaName: "WorldbuildingFieldCompletionOutput",
@@ -118,11 +116,13 @@ export class WorldbuildingService {
           inputHash: hashWorldbuildingInput(input.fields),
           messages,
           schemaName: "WorldbuildingFieldCompletionOutput",
+          templateId: "worldbuilding.complete",
           temperature: WORLDBUILDING_COMPLETION_TEMPERATURE,
         },
         response: modelResult.raw,
         status: modelResult.modelCall.status,
-        promptVersion: modelResult.modelCall.promptVersion ?? "worldbuilding-form.v1",
+        promptVersion:
+          modelResult.modelCall.promptVersion ?? WORLDBUILDING_COMPLETION_PROMPT_VERSION,
         ...(modelResult.modelCall.usage === undefined
           ? {}
           : { usage: modelResult.modelCall.usage }),
@@ -136,55 +136,51 @@ export class WorldbuildingService {
   }
 }
 
-function buildWorldbuildingCompletionContext(input: {
+function buildWorldbuildingCompletionVariables(input: {
   readonly currentFields: WorldbuildingFields;
   readonly pathRepository: CreativePathRepository;
   readonly profile: WorldbuildingProfileRecord | null;
   readonly project: ProjectOverviewRecord;
   readonly repository: WorldRepository;
-}): string {
+}): Record<string, unknown> {
   const projectId = input.project.id;
   const brief = input.pathRepository.getLatestBrief(projectId);
   const blueprint = input.pathRepository.getActiveBlueprint(projectId);
 
-  return JSON.stringify(
-    {
-      project: {
-        genre: input.project.genre,
-        style: input.project.style,
-        title: input.project.title,
-      },
-      brief,
-      blueprint,
-      currentFields: input.currentFields,
-      savedProfile: input.profile?.fields ?? null,
-      existingCanon: {
-        items: input.repository.listItems(projectId).map((item) => ({
-          description: item.description,
-          name: item.name,
-          type: item.type,
-        })),
-        locations: input.repository.listLocations(projectId).map((location) => ({
-          description: location.description,
-          name: location.name,
-          type: location.type,
-        })),
-        organizations: input.repository.listOrganizations(projectId).map((organization) => ({
-          description: organization.description,
-          name: organization.name,
-          type: organization.type,
-        })),
-        worldRules: input.repository.listWorldRules(projectId).map((rule) => ({
-          category: rule.category,
-          content: rule.content,
-          source: rule.source,
-          title: rule.title,
-        })),
-      },
+  return {
+    project: {
+      genre: input.project.genre,
+      style: input.project.style,
+      title: input.project.title,
     },
-    null,
-    2,
-  );
+    brief,
+    blueprint,
+    currentFields: input.currentFields,
+    savedProfile: input.profile?.fields ?? null,
+    existingCanon: {
+      items: input.repository.listItems(projectId).map((item) => ({
+        description: item.description,
+        name: item.name,
+        type: item.type,
+      })),
+      locations: input.repository.listLocations(projectId).map((location) => ({
+        description: location.description,
+        name: location.name,
+        type: location.type,
+      })),
+      organizations: input.repository.listOrganizations(projectId).map((organization) => ({
+        description: organization.description,
+        name: organization.name,
+        type: organization.type,
+      })),
+      worldRules: input.repository.listWorldRules(projectId).map((rule) => ({
+        category: rule.category,
+        content: rule.content,
+        source: rule.source,
+        title: rule.title,
+      })),
+    },
+  };
 }
 
 function hashWorldbuildingInput(fields: WorldbuildingFields): string {

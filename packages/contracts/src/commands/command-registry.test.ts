@@ -37,6 +37,10 @@ describe("command registry", () => {
       "blueprint.completeForm",
       "blueprint.apply",
       "outline.generate",
+      "outline.saveDraft",
+      "outline.saveVolumeOutline",
+      "outline.saveChapterOutline",
+      "outline.saveSceneOutline",
       "outline.approveChapterOutline",
       "outline.applyChapterOutline",
       "plot.generateBookPlan",
@@ -44,6 +48,8 @@ describe("command registry", () => {
       "plot.saveBookPlanDraft",
       "plot.saveVolumePlan",
       "plot.saveArcPlan",
+      "plot.saveChapterPlan",
+      "plot.saveScenePlan",
       "plot.generateRollingOutline",
       "plot.applyChapterPlans",
       "plot.analyzeOutlineImpact",
@@ -60,6 +66,9 @@ describe("command registry", () => {
       "character.list",
       "character.create",
       "character.update",
+      "entityRelation.list",
+      "entityRelation.create",
+      "entityRelation.update",
       "character.generateNames",
       "element.generateCandidates",
       "element.acceptCandidates",
@@ -76,6 +85,12 @@ describe("command registry", () => {
       "storyEvent.list",
       "storyEvent.create",
       "storyEvent.update",
+      "eventRelation.list",
+      "eventRelation.create",
+      "eventRelation.update",
+      "conflict.list",
+      "conflict.create",
+      "conflict.update",
       "foreshadowing.list",
       "foreshadowing.create",
       "foreshadowing.update",
@@ -371,19 +386,21 @@ describe("command registry", () => {
       parseCommandPayload("element.generateCandidates", {
         constraints: ["不使用现代科技词"],
         count: 10,
-        elementType: "weapon",
-        genre: "玄幻",
+        description: "生成冰雪末世安全屋周边的地下黑市势力名称。",
+        elementType: "faction",
+        genre: "冰雪末世",
         projectId: "proj_1",
-        style: "热血",
+        style: "硬核生存",
         worldRuleIds: ["rule_1"],
       }),
     ).toEqual({
       constraints: ["不使用现代科技词"],
       count: 10,
-      elementType: "weapon",
-      genre: "玄幻",
+      description: "生成冰雪末世安全屋周边的地下黑市势力名称。",
+      elementType: "faction",
+      genre: "冰雪末世",
       projectId: "proj_1",
-      style: "热血",
+      style: "硬核生存",
       worldRuleIds: ["rule_1"],
     });
 
@@ -395,7 +412,7 @@ describe("command registry", () => {
             name: "夜照",
             rationale: "适合悬疑题材里的线索武器。",
             tags: ["旧城", "线索"],
-            type: "weapon",
+            type: "sect",
           },
         ],
         projectId: "proj_1",
@@ -407,7 +424,7 @@ describe("command registry", () => {
           name: "夜照",
           rationale: "适合悬疑题材里的线索武器。",
           tags: ["旧城", "线索"],
-          type: "weapon",
+          type: "sect",
         },
       ],
       projectId: "proj_1",
@@ -637,6 +654,68 @@ describe("command registry", () => {
       targetId: "chapter_plan_1",
       targetType: "chapter_plan",
     });
+
+    expect(
+      parseCommandPayload("plot.saveChapterPlan", {
+        arcPlanId: "arc_plan_1",
+        chapterGoal: "主角启动安全屋，并第一次面对求助压力。",
+        chapterIndex: 1,
+        chapterPlanId: "chapter_plan_1",
+        conflict: "主角必须在救人和暴露据点之间选择。",
+        emotionalTurn: "从独善其身到被迫承担。",
+        hook: "门外传来熟悉的求救声。",
+        informationGain: "安全屋入口可能被追踪。",
+        projectId: "proj_1",
+        relatedCharacterIds: ["char_1"],
+        relatedForeshadowingIds: ["foreshadowing_1"],
+        relatedPlotlineIds: ["plotline_1"],
+        status: "draft",
+        targetWordCount: 3200,
+        title: "第 1 章 暴雪预警",
+      }),
+    ).toEqual({
+      arcPlanId: "arc_plan_1",
+      chapterGoal: "主角启动安全屋，并第一次面对求助压力。",
+      chapterIndex: 1,
+      chapterPlanId: "chapter_plan_1",
+      conflict: "主角必须在救人和暴露据点之间选择。",
+      emotionalTurn: "从独善其身到被迫承担。",
+      hook: "门外传来熟悉的求救声。",
+      informationGain: "安全屋入口可能被追踪。",
+      projectId: "proj_1",
+      relatedCharacterIds: ["char_1"],
+      relatedForeshadowingIds: ["foreshadowing_1"],
+      relatedPlotlineIds: ["plotline_1"],
+      status: "draft",
+      targetWordCount: 3200,
+      title: "第 1 章 暴雪预警",
+    });
+
+    expect(
+      parseCommandPayload("plot.saveScenePlan", {
+        chapterPlanId: "chapter_plan_1",
+        conflictTurn: "电力切换失败，邻居开始敲门。",
+        locationId: "location_1",
+        memoryTargets: ["安全屋首次暴露热源"],
+        outcome: "主角守住入口，但留下门禁破绽。",
+        projectId: "proj_1",
+        sceneGoal: "把安全屋危机具体化。",
+        sceneIndex: 1,
+        scenePlanId: "scene_plan_1",
+        status: "draft",
+      }),
+    ).toEqual({
+      chapterPlanId: "chapter_plan_1",
+      conflictTurn: "电力切换失败，邻居开始敲门。",
+      locationId: "location_1",
+      memoryTargets: ["安全屋首次暴露热源"],
+      outcome: "主角守住入口，但留下门禁破绽。",
+      projectId: "proj_1",
+      sceneGoal: "把安全屋危机具体化。",
+      sceneIndex: 1,
+      scenePlanId: "scene_plan_1",
+      status: "draft",
+    });
   });
 
   it("parses creative path and outline payloads", () => {
@@ -683,6 +762,116 @@ describe("command registry", () => {
       chapterCount: 10,
       projectId: "proj_1",
       scope: "chapter_batch",
+    });
+
+    expect(
+      parseCommandPayload("outline.saveDraft", {
+        basis: { source: "manual" },
+        outlineId: "outline_1",
+        projectId: "proj_1",
+        scope: "full_book",
+        status: "draft",
+        title: "全书大纲",
+      }),
+    ).toEqual({
+      basis: { source: "manual" },
+      outlineId: "outline_1",
+      projectId: "proj_1",
+      scope: "full_book",
+      status: "draft",
+      title: "全书大纲",
+    });
+
+    expect(
+      parseCommandPayload("outline.saveVolumeOutline", {
+        climax: "卷末安全屋第一次公开反击。",
+        majorConflict: "救人与隐藏堡垒位置冲突。",
+        outlineId: "outline_1",
+        projectId: "proj_1",
+        purpose: "完成极寒降临和安全屋立足。",
+        sortOrder: 1,
+        status: "draft",
+        title: "第一卷 白灾入屋",
+        volumeOutlineId: "volume_outline_1",
+        wordCountGoal: 500_000,
+      }),
+    ).toEqual({
+      climax: "卷末安全屋第一次公开反击。",
+      majorConflict: "救人与隐藏堡垒位置冲突。",
+      outlineId: "outline_1",
+      projectId: "proj_1",
+      purpose: "完成极寒降临和安全屋立足。",
+      sortOrder: 1,
+      status: "draft",
+      title: "第一卷 白灾入屋",
+      volumeOutlineId: "volume_outline_1",
+      wordCountGoal: 500_000,
+    });
+
+    expect(
+      parseCommandPayload("outline.saveChapterOutline", {
+        chapterGoal: "主角收到极寒预警并启动安全屋改造。",
+        conflict: "时间只剩三小时，物资与信任都不足。",
+        hook: "预警邮件第二次自动刷新。",
+        informationGain: "极寒不是普通寒潮。",
+        outlineId: "outline_1",
+        projectId: "proj_1",
+        relatedForeshadowingIds: ["foreshadowing_1"],
+        relatedPlotlineNodeIds: ["node_1"],
+        requiredCharacterIds: ["char_1"],
+        requiredLocationIds: ["location_1"],
+        sortOrder: 1,
+        status: "draft",
+        targetWordCount: 3300,
+        title: "第 1 章 暴雪预警",
+        volumeOutlineId: "volume_outline_1",
+      }),
+    ).toEqual({
+      chapterGoal: "主角收到极寒预警并启动安全屋改造。",
+      conflict: "时间只剩三小时，物资与信任都不足。",
+      hook: "预警邮件第二次自动刷新。",
+      informationGain: "极寒不是普通寒潮。",
+      outlineId: "outline_1",
+      projectId: "proj_1",
+      relatedForeshadowingIds: ["foreshadowing_1"],
+      relatedPlotlineNodeIds: ["node_1"],
+      requiredCharacterIds: ["char_1"],
+      requiredLocationIds: ["location_1"],
+      sortOrder: 1,
+      status: "draft",
+      targetWordCount: 3300,
+      title: "第 1 章 暴雪预警",
+      volumeOutlineId: "volume_outline_1",
+    });
+
+    expect(
+      parseCommandPayload("outline.saveSceneOutline", {
+        beatType: "opening_hook",
+        chapterOutlineId: "chapter_outline_1",
+        conflict: "改造声引来物业询问。",
+        entryState: "主角半信半疑。",
+        exitState: "主角确认灾难正在逼近。",
+        locationId: "location_1",
+        projectId: "proj_1",
+        purpose: "用具体动作展示安全屋第一轮升级。",
+        sceneOutlineId: "scene_outline_1",
+        sortOrder: 1,
+        status: "draft",
+        title: "三小时倒计时",
+      }),
+    ).toEqual({
+      beatType: "opening_hook",
+      chapterOutlineId: "chapter_outline_1",
+      conflict: "改造声引来物业询问。",
+      entryState: "主角半信半疑。",
+      exitState: "主角确认灾难正在逼近。",
+      locationId: "location_1",
+      projectId: "proj_1",
+      purpose: "用具体动作展示安全屋第一轮升级。",
+      sceneOutlineId: "scene_outline_1",
+      sortOrder: 1,
+      status: "draft",
+      title: "三小时倒计时",
     });
 
     expect(
@@ -806,6 +995,7 @@ describe("command registry", () => {
         title: "雨夜来信",
         description: "主角收到关键线索。",
         eventType: "discovery",
+        outcome: "主角决定追查旧案。",
         participants: [
           {
             entityType: "character",
@@ -815,6 +1005,7 @@ describe("command registry", () => {
         ],
       }),
     ).toMatchObject({
+      outcome: "主角决定追查旧案。",
       participants: [
         {
           entityType: "character",
@@ -822,6 +1013,130 @@ describe("command registry", () => {
           role: "discoverer",
         },
       ],
+    });
+  });
+
+  it("parses entity relation payloads", () => {
+    expect(
+      parseCommandPayload("entityRelation.create", {
+        description: "主角保护医生，医生提供避难所医疗秩序。",
+        polarity: 1,
+        projectId: "proj_1",
+        relationType: "protects",
+        sourceEntityId: "char_1",
+        sourceEntityType: "character",
+        status: "confirmed",
+        strength: 0.8,
+        targetEntityId: "char_2",
+        targetEntityType: "character",
+      }),
+    ).toEqual({
+      description: "主角保护医生，医生提供避难所医疗秩序。",
+      polarity: 1,
+      projectId: "proj_1",
+      relationType: "protects",
+      sourceEntityId: "char_1",
+      sourceEntityType: "character",
+      status: "confirmed",
+      strength: 0.8,
+      targetEntityId: "char_2",
+      targetEntityType: "character",
+    });
+
+    expect(
+      parseCommandPayload("entityRelation.update", {
+        entityRelationId: "relation_1",
+        patch: {
+          description: "关系从互利变成稳定同盟。",
+          status: "confirmed",
+          strength: 0.95,
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      entityRelationId: "relation_1",
+      patch: {
+        description: "关系从互利变成稳定同盟。",
+        status: "confirmed",
+        strength: 0.95,
+      },
+      projectId: "proj_1",
+    });
+  });
+
+  it("parses conflict and event relation payloads", () => {
+    expect(
+      parseCommandPayload("conflict.create", {
+        conflictType: "survival",
+        escalationPath: ["断电", "邻里围门", "外部势力锁定暖源"],
+        opposingForces: ["安全屋", "失控幸存者"],
+        projectId: "proj_1",
+        relatedPlotlineId: "plotline_1",
+        stakes: "安全屋一旦暴露，主角会失去唯一生存优势。",
+        status: "active",
+        title: "暖源暴露危机",
+      }),
+    ).toEqual({
+      conflictType: "survival",
+      escalationPath: ["断电", "邻里围门", "外部势力锁定暖源"],
+      opposingForces: ["安全屋", "失控幸存者"],
+      projectId: "proj_1",
+      relatedPlotlineId: "plotline_1",
+      stakes: "安全屋一旦暴露，主角会失去唯一生存优势。",
+      status: "active",
+      title: "暖源暴露危机",
+    });
+
+    expect(
+      parseCommandPayload("conflict.update", {
+        conflictId: "conflict_1",
+        patch: {
+          escalationPath: ["抢药", "断水", "第一次武装冲突"],
+          status: "resolved",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      conflictId: "conflict_1",
+      patch: {
+        escalationPath: ["抢药", "断水", "第一次武装冲突"],
+        status: "resolved",
+      },
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("eventRelation.create", {
+        description: "预警邮件直接导致主角抢先改造堡垒。",
+        projectId: "proj_1",
+        relationType: "causes",
+        sourceEventId: "event_1",
+        targetEventId: "event_2",
+      }),
+    ).toEqual({
+      description: "预警邮件直接导致主角抢先改造堡垒。",
+      projectId: "proj_1",
+      relationType: "causes",
+      sourceEventId: "event_1",
+      targetEventId: "event_2",
+    });
+
+    expect(
+      parseCommandPayload("eventRelation.update", {
+        eventRelationId: "event_relation_1",
+        patch: {
+          description: "因果关系改为递进升级。",
+          relationType: "escalates",
+        },
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      eventRelationId: "event_relation_1",
+      patch: {
+        description: "因果关系改为递进升级。",
+        relationType: "escalates",
+      },
+      projectId: "proj_1",
     });
   });
 
@@ -855,6 +1170,22 @@ describe("command registry", () => {
         storyTime: "第 3 章夜雨",
       },
       storyEventId: "event_1",
+    });
+
+    expect(
+      parseCommandPayload("storyEvent.update", {
+        projectId: "proj_1",
+        storyEventId: "event_1",
+        patch: {
+          outcome: "主角决定守住安全屋入口。",
+        },
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      storyEventId: "event_1",
+      patch: {
+        outcome: "主角决定守住安全屋入口。",
+      },
     });
   });
 
@@ -896,6 +1227,22 @@ describe("command registry", () => {
         payoffEventId: "event_payoff",
         seedEventId: "event_seed",
         status: "payoff_ready",
+      },
+    });
+
+    expect(
+      parseCommandPayload("foreshadowing.update", {
+        foreshadowingId: "foreshadowing_1",
+        projectId: "proj_1",
+        patch: {
+          description: "水印只在第一页角落闪过。",
+        },
+      }),
+    ).toEqual({
+      foreshadowingId: "foreshadowing_1",
+      projectId: "proj_1",
+      patch: {
+        description: "水印只在第一页角落闪过。",
       },
     });
   });

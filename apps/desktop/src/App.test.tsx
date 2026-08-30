@@ -26,8 +26,10 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { level: 4, name: "Story Pilot" })).toBeInTheDocument();
+    expect(screen.getByLabelText("应用标题栏")).toBeInTheDocument();
     expect(screen.getByLabelText("工作台")).toBeInTheDocument();
-    expect(screen.getByText("项目看板")).toBeInTheDocument();
+    expect(screen.getByLabelText("创作检查器")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "项目看板" })).not.toBeInTheDocument();
     expect(await screen.findByText("暂无打开的作品")).toBeInTheDocument();
   });
 });

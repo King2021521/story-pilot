@@ -23,7 +23,6 @@ import {
   Button,
   Checkbox,
   Col,
-  Descriptions,
   Empty,
   Form,
   Input,
@@ -37,7 +36,7 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { ArtifactReviewItem } from "../ai/ArtifactReviewPanel";
 import {
@@ -597,6 +596,7 @@ export interface StoryEventElement {
   readonly eventType: string;
   readonly id: string;
   readonly participants?: readonly StoryEventParticipantElement[];
+  readonly outcome?: string | null;
   readonly sceneId?: string | null;
   readonly status: string;
   readonly storyTime?: string | null;
@@ -715,7 +715,10 @@ export interface WorkbenchBoard {
   readonly artifacts: readonly ArtifactReviewItem[];
   readonly chapters: readonly WorkbenchChapter[];
   readonly characters?: readonly CharacterElement[];
+  readonly conflicts?: readonly unknown[];
   readonly creativePath?: CreativePathBoard;
+  readonly entityRelations?: readonly unknown[];
+  readonly eventRelations?: readonly unknown[];
   readonly foreshadowings?: readonly ForeshadowingElement[];
   readonly items?: readonly WorldElement[];
   readonly locations?: readonly WorldElement[];
@@ -888,65 +891,58 @@ export function WorkbenchHome({
   const moduleTitle = getWorkspaceModuleTitle(activeModuleKey);
 
   return (
-    <div className="novel-workspace">
-      <main aria-label={moduleTitle} className="novel-workspace__main">
-        {renderModule({
-          activeModuleKey,
-          board,
-          chapterVersions,
-          creativePath,
-          loadingChapterVersions,
-          onAcceptElementCandidates,
-          onApplyBlueprint,
-          onApplyChapterOutline,
-          onApproveChapterOutline,
-          onAdvanceStage,
-          onConfirmBrief,
-          onConfirmMemory,
-          onCreateChapter,
-          onCreateCharacter,
-          onCreateForeshadowing,
-          onCreatePlotline,
-          onCreatePlotlineNode,
-          onCreateStoryEvent,
-          onCreateWorldRule,
-          onCompleteCoreStoryFields,
-          onCompleteWorldbuildingFields,
-          onGenerateBlueprint,
-          onGenerateBookPlan,
-          onGenerateDraft,
-          onGenerateDraftFromOutline,
-          onGenerateDraftFromPlan,
-          onGenerateElementCandidates,
-          onGenerateOutline,
-          onGenerateRollingOutline,
-          onLoadChapterVersions,
-          onPlanForeshadowing,
-          onRejectMemory,
-          onRestoreChapterVersion,
-          onSaveBrief,
-          onSaveBookPlanDraft,
-          onSaveVolumePlan,
-          onSaveArcPlan,
-          onSaveChapter,
-          onSaveCoreStoryFields,
-          onSaveWorldbuildingFields,
-          onSelectChapter,
-          onUpdateCharacter,
-          onUpdateForeshadowing,
-          onUpdatePlotline,
-          onUpdatePlotlineNode,
-          onUpdateStoryEvent,
-          savingChapter,
-          selectedChapter,
-        })}
-      </main>
-      <WorkspaceContextPanel
-        activeModuleKey={activeModuleKey}
-        board={board}
-        creativePath={creativePath}
-      />
-    </div>
+    <main aria-label={moduleTitle} className="workbench-home">
+      {renderModule({
+        activeModuleKey,
+        board,
+        chapterVersions,
+        creativePath,
+        loadingChapterVersions,
+        onAcceptElementCandidates,
+        onApplyBlueprint,
+        onApplyChapterOutline,
+        onApproveChapterOutline,
+        onAdvanceStage,
+        onConfirmBrief,
+        onConfirmMemory,
+        onCreateChapter,
+        onCreateCharacter,
+        onCreateForeshadowing,
+        onCreatePlotline,
+        onCreatePlotlineNode,
+        onCreateStoryEvent,
+        onCreateWorldRule,
+        onCompleteCoreStoryFields,
+        onCompleteWorldbuildingFields,
+        onGenerateBlueprint,
+        onGenerateBookPlan,
+        onGenerateDraft,
+        onGenerateDraftFromOutline,
+        onGenerateDraftFromPlan,
+        onGenerateElementCandidates,
+        onGenerateOutline,
+        onGenerateRollingOutline,
+        onLoadChapterVersions,
+        onPlanForeshadowing,
+        onRejectMemory,
+        onRestoreChapterVersion,
+        onSaveBrief,
+        onSaveBookPlanDraft,
+        onSaveVolumePlan,
+        onSaveArcPlan,
+        onSaveChapter,
+        onSaveCoreStoryFields,
+        onSaveWorldbuildingFields,
+        onSelectChapter,
+        onUpdateCharacter,
+        onUpdateForeshadowing,
+        onUpdatePlotline,
+        onUpdatePlotlineNode,
+        onUpdateStoryEvent,
+        savingChapter,
+        selectedChapter,
+      })}
+    </main>
   );
 }
 
@@ -2199,7 +2195,7 @@ function StorylinesModule({
     [storyEvents],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (selectedPlotline) {
       plotlineForm.setFieldsValue(plotlineToFormValues(selectedPlotline));
       return;
@@ -2209,7 +2205,7 @@ function StorylinesModule({
     plotlineForm.setFieldsValue(PLOTLINE_FORM_DEFAULTS);
   }, [plotlineForm, selectedPlotline]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     nodeForm.resetFields();
     nodeForm.setFieldsValue(PLOTLINE_NODE_FORM_DEFAULTS);
   }, [nodeForm, selectedPlotlineId]);
@@ -2721,7 +2717,7 @@ function BookOutlineModule({
     value: plotline.id,
   }));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     bookForm.setFieldsValue(
       bookPlanToFormValues(selectedBookPlan, {
         estimatedWordCount:
@@ -2737,7 +2733,7 @@ function BookOutlineModule({
     selectedBookPlan,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     volumeForm.setFieldsValue(
       volumePlanToFormValues(selectedVolumePlan, {
         bookPlanId: selectedBookPlan?.id ?? creativePath.bookPlans[0]?.id ?? "",
@@ -2753,7 +2749,7 @@ function BookOutlineModule({
     volumeForm,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     arcForm.setFieldsValue(
       arcPlanToFormValues(selectedArcPlan, {
         arcIndex: getNextArcIndex(creativePath.arcPlans, selectedVolumePlan?.id),
@@ -2768,7 +2764,7 @@ function BookOutlineModule({
     selectedVolumePlan,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     generateForm.setFieldsValue({
       targetWordCount:
         selectedBookPlan?.targetWordCount ??
@@ -3560,7 +3556,7 @@ function PlotNodesModule({
     [storyEvents],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (selectedEvent) {
       eventForm.setFieldsValue(storyEventToFormValues(selectedEvent));
       return;
@@ -3575,7 +3571,7 @@ function PlotNodesModule({
     });
   }, [eventForm, selectedEvent]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (selectedForeshadowing) {
       foreshadowingForm.setFieldsValue(foreshadowingToFormValues(selectedForeshadowing));
       return;
@@ -4311,6 +4307,7 @@ function ElementCandidateSection({
   const [form] = Form.useForm<{
     readonly constraints?: string[];
     readonly count: CountPresetValue;
+    readonly description?: string;
     readonly elementType: ElementTypePresetValue;
     readonly style?: string;
     readonly worldRuleIds?: string[];
@@ -4354,6 +4351,7 @@ function ElementCandidateSection({
             const result = await onGenerateElementCandidates({
               constraints: values.constraints ?? [],
               count: values.count,
+              ...(values.description?.trim() ? { description: values.description.trim() } : {}),
               elementType: values.elementType,
               genre: project.genre,
               ...(values.style === undefined ? {} : { style: values.style }),
@@ -4389,6 +4387,17 @@ function ElementCandidateSection({
                 mode="multiple"
                 optionFilterProp="label"
                 options={worldRuleOptions}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="创作描述" name="description">
+              <Input.TextArea
+                aria-label="创作描述"
+                autoSize={{ maxRows: 5, minRows: 3 }}
+                maxLength={500}
+                placeholder="例如：生成安全屋外部补给线上的地下势力名称。"
+                showCount
               />
             </Form.Item>
           </Col>
@@ -4452,80 +4461,6 @@ function ElementCandidateSection({
         }}
       />
     </ModuleSection>
-  );
-}
-
-function WorkspaceContextPanel({
-  activeModuleKey,
-  board,
-  creativePath,
-}: {
-  readonly activeModuleKey: WorkspaceModuleKey;
-  readonly board: WorkbenchBoard;
-  readonly creativePath: CreativePathBoard;
-}) {
-  const stage = getStageForModule(creativePath, activeModuleKey);
-  const filledWorldbuildingFieldCount = countFilledWorldbuildingFields(
-    board.worldbuildingProfile?.fields,
-  );
-  const plotNodeForeshadowings = board.foreshadowings ?? [];
-  const readyForeshadowingCount = plotNodeForeshadowings.filter(
-    (foreshadowing) => foreshadowing.status === "payoff_ready",
-  ).length;
-  const paidForeshadowingCount = plotNodeForeshadowings.filter(
-    (foreshadowing) => foreshadowing.status === "paid_off",
-  ).length;
-
-  return (
-    <aside aria-label="上下文面板" className="novel-context-panel">
-      <div>
-        <Text className="story-section-title">当前模块</Text>
-        <Text className="novel-context-panel__title" strong>
-          {getWorkspaceModuleTitle(activeModuleKey)}
-        </Text>
-      </div>
-      <Descriptions column={1} size="small">
-        <Descriptions.Item label="阶段状态">
-          <Tag color={getStatusColor(stage?.status)}>{stage?.status ?? "available"}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="完成度">{stage?.readinessScore ?? 0}%</Descriptions.Item>
-        {activeModuleKey === "worldbuilding" ? (
-          <Descriptions.Item label="世界观维度">
-            {filledWorldbuildingFieldCount}/{WORLD_DIMENSIONS.length}
-          </Descriptions.Item>
-        ) : activeModuleKey === "book-outline" ? (
-          <>
-            <Descriptions.Item label="全书规划">{creativePath.bookPlans.length}</Descriptions.Item>
-            <Descriptions.Item label="卷规划">{creativePath.volumePlans.length}</Descriptions.Item>
-            <Descriptions.Item label="阶段弧线">{creativePath.arcPlans.length}</Descriptions.Item>
-          </>
-        ) : activeModuleKey === "plot-nodes" ? (
-          <>
-            <Descriptions.Item label="剧情节点">{board.storyEvents?.length ?? 0}</Descriptions.Item>
-            <Descriptions.Item label="伏笔池">{plotNodeForeshadowings.length}</Descriptions.Item>
-            <Descriptions.Item label="待回收">{readyForeshadowingCount}</Descriptions.Item>
-            <Descriptions.Item label="已回收">{paidForeshadowingCount}</Descriptions.Item>
-          </>
-        ) : (
-          <Descriptions.Item label="世界规则">{board.worldRules?.length ?? 0}</Descriptions.Item>
-        )}
-        <Descriptions.Item label="人物">{board.characters?.length ?? 0}</Descriptions.Item>
-        <Descriptions.Item label="故事线">{board.plotlines?.length ?? 0}</Descriptions.Item>
-        {activeModuleKey === "plot-nodes" ? null : (
-          <Descriptions.Item label="剧情节点">{board.storyEvents?.length ?? 0}</Descriptions.Item>
-        )}
-        <Descriptions.Item label="待审产物">{board.artifacts.length}</Descriptions.Item>
-      </Descriptions>
-      <div className="novel-context-panel__block">
-        <Text className="story-section-title">写作上下文</Text>
-        <ul className="context-fact-list">
-          <li>题材：{board.project.genre}</li>
-          <li>风格：{board.project.style ?? "通用"}</li>
-          <li>章节：{board.chapters.length}</li>
-          <li>待确认记忆：{board.memoryCandidates.length}</li>
-        </ul>
-      </div>
-    </aside>
   );
 }
 
@@ -5202,14 +5137,6 @@ function normalizeWorldbuildingFormFields(
   };
 }
 
-function countFilledWorldbuildingFields(fields: WorldbuildingFields | null | undefined): number {
-  if (!fields) {
-    return 0;
-  }
-
-  return WORLD_DIMENSIONS.filter((dimension) => fields[dimension.key].trim().length > 0).length;
-}
-
 function coreStoryFormValuesFromBlueprint(
   blueprint: CreativePathBoard["blueprint"],
 ): CoreStoryFormValues {
@@ -5405,6 +5332,7 @@ function createFallbackCreativePath(defaultGenre: string): CreativePathBoard {
     outlines: [],
     reviewIssues: [],
     scenePlans: [],
+    sceneOutlines: [],
     stages: [
       { readinessScore: 10, stageKey: "brief", status: "available" },
       { readinessScore: 0, stageKey: "blueprint", status: "locked" },
@@ -5416,6 +5344,7 @@ function createFallbackCreativePath(defaultGenre: string): CreativePathBoard {
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    volumeOutlines: [],
     volumePlans: [],
   };
 }

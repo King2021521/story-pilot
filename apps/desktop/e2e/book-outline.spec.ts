@@ -165,6 +165,7 @@ test.beforeEach(async ({ page }) => {
 
 test("book outline uses stable layered forms and persists each tier", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "作品总控台" })).toBeVisible();
   await page.getByRole("button", { name: "6. 全书大纲" }).click();
 
   await expect(page.getByRole("heading", { name: "全书大纲" })).toBeVisible();
@@ -183,7 +184,10 @@ test("book outline uses stable layered forms and persists each tier", async ({ p
   expect(boxesOverlap(editorBox!, assistantBox!)).toBe(false);
 
   await page.getByRole("button", { name: "编辑全书规划 布衣天子全书大纲" }).click();
-  await page.getByRole("textbox", { name: "核心承诺" }).fill("每卷一次公开胜利和一次隐藏损失。");
+  const corePromiseInput = page.getByRole("textbox", { name: "核心承诺" });
+  await expect(corePromiseInput).toHaveValue("小人物每卷完成一次权力反转，并付出一次身份代价。");
+  await corePromiseInput.fill("每卷一次公开胜利和一次隐藏损失。");
+  await expect(corePromiseInput).toHaveValue("每卷一次公开胜利和一次隐藏损失。");
   await page.getByRole("button", { name: "保存全书规划" }).click();
   await expect
     .poll(async () =>
@@ -200,9 +204,10 @@ test("book outline uses stable layered forms and persists each tier", async ({ p
     });
 
   await page.getByRole("button", { name: "编辑卷规划 第一卷 寒门入局" }).click();
-  await page
-    .getByRole("textbox", { name: "卷核心冲突" })
-    .fill("寒门新官必须用民案撬动旧贵族封锁。");
+  const volumeConflictInput = page.getByRole("textbox", { name: "卷核心冲突" });
+  await expect(volumeConflictInput).toHaveValue("旧贵族封锁上升通道，主角必须借民案撬动权力结构。");
+  await volumeConflictInput.fill("寒门新官必须用民案撬动旧贵族封锁。");
+  await expect(volumeConflictInput).toHaveValue("寒门新官必须用民案撬动旧贵族封锁。");
   await page.getByRole("button", { name: "保存卷规划" }).click();
   await expect
     .poll(async () =>
@@ -219,9 +224,10 @@ test("book outline uses stable layered forms and persists each tier", async ({ p
     });
 
   await page.getByRole("button", { name: "编辑阶段弧线 旧案破口" }).click();
-  await page
-    .getByRole("textbox", { name: "升级链" })
-    .fill("旧案开场\n证人失踪\n公堂反杀\n幕后势力露面");
+  const escalationInput = page.getByRole("textbox", { name: "升级链" });
+  await expect(escalationInput).toHaveValue("旧案开场\n证人失踪\n公堂反杀");
+  await escalationInput.fill("旧案开场\n证人失踪\n公堂反杀\n幕后势力露面");
+  await expect(escalationInput).toHaveValue("旧案开场\n证人失踪\n公堂反杀\n幕后势力露面");
   await page.getByRole("button", { name: "保存阶段弧线" }).click();
   await expect
     .poll(async () =>

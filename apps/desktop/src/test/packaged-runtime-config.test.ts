@@ -49,7 +49,12 @@ describe("packaged desktop runtime config", () => {
       readFileSync(join(process.cwd(), "src-tauri", "tauri.conf.json"), "utf8"),
     ) as {
       app?: {
-        windows?: { center?: boolean; title?: string }[];
+        windows?: {
+          center?: boolean;
+          hiddenTitle?: boolean;
+          title?: string;
+          titleBarStyle?: string;
+        }[];
       };
     };
     const mainWindow = config.app?.windows?.find((window) => window.title === "Story Pilot");
@@ -57,5 +62,27 @@ describe("packaged desktop runtime config", () => {
     expect(mainWindow).toMatchObject({
       center: true,
     });
+  });
+
+  it("uses a macOS overlay titlebar so shell controls align with traffic lights", () => {
+    const config = JSON.parse(
+      readFileSync(join(process.cwd(), "src-tauri", "tauri.conf.json"), "utf8"),
+    ) as {
+      app?: {
+        windows?: {
+          decorations?: boolean;
+          hiddenTitle?: boolean;
+          title?: string;
+          titleBarStyle?: string;
+        }[];
+      };
+    };
+    const mainWindow = config.app?.windows?.find((window) => window.title === "Story Pilot");
+
+    expect(mainWindow).toMatchObject({
+      titleBarStyle: "Overlay",
+      hiddenTitle: true,
+    });
+    expect(mainWindow?.decorations).not.toBe(false);
   });
 });

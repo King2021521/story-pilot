@@ -36,7 +36,10 @@ export interface WorkbenchBoard {
   readonly project: unknown;
   readonly chapters: readonly unknown[];
   readonly characters: readonly unknown[];
+  readonly conflicts: readonly unknown[];
   readonly creativePath: unknown;
+  readonly entityRelations: readonly unknown[];
+  readonly eventRelations: readonly unknown[];
   readonly artifacts: readonly unknown[];
   readonly foreshadowings: readonly unknown[];
   readonly items: readonly unknown[];
@@ -100,6 +103,7 @@ export class WorkbenchService {
       const creativePathRepository = new CreativePathRepository(projectDatabase);
       const longformPlanRepository = new LongformPlanRepository(projectDatabase);
       const outlineRepository = new OutlineRepository(projectDatabase);
+      const characterRepository = new CharacterRepository(projectDatabase);
       if (creativePathRepository.listStages(projectId).length === 0) {
         creativePathRepository.initializePath(projectId);
       }
@@ -109,7 +113,8 @@ export class WorkbenchService {
       return {
         artifacts: new ArtifactRepository(projectDatabase).listByProject({ projectId }),
         chapters: new ChapterRepository(projectDatabase).listChapters({ projectId }),
-        characters: new CharacterRepository(projectDatabase).listCharacters(projectId),
+        characters: characterRepository.listCharacters(projectId),
+        conflicts: plotRepository.listConflicts(projectId),
         creativePath: {
           ...creativePath,
           arcPlans: longformPlanRepository.listArcPlans(projectId),
@@ -122,8 +127,12 @@ export class WorkbenchService {
             status: "open",
           }),
           scenePlans: longformPlanRepository.listScenePlans(projectId),
+          sceneOutlines: outlineRepository.listSceneOutlines(projectId),
+          volumeOutlines: outlineRepository.listVolumeOutlines(projectId),
           volumePlans: longformPlanRepository.listVolumePlans(projectId),
         },
+        entityRelations: characterRepository.listRelations({ projectId }),
+        eventRelations: plotRepository.listEventRelations(projectId),
         foreshadowings: plotRepository.listForeshadowings(projectId),
         items: worldRepository.listItems(projectId),
         locations: worldRepository.listLocations(projectId),

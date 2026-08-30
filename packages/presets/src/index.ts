@@ -42,6 +42,8 @@ export const ELEMENT_TYPE_PRESETS = [
   { label: "城市", value: "city" },
   { label: "地点", value: "location" },
   { label: "组织/势力", value: "organization" },
+  { label: "势力名称", value: "faction" },
+  { label: "门派名称", value: "sect" },
   { label: "武器", value: "weapon" },
   { label: "功法", value: "technique" },
   { label: "道具", value: "item" },

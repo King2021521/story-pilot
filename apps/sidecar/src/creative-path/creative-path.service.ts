@@ -22,6 +22,7 @@ import {
 import {
   BlueprintGenerateOutputSchema,
   buildPromptMessages,
+  buildPromptTemplateMessages,
   CoreStoryFieldCompletionOutputSchema,
   type CoreStoryFieldCompletionOutput,
   type ModelGateway,
@@ -141,6 +142,7 @@ export interface CompleteBlueprintFormInput {
 }
 
 const CORE_STORY_COMPLETION_TEMPERATURE = 0.7;
+const CORE_STORY_COMPLETION_PROMPT_VERSION = "core-story.complete.v1";
 
 @Injectable()
 export class CreativePathService {
@@ -663,22 +665,19 @@ export class CreativePathService {
     try {
       const pathRepository = new CreativePathRepository(projectDatabase);
       const project = getProjectOrThrow(new ProjectRepository(projectDatabase), input.projectId);
-      const context = buildCoreStoryCompletionContext({
+      const variables = buildCoreStoryCompletionVariables({
         currentFields: input.fields,
         pathRepository,
         project,
         projectDatabase,
       });
-      const messages = buildPromptMessages({
-        capability: "core_story_complete",
-        context,
-        instruction:
-          "基于动态上下文补全核心故事表单。保留用户已填写内容的核心含义，返回可直接填入表单的 JSON。",
-        version: "v1",
+      const messages = buildPromptTemplateMessages({
+        templateId: "core-story.complete",
+        variables,
       });
       const modelResult = await this.modelGateway.generateObject({
         messages,
-        promptVersion: "core-story-form.v1",
+        promptVersion: CORE_STORY_COMPLETION_PROMPT_VERSION,
         purpose: "core_story_complete",
         schema: CoreStoryFieldCompletionOutputSchema,
         schemaName: "CoreStoryFieldCompletionOutput",
@@ -696,11 +695,12 @@ export class CreativePathService {
           inputHash: hashCoreStoryInput(input.fields),
           messages,
           schemaName: "CoreStoryFieldCompletionOutput",
+          templateId: "core-story.complete",
           temperature: CORE_STORY_COMPLETION_TEMPERATURE,
         },
         response: modelResult.raw,
         status: modelResult.modelCall.status,
-        promptVersion: modelResult.modelCall.promptVersion ?? "core-story-form.v1",
+        promptVersion: modelResult.modelCall.promptVersion ?? CORE_STORY_COMPLETION_PROMPT_VERSION,
         ...(modelResult.modelCall.usage === undefined
           ? {}
           : { usage: modelResult.modelCall.usage }),
@@ -811,7 +811,7 @@ function buildStageGateReport(
   };
 }
 
-function buildCoreStoryCompletionContext(input: {
+function buildCoreStoryCompletionVariables(input: {
   readonly currentFields: CoreStoryFormFields;
   readonly pathRepository: CreativePathRepository;
   readonly project: {
@@ -821,28 +821,24 @@ function buildCoreStoryCompletionContext(input: {
     readonly title: string;
   };
   readonly projectDatabase: ProjectDatabase;
-}): string {
+}): Record<string, unknown> {
   const brief = input.pathRepository.getLatestBrief(input.project.id);
   const currentBlueprint = input.pathRepository.getActiveBlueprint(input.project.id);
   const worldbuildingProfile = new WorldbuildingRepository(input.projectDatabase).getProfile(
     input.project.id,
   );
 
-  return JSON.stringify(
-    {
-      project: {
-        genre: input.project.genre,
-        style: input.project.style,
-        title: input.project.title,
-      },
-      brief,
-      worldbuildingProfile: worldbuildingProfile?.fields ?? null,
-      currentBlueprint,
-      currentFields: input.currentFields,
+  return {
+    project: {
+      genre: input.project.genre,
+      style: input.project.style,
+      title: input.project.title,
     },
-    null,
-    2,
-  );
+    brief,
+    worldbuildingProfile: worldbuildingProfile?.fields ?? null,
+    currentBlueprint,
+    currentFields: input.currentFields,
+  };
 }
 
 function buildPreviousStageRequirements(

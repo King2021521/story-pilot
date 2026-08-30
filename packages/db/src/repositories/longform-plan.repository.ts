@@ -164,6 +164,41 @@ export interface SaveArcPlanInput {
   readonly now?: number;
 }
 
+export interface SaveChapterPlanInput {
+  readonly chapterPlanId: string;
+  readonly projectId: string;
+  readonly arcPlanId: string | null;
+  readonly chapterId?: string | null;
+  readonly chapterIndex: number;
+  readonly title: string;
+  readonly chapterGoal: string;
+  readonly conflict: string;
+  readonly informationGain: string;
+  readonly emotionalTurn: string;
+  readonly hook: string;
+  readonly targetWordCount: number;
+  readonly relatedPlotlineIds: readonly string[];
+  readonly relatedCharacterIds: readonly string[];
+  readonly relatedForeshadowingIds: readonly string[];
+  readonly status: string;
+  readonly now?: number;
+}
+
+export interface SaveScenePlanInput {
+  readonly scenePlanId: string;
+  readonly projectId: string;
+  readonly chapterPlanId: string;
+  readonly sceneIndex: number;
+  readonly povCharacterId?: string | null;
+  readonly locationId?: string | null;
+  readonly sceneGoal: string;
+  readonly conflictTurn: string;
+  readonly outcome: string;
+  readonly memoryTargets: readonly string[];
+  readonly status: string;
+  readonly now?: number;
+}
+
 export interface CreateBookPlanHierarchyResult {
   readonly bookPlan: BookPlanRecord;
   readonly volumePlans: readonly VolumePlanRecord[];
@@ -617,6 +652,151 @@ export class LongformPlanRepository {
     return arcPlan;
   }
 
+  saveChapterPlan(input: SaveChapterPlanInput): ChapterPlanRecord {
+    const now = input.now ?? Date.now();
+    const existing = this.getChapterPlan(input.projectId, input.chapterPlanId);
+    const values = {
+      arcPlanId: input.arcPlanId,
+      chapterGoal: input.chapterGoal,
+      chapterId: normalizeNullableText(input.chapterId),
+      chapterIndex: input.chapterIndex,
+      chapterPlanId: input.chapterPlanId,
+      conflict: input.conflict,
+      emotionalTurn: input.emotionalTurn,
+      hook: input.hook,
+      informationGain: input.informationGain,
+      now,
+      projectId: input.projectId,
+      relatedCharacterIdsJson: JSON.stringify(input.relatedCharacterIds),
+      relatedForeshadowingIdsJson: JSON.stringify(input.relatedForeshadowingIds),
+      relatedPlotlineIdsJson: JSON.stringify(input.relatedPlotlineIds),
+      status: input.status,
+      targetWordCount: input.targetWordCount,
+      title: input.title,
+    };
+
+    if (existing) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update chapter_plans
+          set arc_plan_id = @arcPlanId,
+              chapter_id = @chapterId,
+              chapter_index = @chapterIndex,
+              title = @title,
+              chapter_goal = @chapterGoal,
+              conflict = @conflict,
+              information_gain = @informationGain,
+              emotional_turn = @emotionalTurn,
+              hook = @hook,
+              target_word_count = @targetWordCount,
+              related_plotline_ids_json = @relatedPlotlineIdsJson,
+              related_character_ids_json = @relatedCharacterIdsJson,
+              related_foreshadowing_ids_json = @relatedForeshadowingIdsJson,
+              status = @status,
+              version = version + 1,
+              updated_at = @now
+          where project_id = @projectId and id = @chapterPlanId
+          `,
+        )
+        .run(values);
+    } else {
+      this.projectDatabase.client
+        .prepare(
+          `
+          insert into chapter_plans (
+            id, project_id, arc_plan_id, chapter_id, chapter_index, title, chapter_goal,
+            conflict, information_gain, emotional_turn, hook, target_word_count,
+            related_plotline_ids_json, related_character_ids_json,
+            related_foreshadowing_ids_json, status, version, source_artifact_id,
+            created_at, updated_at
+          )
+          values (
+            @chapterPlanId, @projectId, @arcPlanId, @chapterId, @chapterIndex, @title, @chapterGoal,
+            @conflict, @informationGain, @emotionalTurn, @hook, @targetWordCount,
+            @relatedPlotlineIdsJson, @relatedCharacterIdsJson,
+            @relatedForeshadowingIdsJson, @status, 1, null,
+            @now, @now
+          )
+          `,
+        )
+        .run(values);
+    }
+
+    const chapterPlan = this.getChapterPlan(input.projectId, input.chapterPlanId);
+    if (!chapterPlan) {
+      throw new Error(`CHAPTER_PLAN_NOT_FOUND: ${input.chapterPlanId}`);
+    }
+
+    return chapterPlan;
+  }
+
+  saveScenePlan(input: SaveScenePlanInput): ScenePlanRecord {
+    const now = input.now ?? Date.now();
+    if (!this.getChapterPlan(input.projectId, input.chapterPlanId)) {
+      throw new Error(`CHAPTER_PLAN_NOT_FOUND: ${input.chapterPlanId}`);
+    }
+
+    const existing = this.getScenePlan(input.projectId, input.scenePlanId);
+    const values = {
+      chapterPlanId: input.chapterPlanId,
+      conflictTurn: input.conflictTurn,
+      locationId: normalizeNullableText(input.locationId),
+      memoryTargetsJson: JSON.stringify(input.memoryTargets),
+      now,
+      outcome: input.outcome,
+      povCharacterId: normalizeNullableText(input.povCharacterId),
+      projectId: input.projectId,
+      sceneGoal: input.sceneGoal,
+      sceneIndex: input.sceneIndex,
+      scenePlanId: input.scenePlanId,
+      status: input.status,
+    };
+
+    if (existing) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update scene_plans
+          set chapter_plan_id = @chapterPlanId,
+              scene_index = @sceneIndex,
+              pov_character_id = @povCharacterId,
+              location_id = @locationId,
+              scene_goal = @sceneGoal,
+              conflict_turn = @conflictTurn,
+              outcome = @outcome,
+              memory_targets_json = @memoryTargetsJson,
+              status = @status,
+              updated_at = @now
+          where project_id = @projectId and id = @scenePlanId
+          `,
+        )
+        .run(values);
+    } else {
+      this.projectDatabase.client
+        .prepare(
+          `
+          insert into scene_plans (
+            id, project_id, chapter_plan_id, scene_index, pov_character_id, location_id,
+            scene_goal, conflict_turn, outcome, memory_targets_json, status, created_at, updated_at
+          )
+          values (
+            @scenePlanId, @projectId, @chapterPlanId, @sceneIndex, @povCharacterId, @locationId,
+            @sceneGoal, @conflictTurn, @outcome, @memoryTargetsJson, @status, @now, @now
+          )
+          `,
+        )
+        .run(values);
+    }
+
+    const scenePlan = this.getScenePlan(input.projectId, input.scenePlanId);
+    if (!scenePlan) {
+      throw new Error(`SCENE_PLAN_NOT_FOUND: ${input.scenePlanId}`);
+    }
+
+    return scenePlan;
+  }
+
   createChapterPlans(input: CreateChapterPlansInput): CreateChapterPlansResult {
     const now = input.now ?? Date.now();
     const create = this.projectDatabase.client.transaction(() => {
@@ -771,6 +951,14 @@ export class LongformPlanRepository {
     return row ? mapChapterPlanRow(row) : null;
   }
 
+  getScenePlan(projectId: string, scenePlanId: string): ScenePlanRecord | null {
+    const row = this.projectDatabase.client
+      .prepare("select * from scene_plans where project_id = ? and id = ?")
+      .get(projectId, scenePlanId) as ScenePlanRow | undefined;
+
+    return row ? mapScenePlanRow(row) : null;
+  }
+
   linkChapterPlanToChapter(input: {
     readonly projectId: string;
     readonly chapterPlanId: string;
@@ -921,4 +1109,12 @@ function parseStringArray(value: string): string[] {
   return Array.isArray(parsed)
     ? parsed.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+function normalizeNullableText(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }

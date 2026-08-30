@@ -28,12 +28,14 @@ export interface AiCapabilityDefinition {
   readonly promptCapability: PromptCapability;
   readonly defaultPromptVersion: "v1";
   readonly outputSchemaName: string;
+  readonly entrypoint: "ai_generate" | "specialized_rpc" | "prompt_only";
 }
 
 const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "blueprint.generate": {
     defaultPromptVersion: "v1",
     displayName: "创作蓝图生成",
+    entrypoint: "ai_generate",
     name: "blueprint.generate",
     outputSchemaName: "BlueprintGenerateOutput",
     promptCapability: "blueprint_generate",
@@ -42,6 +44,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "brief.refine": {
     defaultPromptVersion: "v1",
     displayName: "立项精修",
+    entrypoint: "prompt_only",
     name: "brief.refine",
     outputSchemaName: "BriefRefineOutput",
     promptCapability: "brief_refine",
@@ -50,6 +53,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "bookPlan.generate": {
     defaultPromptVersion: "v1",
     displayName: "全书规划生成",
+    entrypoint: "specialized_rpc",
     name: "bookPlan.generate",
     outputSchemaName: "BookPlanGenerateOutput",
     promptCapability: "book_plan_generate",
@@ -58,6 +62,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "character.generate": {
     defaultPromptVersion: "v1",
     displayName: "人物生成",
+    entrypoint: "prompt_only",
     name: "character.generate",
     outputSchemaName: "CharacterGenerateOutput",
     promptCapability: "character_generate",
@@ -66,6 +71,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "chapter.draft": {
     defaultPromptVersion: "v1",
     displayName: "章节草稿",
+    entrypoint: "ai_generate",
     name: "chapter.draft",
     outputSchemaName: "ChapterDraftOutput",
     promptCapability: "chapter_draft",
@@ -74,6 +80,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "chapter.rewrite": {
     defaultPromptVersion: "v1",
     displayName: "章节改写",
+    entrypoint: "prompt_only",
     name: "chapter.rewrite",
     outputSchemaName: "ChapterRewriteOutput",
     promptCapability: "chapter_rewrite",
@@ -82,6 +89,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "continuity.review": {
     defaultPromptVersion: "v1",
     displayName: "连续性审阅",
+    entrypoint: "ai_generate",
     name: "continuity.review",
     outputSchemaName: "ContinuityReviewOutput",
     promptCapability: "continuity_review",
@@ -90,6 +98,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "element.generateCandidates": {
     defaultPromptVersion: "v1",
     displayName: "要素候选生成",
+    entrypoint: "specialized_rpc",
     name: "element.generateCandidates",
     outputSchemaName: "ElementCandidateOutput",
     promptCapability: "element_generate",
@@ -98,6 +107,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "foreshadowing.plan": {
     defaultPromptVersion: "v1",
     displayName: "伏笔规划",
+    entrypoint: "ai_generate",
     name: "foreshadowing.plan",
     outputSchemaName: "ForeshadowingPlanOutput",
     promptCapability: "foreshadowing_plan",
@@ -106,6 +116,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "memory.extract": {
     defaultPromptVersion: "v1",
     displayName: "记忆抽取",
+    entrypoint: "ai_generate",
     name: "memory.extract",
     outputSchemaName: "MemoryExtractOutput",
     promptCapability: "memory_extract",
@@ -114,6 +125,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "outline.generate": {
     defaultPromptVersion: "v1",
     displayName: "大纲生成",
+    entrypoint: "ai_generate",
     name: "outline.generate",
     outputSchemaName: "OutlineGenerateOutput",
     promptCapability: "outline_generate",
@@ -122,6 +134,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "rollingOutline.generate": {
     defaultPromptVersion: "v1",
     displayName: "滚动章节规划",
+    entrypoint: "specialized_rpc",
     name: "rollingOutline.generate",
     outputSchemaName: "RollingChapterPlanGenerateOutput",
     promptCapability: "rolling_chapter_plan_generate",
@@ -130,6 +143,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "plotArc.generate": {
     defaultPromptVersion: "v1",
     displayName: "剧情弧线生成",
+    entrypoint: "prompt_only",
     name: "plotArc.generate",
     outputSchemaName: "PlotArcGenerateOutput",
     promptCapability: "plot_arc_generate",
@@ -138,6 +152,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "relationship.generate": {
     defaultPromptVersion: "v1",
     displayName: "人物关系生成",
+    entrypoint: "prompt_only",
     name: "relationship.generate",
     outputSchemaName: "RelationshipGenerateOutput",
     promptCapability: "relationship_generate",
@@ -146,6 +161,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "retrospective.generate": {
     defaultPromptVersion: "v1",
     displayName: "阶段复盘生成",
+    entrypoint: "prompt_only",
     name: "retrospective.generate",
     outputSchemaName: "RetrospectiveGenerateOutput",
     promptCapability: "retrospective_generate",
@@ -154,6 +170,7 @@ const capabilities: Record<AiCapabilityName, AiCapabilityDefinition> = {
   "worldbuilding.generate": {
     defaultPromptVersion: "v1",
     displayName: "世界观生成",
+    entrypoint: "specialized_rpc",
     name: "worldbuilding.generate",
     outputSchemaName: "WorldbuildingFieldCompletionOutput",
     promptCapability: "worldbuilding_generate",

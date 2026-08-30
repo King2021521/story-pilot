@@ -175,20 +175,55 @@ export interface StoryBlueprintItem {
 
 export interface OutlineItem {
   readonly id: string;
+  readonly basis?: Record<string, unknown>;
   readonly title: string;
   readonly scope: string;
   readonly status: string;
 }
 
+export interface VolumeOutlineItem {
+  readonly climax: string | null;
+  readonly id: string;
+  readonly majorConflict: string | null;
+  readonly outlineId: string;
+  readonly purpose: string;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly title: string;
+  readonly volumeId: string | null;
+  readonly wordCountGoal: number | null;
+}
+
 export interface ChapterOutlineItem {
   readonly id: string;
   readonly chapterId: string | null;
+  readonly emotionalTurn?: string | null;
   readonly title: string;
   readonly chapterGoal: string;
   readonly conflict: string | null;
   readonly informationGain: string | null;
   readonly hook: string | null;
+  readonly outlineId?: string;
+  readonly sortOrder?: number;
   readonly status: string;
+  readonly targetWordCount?: number | null;
+  readonly volumeOutlineId?: string | null;
+}
+
+export interface SceneOutlineItem {
+  readonly beatType: string;
+  readonly chapterOutlineId: string;
+  readonly conflict: string | null;
+  readonly entryState: string | null;
+  readonly exitState: string | null;
+  readonly id: string;
+  readonly locationId: string | null;
+  readonly povCharacterId: string | null;
+  readonly purpose: string;
+  readonly sceneId: string | null;
+  readonly sortOrder: number;
+  readonly status: string;
+  readonly title: string;
 }
 
 export interface BookPlanItem {
@@ -246,7 +281,9 @@ export interface CreativePathBoard {
   readonly brief: ProjectBriefItem | null;
   readonly blueprint: StoryBlueprintItem | null;
   readonly outlines: readonly OutlineItem[];
+  readonly volumeOutlines: readonly VolumeOutlineItem[];
   readonly chapterOutlines: readonly ChapterOutlineItem[];
+  readonly sceneOutlines: readonly SceneOutlineItem[];
   readonly bookPlans: readonly BookPlanItem[];
   readonly volumePlans: readonly VolumePlanItem[];
   readonly arcPlans: readonly ArcPlanItem[];

@@ -125,6 +125,7 @@ export interface ElementCandidateItem {
 export interface GenerateElementCandidatesValues {
   readonly constraints: readonly string[];
   readonly count: CountPresetValue;
+  readonly description?: string;
   readonly elementType: ElementTypePresetValue;
   readonly genre: string;
   readonly style?: string;
@@ -209,6 +210,7 @@ export type UpdateForeshadowingValues = Omit<CommandPayload<"foreshadowing.updat
 interface CandidateFormValues {
   readonly constraints?: string[];
   readonly count: CountPresetValue;
+  readonly description?: string;
   readonly elementType: ElementTypePresetValue;
   readonly style?: string;
   readonly worldRuleIds?: string[];
@@ -309,6 +311,7 @@ export function CreativeElementsPanel({
                 const result = await onGenerateElementCandidates({
                   constraints: values.constraints ?? [],
                   count: values.count,
+                  ...(values.description?.trim() ? { description: values.description.trim() } : {}),
                   elementType: values.elementType,
                   genre: projectGenre,
                   ...(values.style === undefined ? {} : { style: values.style }),
@@ -346,6 +349,17 @@ export function CreativeElementsPanel({
                     optionFilterProp="label"
                     options={worldRuleOptions}
                     placeholder="选择世界规则"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item label="创作描述" name="description">
+                  <Input.TextArea
+                    aria-label="创作描述"
+                    autoSize={{ minRows: 3, maxRows: 5 }}
+                    maxLength={500}
+                    placeholder="例如：生成安全屋外部补给线上的地下势力名称。"
+                    showCount
                   />
                 </Form.Item>
               </Col>

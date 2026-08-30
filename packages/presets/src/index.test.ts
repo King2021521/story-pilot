@@ -17,6 +17,8 @@ describe("creative presets", () => {
       "city",
       "location",
       "organization",
+      "faction",
+      "sect",
       "weapon",
       "technique",
       "item",

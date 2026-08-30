@@ -59,6 +59,7 @@ export class ElementCandidateService {
         capability: "element_generate",
         context: buildElementGenerationContext({
           constraints: input.constraints,
+          description: input.description,
           elementType: input.elementType,
           genre,
           projectTitle: project.title,
@@ -165,12 +166,12 @@ export class ElementCandidateService {
             continue;
           }
 
-          if (candidate.type === "organization") {
+          if (isOrganizationCandidateType(candidate.type)) {
             const organization = worldRepository.createOrganization({
               name: candidate.name,
               organizationId: randomUUID(),
               projectId: input.projectId,
-              type: "organization",
+              type: candidate.type,
               ...(description === undefined ? {} : { description }),
             });
             domainEventRepository.append({
@@ -228,6 +229,7 @@ function buildElementGenerationContext(input: {
   readonly genre: string;
   readonly style: string;
   readonly elementType: ElementCandidateType;
+  readonly description?: string | undefined;
   readonly worldRules: readonly WorldRuleRecord[];
   readonly constraints: readonly string[];
 }): string {
@@ -235,12 +237,14 @@ function buildElementGenerationContext(input: {
     (rule) => `- ${rule.title} [${rule.category}/${rule.source ?? "soft"}]: ${rule.content}`,
   );
   const constraintLines = input.constraints.map((constraint) => `- ${constraint}`);
+  const description = input.description?.trim();
 
   return [
     `作品：${input.projectTitle}`,
     `题材：${input.genre}`,
     `风格：${input.style}`,
     `候选类型：${input.elementType}`,
+    description ? `用户描述：${description}` : undefined,
     worldRuleLines.length > 0 ? `世界观约束：\n${worldRuleLines.join("\n")}` : undefined,
     constraintLines.length > 0 ? `额外约束：\n${constraintLines.join("\n")}` : undefined,
   ]
@@ -280,10 +284,12 @@ function normalizeGeneratedCandidates(input: {
 const fallbackCandidateNames = {
   character_name: ["沈逐星", "陆照寒", "云惊澜", "闻楚砚", "秦问潮"],
   city: ["照潮城", "玄烛城", "望星城", "玉衡城", "断海城"],
+  faction: ["白线同盟", "炉火商会", "雪脊联防会", "黑温票号", "北墙议事团"],
   item: ["月魄铜铃", "旧星罗盘", "潮汐玉符", "玄铁残页", "归墟灯芯"],
   location: ["落星台", "潮声渡", "玄烛塔", "问剑崖", "沉月港"],
   organization: ["司星阁", "潮生盟", "玄衡院", "烛夜司", "断海楼"],
   place_name: ["星回原", "照潮湾", "无烬岭", "月沉泽", "归墟渡"],
+  sect: ["玄霜门", "寒炉宗", "封雪观", "听冰阁", "北辰门"],
   technique: ["星潮九转", "玄烛观心诀", "断海归元功", "月魄凝锋诀", "潮声炼骨法"],
   weapon: ["潮汐断星刃", "破晓玄枪", "月魄长弓", "烛夜环刀", "断海重剑"],
 } as const satisfies Record<ElementCandidateType, readonly string[]>;
@@ -319,6 +325,10 @@ function getCandidateTypeLabel(type: ElementCandidateType): string {
       return "地点";
     case "organization":
       return "组织";
+    case "faction":
+      return "势力";
+    case "sect":
+      return "门派";
     case "weapon":
       return "武器";
     case "technique":
@@ -351,6 +361,10 @@ function mapLocationType(type: ElementCandidateType): string {
     return "location";
   }
   return "place";
+}
+
+function isOrganizationCandidateType(type: ElementCandidateType): boolean {
+  return type === "organization" || type === "faction" || type === "sect";
 }
 
 function buildCandidateEventPayload(

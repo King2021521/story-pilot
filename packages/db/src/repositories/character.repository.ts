@@ -90,6 +90,25 @@ export interface CreateEntityRelationRecordInput {
   readonly description?: string;
   readonly polarity?: number;
   readonly strength?: number;
+  readonly status?: string;
+  readonly now?: number;
+}
+
+export interface ListEntityRelationsInput {
+  readonly projectId: string;
+  readonly entityType?: string;
+  readonly entityId?: string;
+  readonly status?: string;
+}
+
+export interface UpdateEntityRelationRecordInput {
+  readonly relationId: string;
+  readonly projectId: string;
+  readonly relationType?: string;
+  readonly description?: string | null;
+  readonly polarity?: number;
+  readonly strength?: number;
+  readonly status?: string;
   readonly now?: number;
 }
 
@@ -249,7 +268,7 @@ export class CharacterRepository {
         values (
           @relationId, @projectId, @sourceEntityType, @sourceEntityId, @relationType,
           @targetEntityType, @targetEntityId, @description, @polarity, @strength,
-          'confirmed', @now, @now
+          @status, @now, @now
         )
       `,
       )
@@ -262,6 +281,7 @@ export class CharacterRepository {
         relationType: input.relationType,
         sourceEntityId: input.sourceEntityId,
         sourceEntityType: input.sourceEntityType,
+        status: input.status ?? "confirmed",
         strength: input.strength ?? 0.5,
         targetEntityId: input.targetEntityId,
         targetEntityType: input.targetEntityType,
@@ -273,6 +293,85 @@ export class CharacterRepository {
 
     if (!relation) {
       throw new Error(`ENTITY_RELATION_NOT_CREATED: ${input.relationId}`);
+    }
+
+    return mapRelationRow(relation);
+  }
+
+  listRelations(input: ListEntityRelationsInput): EntityRelationRecord[] {
+    const clauses = ["project_id = @projectId"];
+    const params: Record<string, unknown> = { projectId: input.projectId };
+
+    if (input.status !== undefined) {
+      clauses.push("status = @status");
+      params.status = input.status;
+    }
+    if (input.entityType !== undefined && input.entityId !== undefined) {
+      clauses.push(
+        `(
+          (source_entity_type = @entityType and source_entity_id = @entityId)
+          or (target_entity_type = @entityType and target_entity_id = @entityId)
+        )`,
+      );
+      params.entityType = input.entityType;
+      params.entityId = input.entityId;
+    } else if (input.entityType !== undefined) {
+      clauses.push("(source_entity_type = @entityType or target_entity_type = @entityType)");
+      params.entityType = input.entityType;
+    } else if (input.entityId !== undefined) {
+      clauses.push("(source_entity_id = @entityId or target_entity_id = @entityId)");
+      params.entityId = input.entityId;
+    }
+
+    return this.projectDatabase.client
+      .prepare(
+        `
+        select * from entity_relations
+        where ${clauses.join(" and ")}
+        order by updated_at desc, created_at asc
+        `,
+      )
+      .all(params)
+      .map((row) => mapRelationRow(row as EntityRelationRow));
+  }
+
+  updateRelation(input: UpdateEntityRelationRecordInput): EntityRelationRecord {
+    const now = input.now ?? Date.now();
+    const updates = ["updated_at = @now"];
+    const params: Record<string, unknown> = {
+      now,
+      projectId: input.projectId,
+      relationId: input.relationId,
+    };
+
+    addRelationTextUpdate(updates, params, "relation_type", "relationType", input.relationType);
+    addRelationNullableTextUpdate(updates, params, "description", "description", input.description);
+    if (input.polarity !== undefined) {
+      updates.push("polarity = @polarity");
+      params.polarity = input.polarity;
+    }
+    if (input.strength !== undefined) {
+      updates.push("strength = @strength");
+      params.strength = input.strength;
+    }
+    addRelationTextUpdate(updates, params, "status", "status", input.status);
+
+    this.projectDatabase.client
+      .prepare(
+        `
+        update entity_relations
+        set ${updates.join(", ")}
+        where project_id = @projectId and id = @relationId
+        `,
+      )
+      .run(params);
+
+    const relation = this.projectDatabase.client
+      .prepare("select * from entity_relations where project_id = ? and id = ?")
+      .get(input.projectId, input.relationId) as EntityRelationRow | undefined;
+
+    if (!relation) {
+      throw new Error(`ENTITY_RELATION_NOT_FOUND: ${input.relationId}`);
     }
 
     return mapRelationRow(relation);
@@ -515,4 +614,32 @@ function mapRelationRow(row: EntityRelationRow): EntityRelationRecord {
     targetEntityId: row.target_entity_id,
     targetEntityType: row.target_entity_type,
   };
+}
+
+function addRelationTextUpdate(
+  updates: string[],
+  params: Record<string, unknown>,
+  column: string,
+  paramName: string,
+  value: string | undefined,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  updates.push(`${column} = @${paramName}`);
+  params[paramName] = value.trim();
+}
+
+function addRelationNullableTextUpdate(
+  updates: string[],
+  params: Record<string, unknown>,
+  column: string,
+  paramName: string,
+  value: string | null | undefined,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  updates.push(`${column} = @${paramName}`);
+  params[paramName] = value === null ? null : value.trim() || null;
 }

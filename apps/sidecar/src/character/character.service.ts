@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Injectable } from "@nestjs/common";
+import type { CommandPayload } from "@story-pilot/contracts";
 import {
   CharacterRepository,
   DomainEventRepository,
@@ -45,6 +46,15 @@ export interface CreateCharacterInput {
   readonly arcEnd?: string;
 }
 
+type EntityRelationStatus = CommandPayload<"entityRelation.create">["status"];
+
+export interface ListEntityRelationsInput {
+  readonly projectId: string;
+  readonly entityType?: string;
+  readonly entityId?: string;
+  readonly status?: EntityRelationStatus;
+}
+
 export interface CreateEntityRelationInput {
   readonly projectId: string;
   readonly sourceEntityType: string;
@@ -55,7 +65,10 @@ export interface CreateEntityRelationInput {
   readonly description?: string;
   readonly polarity?: number;
   readonly strength?: number;
+  readonly status?: EntityRelationStatus;
 }
+
+export type UpdateEntityRelationInput = CommandPayload<"entityRelation.update">;
 
 export interface UpdateCharacterInput {
   readonly projectId: string;
@@ -135,6 +148,7 @@ export class CharacterService {
         targetEntityType: input.targetEntityType,
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.polarity === undefined ? {} : { polarity: input.polarity }),
+        ...(input.status === undefined ? {} : { status: input.status }),
         ...(input.strength === undefined ? {} : { strength: input.strength }),
       });
 
@@ -149,9 +163,60 @@ export class CharacterService {
           relationType: relation.relationType,
           sourceEntityId: relation.sourceEntityId,
           sourceEntityType: relation.sourceEntityType,
+          status: relation.status,
           strength: relation.strength,
           targetEntityId: relation.targetEntityId,
           targetEntityType: relation.targetEntityType,
+        },
+        projectId: input.projectId,
+      });
+
+      return relation;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async listRelations(input: ListEntityRelationsInput): Promise<EntityRelationRecord[]> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      return new CharacterRepository(projectDatabase).listRelations({
+        projectId: input.projectId,
+        ...(input.entityId === undefined ? {} : { entityId: input.entityId }),
+        ...(input.entityType === undefined ? {} : { entityType: input.entityType }),
+        ...(input.status === undefined ? {} : { status: input.status }),
+      });
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async updateRelation(input: UpdateEntityRelationInput): Promise<EntityRelationRecord> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const relation = new CharacterRepository(projectDatabase).updateRelation({
+        projectId: input.projectId,
+        relationId: input.entityRelationId,
+        ...(input.patch.description === undefined ? {} : { description: input.patch.description }),
+        ...(input.patch.polarity === undefined ? {} : { polarity: input.patch.polarity }),
+        ...(input.patch.relationType === undefined
+          ? {}
+          : { relationType: input.patch.relationType }),
+        ...(input.patch.status === undefined ? {} : { status: input.patch.status }),
+        ...(input.patch.strength === undefined ? {} : { strength: input.patch.strength }),
+      });
+
+      new DomainEventRepository(projectDatabase).append({
+        aggregateId: relation.id,
+        aggregateType: "entity_relation",
+        eventId: randomUUID(),
+        eventType: "entity_relation.updated",
+        payload: {
+          description: relation.description,
+          polarity: relation.polarity,
+          relationType: relation.relationType,
+          status: relation.status,
+          strength: relation.strength,
         },
         projectId: input.projectId,
       });

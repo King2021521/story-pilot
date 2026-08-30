@@ -76,6 +76,7 @@ export const storyEvents = sqliteTable(
     eventTime: text("event_time"),
     position: integer("position").notNull().default(0),
     summary: text("summary").notNull(),
+    outcome: text("outcome"),
     causalImportance: real("causal_importance").notNull().default(0.5),
     chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
     sceneId: text("scene_id").references(() => scenes.id, { onDelete: "set null" }),

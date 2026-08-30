@@ -7,6 +7,8 @@ const elementTypeSchema = z.enum([
   "city",
   "location",
   "organization",
+  "faction",
+  "sect",
   "weapon",
   "technique",
   "item",
@@ -111,22 +113,101 @@ const outlinePlanStatusSchema = z
   .enum(["draft", "active", "approved", "archived"])
   .default("draft");
 const outlinePlanEscalationSchema = z.array(z.string().min(1).max(160)).max(12).default([]);
-
-const storyEventTypeSchema = z
+const outlineScopeSchema = z
+  .enum(["full_book", "volume", "arc", "chapter_batch"])
+  .default("chapter_batch");
+const outlineBasisSchema = z.record(z.string(), z.unknown()).default({});
+const outlineRelationIdsSchema = z.array(z.string().min(1)).default([]);
+const sceneOutlineBeatTypeSchema = z
   .enum([
-    "decision",
-    "discovery",
+    "opening_hook",
+    "setup",
     "conflict",
+    "reversal",
     "reveal",
-    "loss",
-    "victory",
-    "betrayal",
-    "travel",
+    "payoff",
+    "transition",
+    "climax",
+    "aftermath",
     "custom",
   ])
   .default("custom");
+const entityRelationStatusValueSchema = z.enum(["draft", "confirmed", "archived"]);
+const entityRelationStatusSchema = entityRelationStatusValueSchema.default("confirmed");
+const entityRelationPatchSchema = z
+  .object({
+    description: z.string().max(500).nullable().optional(),
+    polarity: z.number().min(-1).max(1).optional(),
+    relationType: z.string().min(1).max(80).optional(),
+    status: entityRelationStatusValueSchema.optional(),
+    strength: z.number().min(0).max(1).optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "At least one entity relation field must be provided",
+  });
+const eventRelationTypeValueSchema = z.enum([
+  "causes",
+  "precedes",
+  "blocks",
+  "reveals",
+  "foreshadows",
+  "contrasts",
+  "escalates",
+  "resolves",
+  "custom",
+]);
+const eventRelationTypeSchema = eventRelationTypeValueSchema.default("causes");
+const eventRelationPatchSchema = z
+  .object({
+    description: z.string().max(500).nullable().optional(),
+    relationType: eventRelationTypeValueSchema.optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "At least one event relation field must be provided",
+  });
+const conflictTypeValueSchema = z.enum([
+  "survival",
+  "resource",
+  "power",
+  "relationship",
+  "ideology",
+  "mystery",
+  "internal",
+  "external",
+  "custom",
+]);
+const conflictTypeSchema = conflictTypeValueSchema.default("custom");
+const conflictStatusValueSchema = z.enum(["planned", "active", "resolved", "archived"]);
+const conflictStatusSchema = conflictStatusValueSchema.default("planned");
+const conflictPatchSchema = z
+  .object({
+    conflictType: conflictTypeValueSchema.optional(),
+    escalationPath: z.array(z.string().min(1).max(160)).max(20).optional(),
+    opposingForces: z.array(z.string().min(1).max(120)).max(12).optional(),
+    relatedPlotlineId: z.string().min(1).nullable().optional(),
+    stakes: z.string().min(1).max(800).optional(),
+    status: conflictStatusValueSchema.optional(),
+    title: z.string().min(1).max(120).optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "At least one conflict field must be provided",
+  });
 
-const storyEventStatusSchema = z.enum(["draft", "planned", "canon", "archived"]).default("canon");
+const storyEventTypeValueSchema = z.enum([
+  "decision",
+  "discovery",
+  "conflict",
+  "reveal",
+  "loss",
+  "victory",
+  "betrayal",
+  "travel",
+  "custom",
+]);
+const storyEventTypeSchema = storyEventTypeValueSchema.default("custom");
+
+const storyEventStatusValueSchema = z.enum(["draft", "planned", "canon", "archived"]);
+const storyEventStatusSchema = storyEventStatusValueSchema.default("canon");
 
 const storyEventParticipantSchema = z.object({
   entityType: z.string().min(1),
@@ -138,8 +219,8 @@ const storyEventPatchSchema = z
   .object({
     title: z.string().min(1).optional(),
     description: z.string().min(1).optional(),
-    eventType: storyEventTypeSchema.optional(),
-    status: storyEventStatusSchema.optional(),
+    eventType: storyEventTypeValueSchema.optional(),
+    status: storyEventStatusValueSchema.optional(),
     chapterId: z.string().min(1).nullable().optional(),
     sceneId: z.string().min(1).nullable().optional(),
     storyTime: z.string().nullable().optional(),
@@ -150,9 +231,8 @@ const storyEventPatchSchema = z
     message: "At least one story event field must be provided",
   });
 
-const foreshadowingStatusSchema = z
-  .enum(["seeded", "payoff_ready", "paid_off", "archived"])
-  .default("seeded");
+const foreshadowingStatusValueSchema = z.enum(["seeded", "payoff_ready", "paid_off", "archived"]);
+const foreshadowingStatusSchema = foreshadowingStatusValueSchema.default("seeded");
 
 const foreshadowingPatchSchema = z
   .object({
@@ -162,7 +242,7 @@ const foreshadowingPatchSchema = z
     importance: z.number().int().min(1).max(5).optional(),
     seedEventId: z.string().min(1).nullable().optional(),
     payoffEventId: z.string().min(1).nullable().optional(),
-    status: foreshadowingStatusSchema.optional(),
+    status: foreshadowingStatusValueSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, {
     message: "At least one foreshadowing field must be provided",
@@ -253,8 +333,61 @@ export const creativePathCommandSchemas = {
     blueprintId: z.string().min(1),
   }),
   "outline.generate": projectIdPayloadSchema.extend({
-    scope: z.enum(["full_book", "volume", "arc", "chapter_batch"]).default("chapter_batch"),
+    scope: outlineScopeSchema,
     chapterCount: z.union([z.literal(3), z.literal(5), z.literal(10)]).default(10),
+  }),
+  "outline.saveDraft": projectIdPayloadSchema.extend({
+    basis: outlineBasisSchema,
+    outlineId: z.string().min(1).optional(),
+    scope: outlineScopeSchema,
+    status: outlinePlanStatusSchema,
+    title: z.string().min(1).max(120),
+  }),
+  "outline.saveVolumeOutline": projectIdPayloadSchema.extend({
+    climax: outlinePlanOptionalTextFieldSchema,
+    majorConflict: outlinePlanOptionalTextFieldSchema,
+    outlineId: z.string().min(1),
+    purpose: outlinePlanTextFieldSchema,
+    sortOrder: z.number().int().min(0).max(500),
+    status: outlinePlanStatusSchema,
+    title: z.string().min(1).max(120),
+    volumeId: z.string().min(1).nullable().optional(),
+    volumeOutlineId: z.string().min(1).optional(),
+    wordCountGoal: z.number().int().min(1_000).max(2_000_000).nullable().optional(),
+  }),
+  "outline.saveChapterOutline": projectIdPayloadSchema.extend({
+    chapterGoal: outlinePlanTextFieldSchema,
+    chapterId: z.string().min(1).nullable().optional(),
+    chapterOutlineId: z.string().min(1).optional(),
+    conflict: outlinePlanOptionalTextFieldSchema,
+    emotionalTurn: outlinePlanOptionalTextFieldSchema,
+    hook: outlinePlanOptionalTextFieldSchema,
+    informationGain: outlinePlanOptionalTextFieldSchema,
+    outlineId: z.string().min(1),
+    relatedForeshadowingIds: outlineRelationIdsSchema,
+    relatedPlotlineNodeIds: outlineRelationIdsSchema,
+    requiredCharacterIds: outlineRelationIdsSchema,
+    requiredLocationIds: outlineRelationIdsSchema,
+    sortOrder: z.number().int().min(0).max(10_000),
+    status: outlinePlanStatusSchema,
+    targetWordCount: z.number().int().min(500).max(20_000).nullable().optional(),
+    title: z.string().min(1).max(120),
+    volumeOutlineId: z.string().min(1).nullable().optional(),
+  }),
+  "outline.saveSceneOutline": projectIdPayloadSchema.extend({
+    beatType: sceneOutlineBeatTypeSchema,
+    chapterOutlineId: z.string().min(1),
+    conflict: outlinePlanOptionalTextFieldSchema,
+    entryState: outlinePlanOptionalTextFieldSchema,
+    exitState: outlinePlanOptionalTextFieldSchema,
+    locationId: z.string().min(1).nullable().optional(),
+    povCharacterId: z.string().min(1).nullable().optional(),
+    purpose: outlinePlanTextFieldSchema,
+    sceneId: z.string().min(1).nullable().optional(),
+    sceneOutlineId: z.string().min(1).optional(),
+    sortOrder: z.number().int().min(0).max(10_000),
+    status: outlinePlanStatusSchema,
+    title: z.string().min(1).max(120),
   }),
   "outline.approveChapterOutline": projectIdPayloadSchema.extend({
     chapterOutlineId: z.string().min(1),
@@ -302,6 +435,35 @@ export const creativePathCommandSchemas = {
     title: z.string().min(1).max(120),
     volumePlanId: z.string().min(1),
   }),
+  "plot.saveChapterPlan": projectIdPayloadSchema.extend({
+    arcPlanId: outlinePlanOptionalIdSchema,
+    chapterId: outlinePlanOptionalIdSchema,
+    chapterGoal: outlinePlanTextFieldSchema,
+    chapterIndex: z.number().int().positive().max(100_000),
+    chapterPlanId: z.string().min(1).optional(),
+    conflict: outlinePlanTextFieldSchema,
+    emotionalTurn: outlinePlanTextFieldSchema,
+    hook: outlinePlanTextFieldSchema,
+    informationGain: outlinePlanTextFieldSchema,
+    relatedCharacterIds: outlineRelationIdsSchema,
+    relatedForeshadowingIds: outlineRelationIdsSchema,
+    relatedPlotlineIds: outlineRelationIdsSchema,
+    status: outlinePlanStatusSchema,
+    targetWordCount: z.number().int().min(500).max(20_000),
+    title: z.string().min(1).max(120),
+  }),
+  "plot.saveScenePlan": projectIdPayloadSchema.extend({
+    chapterPlanId: z.string().min(1),
+    conflictTurn: outlinePlanTextFieldSchema,
+    locationId: outlinePlanOptionalIdSchema,
+    memoryTargets: z.array(z.string().min(1).max(160)).max(20).default([]),
+    outcome: outlinePlanTextFieldSchema,
+    povCharacterId: outlinePlanOptionalIdSchema,
+    sceneGoal: outlinePlanTextFieldSchema,
+    sceneIndex: z.number().int().positive().max(100),
+    scenePlanId: z.string().min(1).optional(),
+    status: outlinePlanStatusSchema,
+  }),
   "plot.generateRollingOutline": projectIdPayloadSchema.extend({
     arcPlanId: z.string().min(1).optional(),
     chapterCount: z.union([z.literal(10), z.literal(20)]).default(10),
@@ -346,6 +508,26 @@ export const creativeCommandSchemas = {
     characterId: z.string().min(1),
     patch: z.record(z.string(), z.unknown()),
   }),
+  "entityRelation.list": projectIdPayloadSchema.extend({
+    entityId: z.string().min(1).optional(),
+    entityType: z.string().min(1).optional(),
+    status: entityRelationStatusValueSchema.optional(),
+  }),
+  "entityRelation.create": projectIdPayloadSchema.extend({
+    description: z.string().max(500).optional(),
+    polarity: z.number().min(-1).max(1).default(0),
+    relationType: z.string().min(1).max(80),
+    sourceEntityId: z.string().min(1),
+    sourceEntityType: z.string().min(1).max(60),
+    status: entityRelationStatusSchema,
+    strength: z.number().min(0).max(1).default(0.5),
+    targetEntityId: z.string().min(1),
+    targetEntityType: z.string().min(1).max(60),
+  }),
+  "entityRelation.update": projectIdPayloadSchema.extend({
+    entityRelationId: z.string().min(1),
+    patch: entityRelationPatchSchema,
+  }),
   "character.generateNames": projectIdPayloadSchema.extend({
     count: z.number().int().positive().max(50).default(10),
     style: z.string().optional(),
@@ -355,6 +537,7 @@ export const creativeCommandSchemas = {
   "element.generateCandidates": projectIdPayloadSchema.extend({
     elementType: elementTypeSchema,
     count: z.union([z.literal(5), z.literal(10), z.literal(20)]).default(10),
+    description: z.string().max(500).optional(),
     genre: z.string().min(1).optional(),
     style: z.string().min(1).optional(),
     worldRuleIds: z.array(z.string().min(1)).default([]),
@@ -434,6 +617,35 @@ export const creativeCommandSchemas = {
   "storyEvent.update": projectIdPayloadSchema.extend({
     storyEventId: z.string().min(1),
     patch: storyEventPatchSchema,
+  }),
+  "eventRelation.list": projectIdPayloadSchema.extend({
+    eventId: z.string().min(1).optional(),
+  }),
+  "eventRelation.create": projectIdPayloadSchema.extend({
+    description: z.string().max(500).optional(),
+    relationType: eventRelationTypeSchema,
+    sourceEventId: z.string().min(1),
+    targetEventId: z.string().min(1),
+  }),
+  "eventRelation.update": projectIdPayloadSchema.extend({
+    eventRelationId: z.string().min(1),
+    patch: eventRelationPatchSchema,
+  }),
+  "conflict.list": projectIdPayloadSchema.extend({
+    status: conflictStatusValueSchema.optional(),
+  }),
+  "conflict.create": projectIdPayloadSchema.extend({
+    conflictType: conflictTypeSchema,
+    escalationPath: z.array(z.string().min(1).max(160)).max(20).default([]),
+    opposingForces: z.array(z.string().min(1).max(120)).max(12).default([]),
+    relatedPlotlineId: z.string().min(1).nullable().optional(),
+    stakes: z.string().min(1).max(800),
+    status: conflictStatusSchema,
+    title: z.string().min(1).max(120),
+  }),
+  "conflict.update": projectIdPayloadSchema.extend({
+    conflictId: z.string().min(1),
+    patch: conflictPatchSchema,
   }),
   "foreshadowing.list": projectIdPayloadSchema,
   "foreshadowing.create": projectIdPayloadSchema.extend({

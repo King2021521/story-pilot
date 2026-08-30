@@ -109,24 +109,25 @@ describe("WorldbuildingService", () => {
     }
   });
 
-  it("completes 12-dimension fields with structured prompt context and conservative parameters", async () => {
+  it("completes 12-dimension fields with a declared prompt template and expanded output budget", async () => {
     const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-worldbuilding-ai-"));
     tempDirs.push(rootDir);
     process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+    const generatedDimension = buildGeneratedWorldbuildingText("旧城规则");
     const provider = new CapturingObjectProvider({
       fields: {
-        coreConflict: "旧信真相与旧城秩序不可同时保全。",
-        culture: "旧城居民相信沉默是保护家人的必要代价。",
-        economy: "档案、路引和旧城通行资格构成关键资源。",
-        factions: "钟楼议会、旧警署残部和地下信使互相制衡。",
-        geography: "旧城围绕钟楼向外扩散，内圈保存档案。",
-        history: "十年前钟楼火灾改变了旧城权力结构。",
-        powerOrder: "钟楼议会拥有名义裁决权。",
-        powerSystem: "角色依靠线索、关系和档案解读能力推进调查。",
-        rules: "任何人不得私自带走钟楼档案。",
-        socialStructure: "旧城按是否拥有钟楼通行资格分层。",
-        specialMechanism: "每封旧信都会对应一段被删改的档案。",
-        worldBase: "近现代旧城悬疑世界。",
+        coreConflict: generatedDimension,
+        culture: generatedDimension,
+        economy: generatedDimension,
+        factions: generatedDimension,
+        geography: generatedDimension,
+        history: generatedDimension,
+        powerOrder: generatedDimension,
+        powerSystem: generatedDimension,
+        rules: generatedDimension,
+        socialStructure: generatedDimension,
+        specialMechanism: generatedDimension,
+        worldBase: generatedDimension,
       },
     });
 
@@ -154,12 +155,13 @@ describe("WorldbuildingService", () => {
       });
 
       expect(completed.fields).toMatchObject({
-        powerSystem: "角色依靠线索、关系和档案解读能力推进调查。",
-        worldBase: "近现代旧城悬疑世界。",
+        powerSystem: generatedDimension,
+        worldBase: generatedDimension,
       });
       expect(provider.calls).toHaveLength(1);
       const [firstCall] = provider.calls;
       expect(firstCall).toMatchObject({
+        maxOutputTokens: 12000,
         purpose: "worldbuilding_generate",
         schemaName: "WorldbuildingFieldCompletionOutput",
         temperature: 0.65,
@@ -168,10 +170,12 @@ describe("WorldbuildingService", () => {
         throw new Error("expected model provider to receive a worldbuilding completion call");
       }
       const promptText = firstCall.messages.map((message) => message.content).join("\n");
+      expect(promptText).toContain("模板：worldbuilding.complete@v1");
       expect(promptText).toContain("长夜序章");
       expect(promptText).toContain("悬疑推理");
-      expect(promptText).toContain("currentFields");
+      expect(promptText).toContain("<currentFields>");
       expect(promptText).toContain("角色依靠档案解读推进调查。");
+      expect(promptText).toContain("每个字段 300 到 500 字");
     } finally {
       await moduleRef.close();
     }
@@ -203,4 +207,14 @@ class CapturingObjectProvider implements ModelProvider {
     void _input;
     return { embedding: [] };
   }
+}
+
+function buildGeneratedWorldbuildingText(anchor: string): string {
+  return [
+    `${anchor}的设定描述围绕旧城档案、居民身份和钟楼裁决展开，所有人物行动都必须先面对通行资格、档案权限和公共沉默三层限制。`,
+    "运行规则是任何线索都要通过人物选择才能生效，证据不能凭空出现，权力也不能无代价让步；每次调查推进都会消耗关系、暴露身份或触发旧组织反击。",
+    "叙事冲突来自真相与安全不可兼得，主角越接近旧案核心，越会迫使盟友、亲人和对手重新站队。",
+    "代价限制是每次破局都必须留下可回收后果，剧情接口则连接后续档案缺页、钟楼审议、地下信使和卷末公开审判。",
+    "这一维度还必须能和空间地理、权力体系、资源经济和文化价值互相解释：地点决定谁能接触档案，权力决定谁能裁决真相，资源决定谁能承受公开代价，文化则解释普通人为什么会在沉默和反抗之间摇摆。",
+  ].join("");
 }

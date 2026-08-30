@@ -24,22 +24,215 @@ describe("ShellLayout", () => {
     });
   });
 
-  it("renders project sidebar, workbench, board drawer entry, and AI task drawer entry", () => {
+  it("renders a three-pane writing workspace with titlebar-level collapse controls", () => {
     render(
       <AppProviders>
         <ShellLayout />
       </AppProviders>,
     );
 
+    expect(screen.getByLabelText("应用标题栏")).toBeInTheDocument();
     expect(screen.getByLabelText("作品管理区")).toBeInTheDocument();
     expect(screen.getByLabelText("工作台")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "项目看板" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "AI 任务" })).toBeInTheDocument();
+    expect(screen.getByLabelText("创作检查器")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "项目看板" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "AI 任务" })).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "收起侧栏" }));
     expect(screen.getByRole("button", { name: "展开侧栏" })).toBeInTheDocument();
     expect(screen.queryByText("小说创作工作台")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }));
     expect(screen.getByText("小说创作工作台")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "收起检查器" }));
+    expect(screen.queryByLabelText("创作检查器")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开检查器" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开检查器" }));
+    expect(screen.getByLabelText("创作检查器")).toBeInTheDocument();
+  });
+
+  it("generates and accepts auxiliary candidates from the inspector toolbox", async () => {
+    const project = {
+      ...createProject(),
+      genre: "冰雪末世",
+      style: "硬核生存、基地经营",
+      title: "雪境堡垒",
+      wordCountGoal: 5_000_000,
+    };
+    const worldRules = [
+      {
+        category: "economy",
+        content: "极寒后燃料、电池、药品和安全屋通行权成为核心资源。",
+        id: "rule_resource_order",
+        status: "canon",
+        title: "资源秩序",
+      },
+    ];
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [project] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            characters: [],
+            foreshadowings: [],
+            items: [],
+            locations: [],
+            memoryCandidates: [],
+            organizations: [],
+            plotlines: [],
+            project,
+            storyEvents: [],
+            workOrders: [],
+            worldRules,
+          });
+        case "element.generateCandidates":
+          return rpcSuccess(request.id, {
+            items: [
+              {
+                description: "控制安全屋外部白色补给线的半地下互助联盟。",
+                name: "白线同盟",
+                rationale: "能承载物资交易、背叛和临时秩序争夺。",
+                tags: ["补给", "势力"],
+                type: "faction",
+              },
+            ],
+          });
+        case "element.acceptCandidates":
+          return rpcSuccess(request.id, {
+            accepted: [
+              {
+                id: "organization_1",
+                name: "白线同盟",
+                target: "organization",
+                type: "faction",
+              },
+            ],
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: /工具箱/ }));
+    fireEvent.mouseDown(screen.getByLabelText("生成类型"));
+    fireEvent.click(await screen.findByText("势力名称"));
+    fireEvent.change(screen.getByLabelText("创作描述"), {
+      target: { value: "围绕安全屋外部补给线生成可长期博弈的地下势力名称。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成候选" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("element.generateCandidates")).toMatchObject({
+        count: 10,
+        description: "围绕安全屋外部补给线生成可长期博弈的地下势力名称。",
+        elementType: "faction",
+        genre: "冰雪末世",
+        projectId: "project_1",
+        style: "硬核生存、基地经营",
+        worldRuleIds: ["rule_resource_order"],
+      });
+    });
+    expect(await screen.findByText("白线同盟")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("选择候选 白线同盟"));
+    fireEvent.click(screen.getByRole("button", { name: "采纳选中" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("element.acceptCandidates")).toMatchObject({
+        items: [expect.objectContaining({ name: "白线同盟", type: "faction" })],
+        projectId: "project_1",
+      });
+    });
+  });
+
+  it("clears temporary inspector toolbox candidates when switching projects", async () => {
+    const firstProject = {
+      ...createProject(),
+      genre: "冰雪末世",
+      style: "硬核生存",
+      title: "雪境堡垒",
+    };
+    const secondProject = {
+      ...createProject(),
+      genre: "悬疑",
+      id: "project_2",
+      style: "悬疑推理",
+      title: "雾城旧案",
+      workId: "work_2",
+    };
+
+    invokeMock.mockImplementation(async (_tauriCommand, args) => {
+      const request = getRpcRequest(args);
+      const projectId = String(request.payload.projectId ?? firstProject.id);
+      const project = projectId === secondProject.id ? secondProject : firstProject;
+      switch (request.command) {
+        case "project.listRecent":
+          return rpcSuccess(request.id, { items: [firstProject, secondProject] });
+        case "project.open":
+          return rpcSuccess(request.id, project);
+        case "workbench.getBoard":
+          return rpcSuccess(request.id, {
+            artifacts: [],
+            chapters: [],
+            characters: [],
+            foreshadowings: [],
+            items: [],
+            locations: [],
+            memoryCandidates: [],
+            organizations: [],
+            plotlines: [],
+            project,
+            storyEvents: [],
+            workOrders: [],
+            worldRules: [],
+          });
+        case "element.generateCandidates":
+          return rpcSuccess(request.id, {
+            items: [
+              {
+                description: "控制安全屋外部白色补给线的半地下互助联盟。",
+                name: "白线同盟",
+                rationale: "能承载物资交易、背叛和临时秩序争夺。",
+                tags: ["补给", "势力"],
+                type: "faction",
+              },
+            ],
+          });
+        default:
+          return rpcSuccess(request.id, null);
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ShellLayout />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "雪境堡垒" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /工具箱/ }));
+    fireEvent.click(screen.getByRole("button", { name: "生成候选" }));
+    expect(await screen.findByText("白线同盟")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("雾城旧案"));
+
+    expect(await screen.findByRole("heading", { name: "雾城旧案" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("白线同盟")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "采纳选中" })).toBeDisabled();
+    });
   });
 
   it("opens settings, saves model config, validates model, and exports diagnostics", async () => {
@@ -122,7 +315,15 @@ describe("ShellLayout", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "设置" }));
-    expect(await screen.findByText("模型配置")).toBeInTheDocument();
+    const settingsDialog = await screen.findByRole("dialog", { name: "设置" });
+    const settingsScope = within(settingsDialog);
+
+    expect(settingsScope.getByLabelText("设置菜单")).toBeInTheDocument();
+    expect(settingsScope.queryByRole("tab", { name: "模型配置" })).not.toBeInTheDocument();
+    expect(settingsScope.getByRole("button", { name: "模型配置" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(await screen.findByText("/Users/test/.story-pilot/setting.json")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Base URL"), {
@@ -155,7 +356,11 @@ describe("ShellLayout", () => {
       });
     });
 
-    fireEvent.click(screen.getByRole("tab", { name: "诊断信息" }));
+    fireEvent.click(settingsScope.getByRole("button", { name: "诊断信息" }));
+    expect(settingsScope.getByRole("button", { name: "诊断信息" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     fireEvent.click(screen.getByRole("button", { name: "导出诊断包" }));
 
     await waitFor(() => {
@@ -1277,10 +1482,14 @@ describe("ShellLayout", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "新建角色" }));
 
+    fireEvent.change(screen.getByLabelText("创作描述"), {
+      target: { value: "生成能承担旧案反转线的角色候选。" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "生成角色候选" }));
     await waitFor(() => {
       expect(rpcPayload("element.generateCandidates")).toMatchObject({
         count: 10,
+        description: "生成能承担旧案反转线的角色候选。",
         elementType: "character_name",
         genre: "悬疑",
         projectId: "project_1",
@@ -1974,7 +2183,6 @@ describe("ShellLayout", () => {
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "项目看板" }));
     fireEvent.click(await screen.findByRole("tab", { name: /AI 产物/ }));
 
     const draftArtifact = screen.getByText("AI 章节草稿").closest("li");
@@ -2050,7 +2258,6 @@ describe("ShellLayout", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "9. 正文创作" }));
     await screen.findByLabelText("章节正文");
-    fireEvent.click(screen.getByRole("button", { name: "项目看板" }));
     fireEvent.click(await screen.findByRole("tab", { name: /图谱/ }));
 
     await waitFor(() => {
@@ -2115,6 +2322,13 @@ interface TestCreativePathBoard {
     status: string;
     title: string;
   }>;
+  volumeOutlines: Array<{
+    id: string;
+    outlineId: string;
+    sortOrder: number;
+    status: string;
+    title: string;
+  }>;
   chapterOutlines: Array<{
     chapterGoal: string;
     chapterId: null | string;
@@ -2122,6 +2336,13 @@ interface TestCreativePathBoard {
     hook: string;
     id: string;
     informationGain: string;
+    status: string;
+    title: string;
+  }>;
+  sceneOutlines: Array<{
+    chapterOutlineId: string;
+    id: string;
+    sortOrder: number;
     status: string;
     title: string;
   }>;
@@ -2238,6 +2459,7 @@ function createCreativePathBoard(
     outlines: [],
     reviewIssues: [],
     scenePlans: [],
+    sceneOutlines: [],
     stages: [
       { readinessScore: 20, stageKey: "brief", status: "available" },
       { readinessScore: 0, stageKey: "blueprint", status: "locked" },
@@ -2249,6 +2471,7 @@ function createCreativePathBoard(
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    volumeOutlines: [],
     volumePlans: [],
     ...overrides,
   };

@@ -183,6 +183,7 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
     "related_story_event_ids_json text not null default '[]'",
   );
   ensureTableColumn(projectDatabase, "plotline_nodes", "chapter_hint", "chapter_hint text");
+  ensureTableColumn(projectDatabase, "story_events", "outcome", "outcome text");
   ensureTableColumn(
     projectDatabase,
     "foreshadowings",

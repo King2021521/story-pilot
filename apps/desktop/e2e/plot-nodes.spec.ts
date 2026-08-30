@@ -157,6 +157,7 @@ test("plot node design uses stable editing forms and persists event and foreshad
   page,
 }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "作品总控台" })).toBeVisible();
   await page.getByRole("button", { name: "7. 剧情节点" }).click();
 
   await expect(page.getByRole("heading", { name: "剧情节点设计" })).toBeVisible();
@@ -180,9 +181,16 @@ test("plot node design uses stable editing forms and persists event and foreshad
   expect(boxesOverlap(foreshadowingEditorBox!, assistantBox!)).toBe(false);
 
   await page.getByRole("button", { name: "编辑剧情节点 旧信出现" }).click();
-  await page.getByRole("textbox", { name: "节点标题" }).fill("水印来源暴露");
-  await page.getByRole("textbox", { name: "故事时间" }).fill("第 3 章公堂前");
-  await page.getByRole("textbox", { name: "节点描述" }).fill("秦钰确认旧信水印来自官府档案纸。");
+  const eventTitleInput = page.getByRole("textbox", { name: "节点标题" });
+  const eventStoryTimeInput = page.getByRole("textbox", { name: "故事时间" });
+  const eventDescriptionInput = page.getByRole("textbox", { name: "节点描述" });
+  await expect(eventTitleInput).toHaveValue("旧信出现");
+  await eventTitleInput.fill("水印来源暴露");
+  await eventStoryTimeInput.fill("第 3 章公堂前");
+  await eventDescriptionInput.fill("秦钰确认旧信水印来自官府档案纸。");
+  await expect(eventTitleInput).toHaveValue("水印来源暴露");
+  await expect(eventStoryTimeInput).toHaveValue("第 3 章公堂前");
+  await expect(eventDescriptionInput).toHaveValue("秦钰确认旧信水印来自官府档案纸。");
   await page.getByRole("button", { name: "保存剧情节点" }).click();
 
   await expect
@@ -203,10 +211,15 @@ test("plot node design uses stable editing forms and persists event and foreshad
     });
 
   await page.getByRole("button", { name: "编辑伏笔 信纸水印" }).click();
-  await page
-    .getByRole("textbox", { name: "伏笔内容" })
-    .fill("水印像是普通纸纹，实则是官府档案纸暗纹。");
-  await page.getByRole("textbox", { name: "回收方案" }).fill("第 20 章揭示水印证明档案调包。");
+  const foreshadowingDescriptionInput = page.getByRole("textbox", { name: "伏笔内容" });
+  const foreshadowingPayoffInput = page.getByRole("textbox", { name: "回收方案" });
+  await expect(foreshadowingDescriptionInput).toHaveValue("信纸水印第一次出现，暂不解释来源。");
+  await foreshadowingDescriptionInput.fill("水印像是普通纸纹，实则是官府档案纸暗纹。");
+  await foreshadowingPayoffInput.fill("第 20 章揭示水印证明档案调包。");
+  await expect(foreshadowingDescriptionInput).toHaveValue(
+    "水印像是普通纸纹，实则是官府档案纸暗纹。",
+  );
+  await expect(foreshadowingPayoffInput).toHaveValue("第 20 章揭示水印证明档案调包。");
   await page.getByRole("button", { name: "保存伏笔" }).click();
 
   await expect

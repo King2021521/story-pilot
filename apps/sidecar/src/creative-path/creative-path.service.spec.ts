@@ -145,19 +145,20 @@ describe("CreativePathService core story form", () => {
     const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-core-story-ai-"));
     tempDirs.push(rootDir);
     process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+    const generatedLongText = buildGeneratedCoreStoryText("旧城旧案");
     const provider = new CapturingObjectProvider({
       fields: coreStoryFields({
-        antagonistForce: "旧城钟楼背后的既得利益者和被旧案保护的制度。",
-        corePromise: "每个单元都提供硬线索、身份反转和旧案真相的一次推进。",
+        antagonistForce: generatedLongText,
+        corePromise: generatedLongText,
         differentiators: ["旧信谜题与人物成长绑定", "钟楼档案形成连续线索网"],
         emotionalAxes: ["悬疑", "反转"],
-        logline: "雨夜旧信把主角拖回十年前钟楼旧案。",
-        mainConflict: "主角追查真相时不断触碰旧城秩序。",
-        mainGoal: "找出钟楼火灾真相并保护仍被旧案威胁的人。",
-        premise: "旧城钟楼火灾十年后，主角收到一封不该存在的旧信。",
-        protagonistArc: "从逃避旧案到主动承担真相带来的代价。",
+        logline: "雨夜旧信把主角拖回十年前钟楼旧案，他必须在保护幸存者与公开真相之间付出沉重代价。",
+        mainConflict: generatedLongText,
+        mainGoal: generatedLongText,
+        premise: generatedLongText,
+        protagonistArc: generatedLongText,
         risks: ["线索密度不足会削弱追读", "旧案反转不能只靠隐瞒信息"],
-        stakes: "失败会让旧案幸存者再次被清算。",
+        stakes: generatedLongText,
         storyDriver: "mystery",
       }),
     });
@@ -198,7 +199,7 @@ describe("CreativePathService core story form", () => {
       });
 
       expect(completed.fields).toMatchObject({
-        mainGoal: "找出钟楼火灾真相并保护仍被旧案威胁的人。",
+        mainGoal: generatedLongText,
         storyDriver: "mystery",
       });
       expect(provider.calls).toHaveLength(1);
@@ -207,16 +208,19 @@ describe("CreativePathService core story form", () => {
         throw new Error("expected model provider to receive a core story completion call");
       }
       expect(firstCall).toMatchObject({
+        maxOutputTokens: 8000,
         purpose: "core_story_complete",
         schemaName: "CoreStoryFieldCompletionOutput",
         temperature: 0.7,
       });
       const promptText = firstCall.messages.map((message) => message.content).join("\n");
+      expect(promptText).toContain("模板：core-story.complete@v1");
       expect(promptText).toContain("长夜序章");
       expect(promptText).toContain("悬疑推理");
       expect(promptText).toContain("worldbuildingProfile");
       expect(promptText).toContain("近现代旧城悬疑世界。");
       expect(promptText).toContain("查清钟楼旧案。");
+      expect(promptText).toContain("200 到 800 字");
     } finally {
       await moduleRef.close();
     }
@@ -248,4 +252,13 @@ class CapturingObjectProvider implements ModelProvider {
     void _input;
     return { embedding: [] };
   }
+}
+
+function buildGeneratedCoreStoryText(anchor: string): string {
+  return [
+    `${anchor}的故事契约必须把主角目标、读者期待和长期冲突锁在同一条因果链上：主角不是单纯查案，而是在每一次接近真相时，都要决定是否牺牲既有安全来保护仍被旧案威胁的人。`,
+    "对抗力量不仅阻止他取得证据，还会利用城市居民对稳定的依赖，把沉默包装成公共利益。",
+    "每个阶段都要交付明确爽点，包括硬线索推进、身份反转、关系重组和旧制度裂缝，同时保留更高层级的疑问。",
+    "失败代价必须可感知：亲近者被牵连、证据链断裂、主角信誉受损，甚至让原本愿意作证的人重新回到沉默。",
+  ].join("");
 }

@@ -48,6 +48,13 @@ export class AiCommandService {
 
   async generate(input: AiGenerateInput): Promise<AiGenerateResult> {
     const capability = input.capability as AiCapabilityName;
+    const capabilityDefinition = CapabilityRegistry.get(capability);
+    if (capabilityDefinition.entrypoint !== "ai_generate") {
+      throw new Error(
+        `AI_CAPABILITY_NOT_AVAILABLE_ON_AI_GENERATE: ${capability} uses ${capabilityDefinition.entrypoint}`,
+      );
+    }
+
     if (capability === "blueprint.generate") {
       return this.generateBlueprint(input, capability);
     }

@@ -14,6 +14,7 @@ export interface OpenAICompatibleProviderOptions {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly model: string;
+  readonly embeddingModel?: string;
   readonly fetch?: FetchLike;
 }
 
@@ -46,22 +47,30 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly embeddingModel: string;
   private readonly fetchImpl: FetchLike;
 
   constructor(options: OpenAICompatibleProviderOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/u, "");
     this.apiKey = normalizeApiKey(options.apiKey);
+    this.embeddingModel = options.embeddingModel?.trim() || options.model;
     this.model = options.model;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   async generateObject(input: ProviderGenerateObjectInput): Promise<ProviderObjectResult> {
-    const json = (await this.postJson("/chat/completions", {
-      messages: input.messages,
-      model: this.model,
-      response_format: { type: "json_object" },
-      ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
-    })) as ChatCompletionResponse;
+    const json = (await this.postJson(
+      "/chat/completions",
+      {
+        messages: input.messages,
+        model: this.model,
+        response_format: { type: "json_object" },
+        ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+        ...(input.topP === undefined ? {} : { top_p: input.topP }),
+        ...(input.maxOutputTokens === undefined ? {} : { max_tokens: input.maxOutputTokens }),
+      },
+      input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs },
+    )) as ChatCompletionResponse;
     const content = json.choices?.[0]?.message?.content;
 
     if (!content) {
@@ -76,11 +85,17 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   async *streamText(input: ProviderStreamTextInput): AsyncIterable<string> {
-    const json = (await this.postJson("/chat/completions", {
-      messages: input.messages,
-      model: this.model,
-      ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
-    })) as ChatCompletionResponse;
+    const json = (await this.postJson(
+      "/chat/completions",
+      {
+        messages: input.messages,
+        model: this.model,
+        ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+        ...(input.topP === undefined ? {} : { top_p: input.topP }),
+        ...(input.maxOutputTokens === undefined ? {} : { max_tokens: input.maxOutputTokens }),
+      },
+      input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs },
+    )) as ChatCompletionResponse;
     const content = json.choices?.[0]?.message?.content;
 
     if (content) {
@@ -91,7 +106,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
   async embed(input: ProviderEmbedInput): Promise<ProviderEmbedResult> {
     const json = (await this.postJson("/embeddings", {
       input: input.input,
-      model: this.model,
+      model: this.embeddingModel,
     })) as EmbeddingsResponse;
     const embedding = json.data?.[0]?.embedding;
 
@@ -105,21 +120,38 @@ export class OpenAICompatibleProvider implements ModelProvider {
     };
   }
 
-  private async postJson(path: string, body: unknown): Promise<unknown> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      body: JSON.stringify(body),
-      headers: {
-        authorization: `Bearer ${this.apiKey}`,
-        "content-type": "application/json",
-      },
-      method: "POST",
-    });
+  private async postJson(
+    path: string,
+    body: unknown,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<unknown> {
+    const controller = options.timeoutMs ? new AbortController() : undefined;
+    const timeout =
+      controller && options.timeoutMs
+        ? setTimeout(() => controller.abort(), options.timeoutMs)
+        : undefined;
 
-    if (!response.ok) {
-      throw new Error(`OPENAI_COMPATIBLE_HTTP_ERROR: ${response.status}`);
+    try {
+      const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+        body: JSON.stringify(body),
+        headers: {
+          authorization: `Bearer ${this.apiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+        ...(controller === undefined ? {} : { signal: controller.signal }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OPENAI_COMPATIBLE_HTTP_ERROR: ${response.status}`);
+      }
+
+      return response.json();
+    } finally {
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
     }
-
-    return response.json();
   }
 }
 

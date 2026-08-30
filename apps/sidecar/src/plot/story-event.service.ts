@@ -6,31 +6,24 @@ import { DomainEventRepository, PlotRepository, type StoryEventRecord } from "@s
 
 import { ProjectStorageService } from "../storage/project-storage.service.js";
 
+type StoryEventType = CommandPayload<"storyEvent.create">["eventType"];
+type StoryEventStatus = CommandPayload<"storyEvent.create">["status"];
+
 export interface CreateStoryEventInput {
   readonly projectId: string;
   readonly title: string;
   readonly description: string;
-  readonly eventType:
-    | "decision"
-    | "discovery"
-    | "conflict"
-    | "reveal"
-    | "loss"
-    | "victory"
-    | "betrayal"
-    | "travel"
-    | "custom";
+  readonly eventType?: StoryEventType;
+  readonly status?: StoryEventStatus;
   readonly chapterId?: string;
   readonly sceneId?: string;
   readonly storyTime?: string;
-  readonly status?: string;
-  readonly participants?: readonly CreateStoryEventParticipantInput[];
-}
-
-export interface CreateStoryEventParticipantInput {
-  readonly entityType: string;
-  readonly entityId: string;
-  readonly role: string;
+  readonly outcome?: string;
+  readonly participants?: readonly {
+    readonly entityType: string;
+    readonly entityId: string;
+    readonly role?: string;
+  }[];
 }
 
 export type UpdateStoryEventInput = CommandPayload<"storyEvent.update">;
@@ -45,16 +38,17 @@ export class StoryEventService {
       const event = new PlotRepository(projectDatabase).createStoryEvent({
         description: input.description,
         eventId: randomUUID(),
-        eventType: input.eventType,
+        eventType: input.eventType ?? "custom",
         participants: (input.participants ?? []).map((participant) => ({
           entityId: participant.entityId,
           entityType: participant.entityType,
           participantId: randomUUID(),
-          role: participant.role,
+          role: participant.role ?? "participant",
         })),
         projectId: input.projectId,
         title: input.title,
         ...(input.chapterId === undefined ? {} : { chapterId: input.chapterId }),
+        ...(input.outcome === undefined ? {} : { outcome: input.outcome }),
         ...(input.sceneId === undefined ? {} : { sceneId: input.sceneId }),
         ...(input.storyTime === undefined ? {} : { storyTime: input.storyTime }),
         ...(input.status === undefined ? {} : { status: input.status }),
@@ -75,6 +69,7 @@ export class StoryEventService {
           })),
           sceneId: input.sceneId,
           summary: event.summary,
+          outcome: event.outcome,
           storyTime: input.storyTime,
           title: event.title,
         },
@@ -96,6 +91,7 @@ export class StoryEventService {
         ...(input.patch.chapterId === undefined ? {} : { chapterId: input.patch.chapterId }),
         ...(input.patch.description === undefined ? {} : { description: input.patch.description }),
         ...(input.patch.eventType === undefined ? {} : { eventType: input.patch.eventType }),
+        ...(input.patch.outcome === undefined ? {} : { outcome: input.patch.outcome }),
         ...(input.patch.participants === undefined
           ? {}
           : {
@@ -128,6 +124,7 @@ export class StoryEventService {
           sceneId: event.sceneId,
           status: event.status,
           summary: event.summary,
+          outcome: event.outcome,
           storyTime: event.storyTime,
           title: event.title,
         },

@@ -3,9 +3,11 @@ import { z } from "zod";
 import {
   ChapterDraftOutputSchema,
   ContinuityReviewOutputSchema,
+  CoreStoryFieldCompletionOutputSchema,
   ElementCandidateOutputSchema,
   ForeshadowingPlanOutputSchema,
   MemoryExtractOutputSchema,
+  WorldbuildingFieldCompletionOutputSchema,
 } from "@story-pilot/ai";
 
 import { createModelGatewayFromEnv, modelGatewayProvider } from "./model-gateway.provider.js";
@@ -102,6 +104,40 @@ describe("createModelGatewayFromEnv", () => {
     });
   });
 
+  it("keeps deterministic fake planning responses aligned with strict completion schemas", async () => {
+    const gateway = createModelGatewayFromEnv({ STORY_PILOT_ALLOW_FAKE_MODEL: "true" });
+
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "补全世界观" }],
+        purpose: "worldbuilding_generate",
+        schema: WorldbuildingFieldCompletionOutputSchema,
+        schemaName: "WorldbuildingFieldCompletionOutput",
+      }),
+    ).resolves.toMatchObject({
+      object: {
+        fields: {
+          worldBase: expect.any(String),
+        },
+      },
+    });
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "补全核心故事" }],
+        purpose: "core_story_complete",
+        schema: CoreStoryFieldCompletionOutputSchema,
+        schemaName: "CoreStoryFieldCompletionOutput",
+      }),
+    ).resolves.toMatchObject({
+      object: {
+        fields: {
+          logline: expect.any(String),
+          premise: expect.any(String),
+        },
+      },
+    });
+  });
+
   it("creates an OpenAI-compatible gateway from local LLM env settings", async () => {
     const calls: string[] = [];
     const gateway = createModelGatewayFromEnv(
@@ -138,6 +174,77 @@ describe("createModelGatewayFromEnv", () => {
       object: { ok: true },
     });
     expect(calls).toEqual(["https://api.example.test/v1/chat/completions"]);
+  });
+
+  it("applies retry and embedding model env settings to provider requests", async () => {
+    const calls: Array<{ body: unknown; url: string }> = [];
+    const gateway = createModelGatewayFromEnv(
+      {
+        STORY_PILOT_LLM_API_KEY: "test-key",
+        STORY_PILOT_LLM_BASE_URL: "https://api.example.test/v1",
+        STORY_PILOT_LLM_EMBEDDING_MODEL: "text-embedding-test",
+        STORY_PILOT_LLM_MAX_RETRIES: "1",
+        STORY_PILOT_LLM_MODEL: "gpt-5.5",
+        STORY_PILOT_LLM_TIMEOUT_MS: "45000",
+      },
+      async (url, init) => {
+        calls.push({
+          body: JSON.parse(String(init?.body)),
+          url: String(url),
+        });
+
+        if (String(url).endsWith("/chat/completions") && calls.length === 1) {
+          return new Response(JSON.stringify({ error: "temporary" }), { status: 500 });
+        }
+
+        if (String(url).endsWith("/embeddings")) {
+          return new Response(
+            JSON.stringify({
+              data: [{ embedding: [0.1, 0.2] }],
+            }),
+            { status: 200 },
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ ok: true }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      },
+    );
+
+    await expect(
+      gateway.generateObject({
+        messages: [{ role: "user", content: "ping" }],
+        purpose: "memory_extract",
+        schema: z.object({ ok: z.boolean() }),
+        schemaName: "Ping",
+      }),
+    ).resolves.toMatchObject({
+      object: { ok: true },
+    });
+    await expect(gateway.embed({ input: "旧信", purpose: "memory_recall" })).resolves.toMatchObject(
+      {
+        embedding: [0.1, 0.2],
+      },
+    );
+
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://api.example.test/v1/chat/completions",
+      "https://api.example.test/v1/chat/completions",
+      "https://api.example.test/v1/embeddings",
+    ]);
+    expect(calls[2]?.body).toMatchObject({
+      model: "text-embedding-test",
+    });
   });
 
   it("provider gateway reads updated model environment after settings changes", async () => {

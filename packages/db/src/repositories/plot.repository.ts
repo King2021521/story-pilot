@@ -41,8 +41,33 @@ export interface StoryEventRecord {
   readonly sceneId: string | null;
   readonly storyTime: string | null;
   readonly summary: string;
+  readonly outcome: string | null;
   readonly status: string;
   readonly participants: StoryEventParticipantRecord[];
+}
+
+export interface EventRelationRecord {
+  readonly id: string;
+  readonly projectId: string;
+  readonly sourceEventId: string;
+  readonly relationType: string;
+  readonly targetEventId: string;
+  readonly description: string | null;
+  readonly createdAt: number;
+}
+
+export interface ConflictRecord {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly conflictType: string;
+  readonly opposingForces: readonly string[];
+  readonly stakes: string;
+  readonly escalationPath: readonly string[];
+  readonly relatedPlotlineId: string | null;
+  readonly status: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
 }
 
 export interface ForeshadowingEventLinkRecord {
@@ -147,6 +172,7 @@ export interface CreateStoryEventRecordInput {
   readonly chapterId?: string;
   readonly sceneId?: string;
   readonly storyTime?: string;
+  readonly outcome?: string;
   readonly status?: string;
   readonly participants: readonly CreateStoryEventParticipantInput[];
   readonly now?: number;
@@ -183,8 +209,52 @@ export interface UpdateStoryEventRecordInput {
   readonly chapterId?: string | null;
   readonly sceneId?: string | null;
   readonly storyTime?: string | null;
+  readonly outcome?: string | null;
   readonly status?: string;
   readonly participants?: readonly CreateStoryEventParticipantInput[];
+  readonly now?: number;
+}
+
+export interface CreateEventRelationRecordInput {
+  readonly eventRelationId: string;
+  readonly projectId: string;
+  readonly sourceEventId: string;
+  readonly relationType: string;
+  readonly targetEventId: string;
+  readonly description?: string;
+  readonly now?: number;
+}
+
+export interface UpdateEventRelationRecordInput {
+  readonly eventRelationId: string;
+  readonly projectId: string;
+  readonly relationType?: string;
+  readonly description?: string | null;
+}
+
+export interface CreateConflictRecordInput {
+  readonly conflictId: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly conflictType: string;
+  readonly opposingForces: readonly string[];
+  readonly stakes: string;
+  readonly escalationPath: readonly string[];
+  readonly relatedPlotlineId?: string | null;
+  readonly status?: string;
+  readonly now?: number;
+}
+
+export interface UpdateConflictRecordInput {
+  readonly conflictId: string;
+  readonly projectId: string;
+  readonly title?: string;
+  readonly conflictType?: string;
+  readonly opposingForces?: readonly string[];
+  readonly stakes?: string;
+  readonly escalationPath?: readonly string[];
+  readonly relatedPlotlineId?: string | null;
+  readonly status?: string;
   readonly now?: number;
 }
 
@@ -248,7 +318,32 @@ interface StoryEventRow {
   readonly chapter_id: string | null;
   readonly scene_id: string | null;
   readonly summary: string;
+  readonly outcome: string | null;
   readonly status: string;
+}
+
+interface EventRelationRow {
+  readonly id: string;
+  readonly project_id: string;
+  readonly source_event_id: string;
+  readonly relation_type: string;
+  readonly target_event_id: string;
+  readonly description: string | null;
+  readonly created_at: number;
+}
+
+interface ConflictRow {
+  readonly id: string;
+  readonly project_id: string;
+  readonly title: string;
+  readonly conflict_type: string;
+  readonly opposing_forces_json: string;
+  readonly stakes: string;
+  readonly escalation_path_json: string;
+  readonly related_plotline_id: string | null;
+  readonly status: string;
+  readonly created_at: number;
+  readonly updated_at: number;
 }
 
 interface StoryEventParticipantRow {
@@ -510,11 +605,11 @@ export class PlotRepository {
           `
           insert into story_events (
             id, project_id, title, event_type, event_time, position, summary,
-            chapter_id, scene_id, status, created_at, updated_at
+            outcome, chapter_id, scene_id, status, created_at, updated_at
           )
           values (
             @eventId, @projectId, @title, @eventType, @storyTime, @position, @description,
-            @chapterId, @sceneId, @status, @now, @now
+            @outcome, @chapterId, @sceneId, @status, @now, @now
           )
         `,
         )
@@ -524,6 +619,7 @@ export class PlotRepository {
           eventId: input.eventId,
           eventType: input.eventType,
           now,
+          outcome: normalizeNullableText(input.outcome),
           position,
           projectId: input.projectId,
           sceneId: input.sceneId ?? null,
@@ -574,6 +670,189 @@ export class PlotRepository {
       .all(projectId) as StoryEventRow[];
 
     return rows.map((row) => this.getStoryEvent(projectId, row.id)).filter(isDefined);
+  }
+
+  createEventRelation(input: CreateEventRelationRecordInput): EventRelationRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        `
+        insert into event_relations (
+          id, project_id, source_event_id, relation_type, target_event_id, description, created_at
+        )
+        values (
+          @eventRelationId, @projectId, @sourceEventId, @relationType, @targetEventId, @description, @now
+        )
+        `,
+      )
+      .run({
+        description: normalizeNullableText(input.description),
+        eventRelationId: input.eventRelationId,
+        now,
+        projectId: input.projectId,
+        relationType: input.relationType,
+        sourceEventId: input.sourceEventId,
+        targetEventId: input.targetEventId,
+      });
+
+    const relation = this.getEventRelation(input.projectId, input.eventRelationId);
+    if (!relation) {
+      throw new Error(`EVENT_RELATION_NOT_CREATED: ${input.eventRelationId}`);
+    }
+
+    return relation;
+  }
+
+  listEventRelations(projectId: string, eventId?: string): EventRelationRecord[] {
+    const rows = eventId
+      ? this.projectDatabase.client
+          .prepare(
+            `
+            select * from event_relations
+            where project_id = ?
+              and (source_event_id = ? or target_event_id = ?)
+            order by created_at asc
+            `,
+          )
+          .all(projectId, eventId, eventId)
+      : this.projectDatabase.client
+          .prepare("select * from event_relations where project_id = ? order by created_at asc")
+          .all(projectId);
+
+    return rows.map((row) => mapEventRelationRow(row as EventRelationRow));
+  }
+
+  updateEventRelation(input: UpdateEventRelationRecordInput): EventRelationRecord {
+    const updates: string[] = [];
+    const params: Record<string, unknown> = {
+      eventRelationId: input.eventRelationId,
+      projectId: input.projectId,
+    };
+
+    addTextUpdate(updates, params, "relation_type", "relationType", input.relationType);
+    addNullableTextUpdate(updates, params, "description", "description", input.description);
+
+    if (updates.length > 0) {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update event_relations
+          set ${updates.join(", ")}
+          where project_id = @projectId and id = @eventRelationId
+          `,
+        )
+        .run(params);
+    }
+
+    const relation = this.getEventRelation(input.projectId, input.eventRelationId);
+    if (!relation) {
+      throw new Error(`EVENT_RELATION_NOT_FOUND: ${input.eventRelationId}`);
+    }
+
+    return relation;
+  }
+
+  createConflict(input: CreateConflictRecordInput): ConflictRecord {
+    const now = input.now ?? Date.now();
+    this.projectDatabase.client
+      .prepare(
+        `
+        insert into conflicts (
+          id, project_id, title, conflict_type, opposing_forces_json, stakes,
+          escalation_path_json, related_plotline_id, status, created_at, updated_at
+        )
+        values (
+          @conflictId, @projectId, @title, @conflictType, @opposingForcesJson, @stakes,
+          @escalationPathJson, @relatedPlotlineId, @status, @now, @now
+        )
+        `,
+      )
+      .run({
+        conflictId: input.conflictId,
+        conflictType: input.conflictType,
+        escalationPathJson: stringifyStringArray(input.escalationPath),
+        now,
+        opposingForcesJson: stringifyStringArray(input.opposingForces),
+        projectId: input.projectId,
+        relatedPlotlineId: normalizeNullableText(input.relatedPlotlineId),
+        stakes: input.stakes.trim(),
+        status: input.status ?? "planned",
+        title: input.title.trim(),
+      });
+
+    const conflict = this.getConflict(input.projectId, input.conflictId);
+    if (!conflict) {
+      throw new Error(`CONFLICT_NOT_CREATED: ${input.conflictId}`);
+    }
+
+    return conflict;
+  }
+
+  listConflicts(projectId: string, status?: string): ConflictRecord[] {
+    const rows = status
+      ? this.projectDatabase.client
+          .prepare(
+            "select * from conflicts where project_id = ? and status = ? order by created_at asc",
+          )
+          .all(projectId, status)
+      : this.projectDatabase.client
+          .prepare("select * from conflicts where project_id = ? order by created_at asc")
+          .all(projectId);
+
+    return rows.map((row) => mapConflictRow(row as ConflictRow));
+  }
+
+  updateConflict(input: UpdateConflictRecordInput): ConflictRecord {
+    const now = input.now ?? Date.now();
+    const updates = ["updated_at = @now"];
+    const params: Record<string, unknown> = {
+      conflictId: input.conflictId,
+      now,
+      projectId: input.projectId,
+    };
+
+    addTextUpdate(updates, params, "title", "title", input.title);
+    addTextUpdate(updates, params, "conflict_type", "conflictType", input.conflictType);
+    addTextUpdate(updates, params, "stakes", "stakes", input.stakes);
+    addTextUpdate(updates, params, "status", "status", input.status);
+    addNullableTextUpdate(
+      updates,
+      params,
+      "related_plotline_id",
+      "relatedPlotlineId",
+      input.relatedPlotlineId,
+    );
+    addJsonArrayUpdate(
+      updates,
+      params,
+      "opposing_forces_json",
+      "opposingForcesJson",
+      input.opposingForces,
+    );
+    addJsonArrayUpdate(
+      updates,
+      params,
+      "escalation_path_json",
+      "escalationPathJson",
+      input.escalationPath,
+    );
+
+    this.projectDatabase.client
+      .prepare(
+        `
+        update conflicts
+        set ${updates.join(", ")}
+        where project_id = @projectId and id = @conflictId
+        `,
+      )
+      .run(params);
+
+    const conflict = this.getConflict(input.projectId, input.conflictId);
+    if (!conflict) {
+      throw new Error(`CONFLICT_NOT_FOUND: ${input.conflictId}`);
+    }
+
+    return conflict;
   }
 
   createForeshadowing(input: CreateForeshadowingRecordInput): ForeshadowingRecord {
@@ -658,6 +937,7 @@ export class PlotRepository {
     addNullableTextUpdate(updates, params, "chapter_id", "chapterId", input.chapterId);
     addNullableTextUpdate(updates, params, "scene_id", "sceneId", input.sceneId);
     addNullableTextUpdate(updates, params, "event_time", "storyTime", input.storyTime);
+    addNullableTextUpdate(updates, params, "outcome", "outcome", input.outcome);
 
     const update = this.projectDatabase.client.transaction(() => {
       this.projectDatabase.client
@@ -894,6 +1174,7 @@ export class PlotRepository {
       chapterId: row.chapter_id,
       eventType: row.event_type,
       id: row.id,
+      outcome: row.outcome,
       participants,
       projectId: row.project_id,
       sceneId: row.scene_id,
@@ -902,6 +1183,25 @@ export class PlotRepository {
       summary: row.summary,
       title: row.title,
     };
+  }
+
+  private getEventRelation(
+    projectId: string,
+    eventRelationId: string,
+  ): EventRelationRecord | undefined {
+    const row = this.projectDatabase.client
+      .prepare("select * from event_relations where project_id = ? and id = ?")
+      .get(projectId, eventRelationId) as EventRelationRow | undefined;
+
+    return row ? mapEventRelationRow(row) : undefined;
+  }
+
+  private getConflict(projectId: string, conflictId: string): ConflictRecord | undefined {
+    const row = this.projectDatabase.client
+      .prepare("select * from conflicts where project_id = ? and id = ?")
+      .get(projectId, conflictId) as ConflictRow | undefined;
+
+    return row ? mapConflictRow(row) : undefined;
   }
 
   private getForeshadowing(
@@ -990,6 +1290,34 @@ function mapParticipantRow(row: StoryEventParticipantRow): StoryEventParticipant
     id: row.id,
     projectId: row.project_id,
     role: row.role,
+  };
+}
+
+function mapEventRelationRow(row: EventRelationRow): EventRelationRecord {
+  return {
+    createdAt: row.created_at,
+    description: row.description,
+    id: row.id,
+    projectId: row.project_id,
+    relationType: row.relation_type,
+    sourceEventId: row.source_event_id,
+    targetEventId: row.target_event_id,
+  };
+}
+
+function mapConflictRow(row: ConflictRow): ConflictRecord {
+  return {
+    conflictType: row.conflict_type,
+    createdAt: row.created_at,
+    escalationPath: parseStringArray(row.escalation_path_json),
+    id: row.id,
+    opposingForces: parseStringArray(row.opposing_forces_json),
+    projectId: row.project_id,
+    relatedPlotlineId: row.related_plotline_id,
+    stakes: row.stakes,
+    status: row.status,
+    title: row.title,
+    updatedAt: row.updated_at,
   };
 }
 

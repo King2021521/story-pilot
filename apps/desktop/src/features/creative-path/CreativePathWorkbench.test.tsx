@@ -354,6 +354,7 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
       },
     ],
     reviewIssues: [],
+    sceneOutlines: [],
     scenePlans: [],
     stages: [
       { readinessScore: 10, stageKey: "brief", status: "available" },
@@ -366,6 +367,7 @@ function createCreativePathBoard(overrides: Partial<CreativePathBoard> = {}): Cr
       { readinessScore: 0, stageKey: "memory_review", status: "locked" },
       { readinessScore: 0, stageKey: "retrospective", status: "locked" },
     ],
+    volumeOutlines: [],
     volumePlans: [],
     ...overrides,
   };
