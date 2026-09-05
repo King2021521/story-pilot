@@ -6,6 +6,7 @@ This directory contains executable product and engineering specs for Story Pilot
 - [Story Pilot MVP Implementation Plan](./2026-08-27-story-pilot-mvp-implementation-plan.md)
 - [小说创作主路径整改 Spec](./2026-08-28-creative-main-path-remediation-spec.md)
 - [创作预设与 AI 要素候选 Spec](./2026-08-28-creative-presets-ai-candidates-spec.md)
+- [Story Pilot 500 万字长篇连载控制系统 Spec](./2026-09-05-longform-serial-control-system-spec.md)
 - [生产化补强 Specs](./production-readiness/README.md)
 - [生产级优化补强方案](./production-readiness/09-production-reinforcement-plan.md)
 
