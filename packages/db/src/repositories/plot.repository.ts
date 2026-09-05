@@ -149,6 +149,12 @@ export interface UpdatePlotlineRecordInput {
   readonly now?: number;
 }
 
+export interface DeletePlotlineRecordInput {
+  readonly projectId: string;
+  readonly plotlineId: string;
+  readonly now?: number;
+}
+
 export interface CreatePlotlineNodeRecordInput {
   readonly plotlineNodeId: string;
   readonly projectId: string;
@@ -537,6 +543,75 @@ export class PlotRepository {
     }
 
     return plotline;
+  }
+
+  deletePlotline(input: DeletePlotlineRecordInput): void {
+    const plotline = this.getPlotline(input.projectId, input.plotlineId);
+    if (!plotline) {
+      throw new Error(`PLOTLINE_NOT_FOUND: ${input.plotlineId}`);
+    }
+
+    const now = input.now ?? Date.now();
+    const remove = this.projectDatabase.client.transaction(() => {
+      this.projectDatabase.client
+        .prepare(
+          `
+          update conflicts
+          set related_plotline_id = null,
+              updated_at = @now
+          where project_id = @projectId and related_plotline_id = @plotlineId
+          `,
+        )
+        .run({
+          now,
+          plotlineId: input.plotlineId,
+          projectId: input.projectId,
+        });
+
+      this.projectDatabase.client
+        .prepare(
+          `
+          update book_plans
+          set main_plotline_id = null,
+              updated_at = @now
+          where project_id = @projectId and main_plotline_id = @plotlineId
+          `,
+        )
+        .run({
+          now,
+          plotlineId: input.plotlineId,
+          projectId: input.projectId,
+        });
+
+      this.projectDatabase.client
+        .prepare(
+          `
+          update arc_plans
+          set plotline_id = null,
+              updated_at = @now
+          where project_id = @projectId and plotline_id = @plotlineId
+          `,
+        )
+        .run({
+          now,
+          plotlineId: input.plotlineId,
+          projectId: input.projectId,
+        });
+
+      this.projectDatabase.client
+        .prepare("delete from plotline_nodes where project_id = ? and plotline_id = ?")
+        .run(input.projectId, input.plotlineId);
+
+      const result = this.projectDatabase.client
+        .prepare("delete from plotlines where project_id = ? and id = ?")
+        .run(input.projectId, input.plotlineId);
+
+      if (result.changes === 0) {
+        throw new Error(`PLOTLINE_NOT_FOUND: ${input.plotlineId}`);
+      }
+    });
+
+    remove();
   }
 
   createPlotlineNode(input: CreatePlotlineNodeRecordInput): PlotlineNodeRecord {
@@ -1235,7 +1310,7 @@ export class PlotRepository {
     };
   }
 
-  private getPlotline(projectId: string, plotlineId: string): PlotlineRecord | undefined {
+  getPlotline(projectId: string, plotlineId: string): PlotlineRecord | undefined {
     const row = this.projectDatabase.client
       .prepare("select * from plotlines where project_id = ? and id = ?")
       .get(projectId, plotlineId) as PlotlineRow | undefined;

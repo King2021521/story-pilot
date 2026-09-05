@@ -2,7 +2,9 @@ import {
   BranchesOutlined,
   CheckCircleOutlined,
   DatabaseOutlined,
+  DeleteOutlined,
   DeploymentUnitOutlined,
+  EditOutlined,
   FileProtectOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
@@ -27,6 +29,8 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
+  Pagination,
   Row,
   Select,
   Space,
@@ -42,8 +46,10 @@ import type { ArtifactReviewItem } from "../ai/ArtifactReviewPanel";
 import {
   ChapterEditorPage,
   type CreateChapterRequest,
+  type ExtractStoryStateDeltaRequest,
   type GenerateChapterDraftRequest,
   type LoadChapterVersionsRequest,
+  type ReviewChapterDraftRequest,
   type RestoreChapterVersionRequest,
   type SaveChapterRequest,
 } from "../chapter/ChapterEditorPage";
@@ -518,6 +524,10 @@ const EVENT_TYPE_OPTIONS = [
 type StoryEventTypeValue = CommandPayload<"storyEvent.create">["eventType"];
 type StoryEventStatusValue = CommandPayload<"storyEvent.create">["status"];
 type ForeshadowingStatusValue = CommandPayload<"foreshadowing.create">["status"];
+type PlotDebtValues = CommandPayload<"plotDebt.save">["values"];
+type PlotDebtStatusValue = PlotDebtValues["status"];
+type PlotDebtRiskLevelValue = PlotDebtValues["riskLevel"];
+type PlotDebtTypeValue = PlotDebtValues["debtType"];
 
 const STORY_EVENT_STATUS_OPTIONS: ReadonlyArray<{
   readonly label: string;
@@ -539,6 +549,40 @@ const FORESHADOWING_STATUS_OPTIONS: ReadonlyArray<{
   { label: "归档", value: "archived" },
 ];
 
+const PLOT_DEBT_TYPE_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: PlotDebtTypeValue;
+}> = [
+  { label: "伏笔", value: "foreshadowing" },
+  { label: "谜题", value: "mystery" },
+  { label: "读者承诺", value: "reader_promise" },
+  { label: "关系债", value: "relationship" },
+  { label: "世界规则", value: "world_rule" },
+  { label: "冲突债", value: "conflict" },
+  { label: "奖励兑现", value: "reward" },
+];
+
+const PLOT_DEBT_STATUS_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: PlotDebtStatusValue;
+}> = [
+  { label: "打开", value: "open" },
+  { label: "已强化", value: "reinforced" },
+  { label: "待回收", value: "payoff_ready" },
+  { label: "已回收", value: "paid_off" },
+  { label: "已放弃", value: "dropped" },
+];
+
+const PLOT_DEBT_RISK_LEVEL_OPTIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly value: PlotDebtRiskLevelValue;
+}> = [
+  { label: "低", value: "low" },
+  { label: "中", value: "medium" },
+  { label: "高", value: "high" },
+  { label: "严重", value: "critical" },
+];
+
 const EVENT_TYPE_LABELS = Object.fromEntries(
   EVENT_TYPE_OPTIONS.map((option) => [option.value, option.label]),
 ) as Record<StoryEventTypeValue, string>;
@@ -551,6 +595,18 @@ const FORESHADOWING_STATUS_LABELS = Object.fromEntries(
   FORESHADOWING_STATUS_OPTIONS.map((option) => [option.value, option.label]),
 ) as Record<ForeshadowingStatusValue, string>;
 
+const PLOT_DEBT_TYPE_LABELS = Object.fromEntries(
+  PLOT_DEBT_TYPE_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<PlotDebtTypeValue, string>;
+
+const PLOT_DEBT_STATUS_LABELS = Object.fromEntries(
+  PLOT_DEBT_STATUS_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<PlotDebtStatusValue, string>;
+
+const PLOT_DEBT_RISK_LEVEL_LABELS = Object.fromEntries(
+  PLOT_DEBT_RISK_LEVEL_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<PlotDebtRiskLevelValue, string>;
+
 const STORY_EVENT_FORM_DEFAULTS = {
   eventType: "discovery",
   participants: [],
@@ -561,6 +617,17 @@ const FORESHADOWING_FORM_DEFAULTS = {
   importance: 3,
   status: "seeded",
 } satisfies Pick<ForeshadowingFormValues, "importance" | "status">;
+
+const PLOT_DEBT_FORM_DEFAULTS = {
+  debtType: "reader_promise",
+  lifecycleNotes: [],
+  promise: "",
+  relatedCharacterIds: [],
+  relatedWorldRuleIds: [],
+  riskLevel: "medium",
+  status: "open",
+  title: "",
+} satisfies PlotDebtFormValues;
 
 const MODULE_STAGE_MAP: Partial<Record<WorkspaceModuleKey, CreativeStageKey>> = {
   basic: "brief",
@@ -639,6 +706,7 @@ export interface CreateStoryEventParticipantValues {
 export type UpdateStoryEventValues = Omit<CommandPayload<"storyEvent.update">, "projectId">;
 export type UpdateForeshadowingValues = Omit<CommandPayload<"foreshadowing.update">, "projectId">;
 export type PlanForeshadowingValues = Omit<CommandPayload<"foreshadowing.plan">, "projectId">;
+export type SavePlotDebtValues = Omit<CommandPayload<"plotDebt.save">, "projectId">;
 
 interface StoryEventFormValues {
   readonly title: string;
@@ -660,16 +728,38 @@ interface ForeshadowingFormValues {
   readonly status: ForeshadowingStatusValue;
 }
 
+interface PlotDebtFormValues {
+  readonly actualPayoffChapterIndex?: number | null;
+  readonly debtType: PlotDebtTypeValue;
+  readonly expectedPayoffChapterIndex?: number | null;
+  readonly lifecycleNotes: readonly string[];
+  readonly promise: string;
+  readonly relatedCharacterIds: readonly string[];
+  readonly relatedForeshadowingId?: string | null;
+  readonly relatedPlotlineId?: string | null;
+  readonly relatedWorldRuleIds: readonly string[];
+  readonly riskLevel: PlotDebtRiskLevelValue;
+  readonly seedChapterIndex?: number | null;
+  readonly status: PlotDebtStatusValue;
+  readonly title: string;
+}
+
 export interface UpdateCharacterValues {
   readonly characterId: string;
   readonly patch: Partial<CreateCharacterValues>;
 }
+
+export type DeleteCharacterValues = Omit<CommandPayload<"character.delete">, "projectId">;
+export type DeletePlotlineValues = Omit<CommandPayload<"plotline.delete">, "projectId">;
 
 export type WorldbuildingFields = CommandPayload<"worldbuilding.saveFields">["fields"];
 export type CoreStoryFields = CommandPayload<"blueprint.saveForm">["fields"];
 export type SaveBookPlanDraftValues = Omit<CommandPayload<"plot.saveBookPlanDraft">, "projectId">;
 export type SaveVolumePlanValues = Omit<CommandPayload<"plot.saveVolumePlan">, "projectId">;
 export type SaveArcPlanValues = Omit<CommandPayload<"plot.saveArcPlan">, "projectId">;
+export type DeleteBookPlanValues = Omit<CommandPayload<"plot.deleteBookPlan">, "projectId">;
+export type DeleteVolumePlanValues = Omit<CommandPayload<"plot.deleteVolumePlan">, "projectId">;
+export type DeleteArcPlanValues = Omit<CommandPayload<"plot.deleteArcPlan">, "projectId">;
 
 interface CoreStoryFormValues extends Omit<CoreStoryFields, "differentiators" | "risks"> {
   readonly differentiatorsText: string;
@@ -707,6 +797,54 @@ export interface WorldbuildingProfile {
   readonly updatedAt: number;
 }
 
+export interface PlotDebtItem extends PlotDebtValues {
+  readonly createdAt?: number;
+  readonly id: string;
+  readonly projectId?: string;
+  readonly updatedAt?: number;
+}
+
+export interface StoryStateSnapshotItem {
+  readonly activeConflicts: readonly string[];
+  readonly chapterId: string | null;
+  readonly chapterIndex: number;
+  readonly createdAt: number;
+  readonly currentArcPlanId: string | null;
+  readonly currentVolumeId: string | null;
+  readonly globalSituation: string;
+  readonly hiddenInformation: readonly string[];
+  readonly id: string;
+  readonly locationState: Record<string, unknown>;
+  readonly openQuestions: readonly string[];
+  readonly organizationState: Record<string, unknown>;
+  readonly projectId: string;
+  readonly resourceState: Record<string, unknown>;
+  readonly revealedInformation: readonly string[];
+  readonly sourceChapterVersion: number | null;
+  readonly storyTime: string | null;
+}
+
+export interface CharacterStateSnapshotItem {
+  readonly characterId: string;
+  readonly chapterId: string | null;
+  readonly chapterIndex: number;
+  readonly createdAt: number;
+  readonly emotionalState: string;
+  readonly externalGoal: string;
+  readonly id: string;
+  readonly internalNeed: string;
+  readonly knowledgeState: string;
+  readonly physicalState: string;
+  readonly position: string;
+  readonly projectId: string;
+  readonly relationshipState: Record<string, unknown>;
+  readonly resourceState: Record<string, unknown>;
+  readonly riskFlags: readonly string[];
+  readonly secrets: readonly string[];
+  readonly sourceId: string;
+  readonly sourceType: string;
+}
+
 export interface CompleteWorldbuildingFieldsResult {
   readonly fields: WorldbuildingFields;
 }
@@ -714,6 +852,7 @@ export interface CompleteWorldbuildingFieldsResult {
 export interface WorkbenchBoard {
   readonly artifacts: readonly ArtifactReviewItem[];
   readonly chapters: readonly WorkbenchChapter[];
+  readonly characterStateSnapshots?: readonly CharacterStateSnapshotItem[];
   readonly characters?: readonly CharacterElement[];
   readonly conflicts?: readonly unknown[];
   readonly creativePath?: CreativePathBoard;
@@ -724,9 +863,11 @@ export interface WorkbenchBoard {
   readonly locations?: readonly WorldElement[];
   readonly memoryCandidates: readonly MemoryCandidateItem[];
   readonly organizations?: readonly WorldElement[];
+  readonly plotDebts?: readonly PlotDebtItem[];
   readonly plotlines?: readonly PlotlineElement[];
   readonly project: WorkbenchProject;
   readonly storyEvents?: readonly StoryEventElement[];
+  readonly storyStateSnapshots?: readonly StoryStateSnapshotItem[];
   readonly workOrders: readonly unknown[];
   readonly worldRules?: readonly WorldRuleElement[];
   readonly worldbuildingProfile?: WorldbuildingProfile | null;
@@ -740,6 +881,7 @@ export interface WorkbenchHomeProps {
   readonly loading?: boolean;
   readonly selectedChapterId?: string | undefined;
   readonly savingChapter?: boolean;
+  onExtractStoryStateDelta(input: ExtractStoryStateDeltaRequest): Promise<void> | void;
   onGenerateDraft(input: GenerateChapterDraftRequest): Promise<void> | void;
   onConfirmMemory(input: MemoryCandidateDecisionInput): Promise<void> | void;
   onRejectMemory(candidateId: string): Promise<void> | void;
@@ -747,6 +889,8 @@ export interface WorkbenchHomeProps {
   onSelectChapter(chapterId: string): void;
   onCreateChapter(input: CreateChapterRequest): Promise<void> | void;
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
+  onDeleteCharacter(input: DeleteCharacterValues): Promise<void> | void;
+  onDeletePlotline(input: DeletePlotlineValues): Promise<void> | void;
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
   onCreatePlotlineNode(input: CreatePlotlineNodeValues): Promise<void> | void;
@@ -777,9 +921,16 @@ export interface WorkbenchHomeProps {
     readonly targetWordCount: number;
     readonly volumeCount: number;
   }): Promise<void> | void;
+  onGenerateChapterExecutionCard(input: {
+    readonly chapterPlanId: string;
+    readonly instruction?: string;
+  }): Promise<void> | void;
   onSaveBookPlanDraft(input: SaveBookPlanDraftValues): Promise<void> | void;
   onSaveVolumePlan(input: SaveVolumePlanValues): Promise<void> | void;
   onSaveArcPlan(input: SaveArcPlanValues): Promise<void> | void;
+  onDeleteBookPlan(input: DeleteBookPlanValues): Promise<void> | void;
+  onDeleteVolumePlan(input: DeleteVolumePlanValues): Promise<void> | void;
+  onDeleteArcPlan(input: DeleteArcPlanValues): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateDraftFromPlan(input: { readonly chapterPlanId: string }): Promise<void> | void;
   onGenerateOutline(input: {
@@ -792,12 +943,19 @@ export interface WorkbenchHomeProps {
     readonly startChapterIndex: number;
     readonly chapterCount: 10 | 20;
   }): Promise<void> | void;
+  onGenerateSerialReview(input: {
+    readonly scope: "chapter_batch" | "arc" | "volume";
+    readonly startChapterIndex: number;
+    readonly endChapterIndex: number;
+  }): Promise<void> | void;
   onPlanForeshadowing(input: PlanForeshadowingValues): Promise<void> | void;
   onReopenStage(input: {
     readonly stageKey: CreativeStageKey;
     readonly reason?: string;
   }): Promise<void> | void;
   onSaveBrief(input: SaveBriefValues): Promise<void> | void;
+  onSavePlotDebt(input: SavePlotDebtValues): Promise<void> | void;
+  onReviewChapterDraft(input: ReviewChapterDraftRequest): Promise<void> | void;
   onUpdateCharacter(input: UpdateCharacterValues): Promise<void> | void;
   onUpdateForeshadowing(input: UpdateForeshadowingValues): Promise<void> | void;
   onUpdatePlotline(input: UpdatePlotlineValues): Promise<void> | void;
@@ -834,6 +992,11 @@ export function WorkbenchHome({
   onConfirmBrief,
   onCreateChapter,
   onCreateCharacter,
+  onDeleteArcPlan,
+  onDeleteBookPlan,
+  onDeleteCharacter,
+  onDeleteVolumePlan,
+  onDeletePlotline,
   onCreateForeshadowing,
   onCreatePlotline,
   onCreatePlotlineNode,
@@ -841,14 +1004,17 @@ export function WorkbenchHome({
   onCreateWorldRule,
   onCompleteCoreStoryFields,
   onCompleteWorldbuildingFields,
+  onExtractStoryStateDelta,
   onGenerateDraft,
   onGenerateBlueprint,
   onGenerateBookPlan,
+  onGenerateChapterExecutionCard,
   onGenerateDraftFromOutline,
   onGenerateDraftFromPlan,
   onGenerateElementCandidates,
   onGenerateOutline,
   onGenerateRollingOutline,
+  onGenerateSerialReview,
   onLoadChapterVersions,
   onPlanForeshadowing,
   onRejectMemory,
@@ -856,6 +1022,8 @@ export function WorkbenchHome({
   onSaveChapter,
   onSaveBrief,
   onSaveBookPlanDraft,
+  onSavePlotDebt,
+  onReviewChapterDraft,
   onSaveVolumePlan,
   onSaveArcPlan,
   onSaveCoreStoryFields,
@@ -907,6 +1075,11 @@ export function WorkbenchHome({
         onConfirmMemory,
         onCreateChapter,
         onCreateCharacter,
+        onDeleteArcPlan,
+        onDeleteBookPlan,
+        onDeleteCharacter,
+        onDeleteVolumePlan,
+        onDeletePlotline,
         onCreateForeshadowing,
         onCreatePlotline,
         onCreatePlotlineNode,
@@ -914,20 +1087,25 @@ export function WorkbenchHome({
         onCreateWorldRule,
         onCompleteCoreStoryFields,
         onCompleteWorldbuildingFields,
+        onExtractStoryStateDelta,
         onGenerateBlueprint,
         onGenerateBookPlan,
+        onGenerateChapterExecutionCard,
         onGenerateDraft,
         onGenerateDraftFromOutline,
         onGenerateDraftFromPlan,
         onGenerateElementCandidates,
         onGenerateOutline,
         onGenerateRollingOutline,
+        onGenerateSerialReview,
         onLoadChapterVersions,
         onPlanForeshadowing,
         onRejectMemory,
         onRestoreChapterVersion,
         onSaveBrief,
         onSaveBookPlanDraft,
+        onSavePlotDebt,
+        onReviewChapterDraft,
         onSaveVolumePlan,
         onSaveArcPlan,
         onSaveChapter,
@@ -966,6 +1144,11 @@ function renderModule(input: {
   onConfirmMemory(input: MemoryCandidateDecisionInput): Promise<void> | void;
   onCreateChapter(input: CreateChapterRequest): Promise<void> | void;
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
+  onDeleteArcPlan(input: DeleteArcPlanValues): Promise<void> | void;
+  onDeleteBookPlan(input: DeleteBookPlanValues): Promise<void> | void;
+  onDeleteCharacter(input: DeleteCharacterValues): Promise<void> | void;
+  onDeleteVolumePlan(input: DeleteVolumePlanValues): Promise<void> | void;
+  onDeletePlotline(input: DeletePlotlineValues): Promise<void> | void;
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
   onCreatePlotlineNode(input: CreatePlotlineNodeValues): Promise<void> | void;
@@ -977,10 +1160,15 @@ function renderModule(input: {
   onCompleteWorldbuildingFields(input: {
     readonly fields: WorldbuildingFields;
   }): Promise<CompleteWorldbuildingFieldsResult> | CompleteWorldbuildingFieldsResult;
+  onExtractStoryStateDelta(input: ExtractStoryStateDeltaRequest): Promise<void> | void;
   onGenerateBlueprint(): Promise<void> | void;
   onGenerateBookPlan(input: {
     readonly targetWordCount: number;
     readonly volumeCount: number;
+  }): Promise<void> | void;
+  onGenerateChapterExecutionCard(input: {
+    readonly chapterPlanId: string;
+    readonly instruction?: string;
   }): Promise<void> | void;
   onSaveBookPlanDraft(input: SaveBookPlanDraftValues): Promise<void> | void;
   onSaveVolumePlan(input: SaveVolumePlanValues): Promise<void> | void;
@@ -1005,6 +1193,11 @@ function renderModule(input: {
     readonly startChapterIndex: number;
     readonly chapterCount: 10 | 20;
   }): Promise<void> | void;
+  onGenerateSerialReview(input: {
+    readonly scope: "chapter_batch" | "arc" | "volume";
+    readonly startChapterIndex: number;
+    readonly endChapterIndex: number;
+  }): Promise<void> | void;
   onLoadChapterVersions(input: LoadChapterVersionsRequest): Promise<void> | void;
   onPlanForeshadowing(input: PlanForeshadowingValues): Promise<void> | void;
   onRejectMemory(candidateId: string): Promise<void> | void;
@@ -1014,6 +1207,8 @@ function renderModule(input: {
   onSaveCoreStoryFields(input: {
     readonly fields: CoreStoryFields;
   }): Promise<SaveCoreStoryFieldsResult> | SaveCoreStoryFieldsResult;
+  onSavePlotDebt(input: SavePlotDebtValues): Promise<void> | void;
+  onReviewChapterDraft(input: ReviewChapterDraftRequest): Promise<void> | void;
   onSaveWorldbuildingFields(input: { readonly fields: WorldbuildingFields }): Promise<void> | void;
   onSelectChapter(chapterId: string): void;
   onUpdateCharacter(input: UpdateCharacterValues): Promise<void> | void;
@@ -1052,10 +1247,12 @@ function renderModule(input: {
     case "characters":
       return (
         <CharactersModule
+          characterStateSnapshots={input.board.characterStateSnapshots ?? []}
           characters={input.board.characters ?? []}
           onAcceptElementCandidates={input.onAcceptElementCandidates}
           onAdvanceStage={input.onAdvanceStage}
           onCreateCharacter={input.onCreateCharacter}
+          onDeleteCharacter={input.onDeleteCharacter}
           onGenerateElementCandidates={input.onGenerateElementCandidates}
           onUpdateCharacter={input.onUpdateCharacter}
           project={input.board.project}
@@ -1068,6 +1265,7 @@ function renderModule(input: {
           onAdvanceStage={input.onAdvanceStage}
           onCreatePlotline={input.onCreatePlotline}
           onCreatePlotlineNode={input.onCreatePlotlineNode}
+          onDeletePlotline={input.onDeletePlotline}
           onUpdatePlotline={input.onUpdatePlotline}
           onUpdatePlotlineNode={input.onUpdatePlotlineNode}
           plotlines={input.board.plotlines ?? []}
@@ -1079,8 +1277,11 @@ function renderModule(input: {
       );
     case "book-outline":
       return (
-        <BookOutlineModule
+        <BookOutlineModuleV2
           creativePath={input.creativePath}
+          onDeleteArcPlan={input.onDeleteArcPlan}
+          onDeleteBookPlan={input.onDeleteBookPlan}
+          onDeleteVolumePlan={input.onDeleteVolumePlan}
           onGenerateBookPlan={input.onGenerateBookPlan}
           onSaveArcPlan={input.onSaveArcPlan}
           onSaveBookPlanDraft={input.onSaveBookPlanDraft}
@@ -1098,9 +1299,13 @@ function renderModule(input: {
           onCreateForeshadowing={input.onCreateForeshadowing}
           onCreateStoryEvent={input.onCreateStoryEvent}
           onPlanForeshadowing={input.onPlanForeshadowing}
+          onSavePlotDebt={input.onSavePlotDebt}
           onUpdateForeshadowing={input.onUpdateForeshadowing}
           onUpdateStoryEvent={input.onUpdateStoryEvent}
+          plotDebts={input.board.plotDebts ?? []}
+          plotlines={input.board.plotlines ?? []}
           storyEvents={input.board.storyEvents ?? []}
+          worldRules={input.board.worldRules ?? []}
         />
       );
     case "chapter-planning":
@@ -1109,10 +1314,12 @@ function renderModule(input: {
           creativePath={input.creativePath}
           onApplyChapterOutline={input.onApplyChapterOutline}
           onApproveChapterOutline={input.onApproveChapterOutline}
+          onGenerateChapterExecutionCard={input.onGenerateChapterExecutionCard}
           onGenerateDraftFromOutline={input.onGenerateDraftFromOutline}
           onGenerateDraftFromPlan={input.onGenerateDraftFromPlan}
           onGenerateOutline={input.onGenerateOutline}
           onGenerateRollingOutline={input.onGenerateRollingOutline}
+          onGenerateSerialReview={input.onGenerateSerialReview}
         />
       );
     case "manuscript":
@@ -1122,8 +1329,10 @@ function renderModule(input: {
           chapters={input.board.chapters}
           loadingVersions={input.loadingChapterVersions}
           onCreateChapter={input.onCreateChapter}
+          onExtractStateDelta={input.onExtractStoryStateDelta}
           onGenerateDraft={input.onGenerateDraft}
           onLoadVersions={input.onLoadChapterVersions}
+          onReviewDraft={input.onReviewChapterDraft}
           onRestoreVersion={input.onRestoreChapterVersion}
           onSave={input.onSaveChapter}
           onSelectChapter={input.onSelectChapter}
@@ -1754,15 +1963,18 @@ function CoreStoryModule({
 }
 
 function CharactersModule({
+  characterStateSnapshots,
   characters,
   onAcceptElementCandidates,
   onAdvanceStage,
   onCreateCharacter,
+  onDeleteCharacter,
   onGenerateElementCandidates,
   onUpdateCharacter,
   project,
   worldRules,
 }: {
+  readonly characterStateSnapshots: readonly CharacterStateSnapshotItem[];
   readonly characters: readonly CharacterElement[];
   readonly project: WorkbenchProject;
   readonly worldRules: readonly WorldRuleElement[];
@@ -1772,6 +1984,7 @@ function CharactersModule({
     readonly mode: "strict" | "force";
   }): Promise<void> | void;
   onCreateCharacter(input: CreateCharacterValues): Promise<void> | void;
+  onDeleteCharacter(input: DeleteCharacterValues): Promise<void> | void;
   onGenerateElementCandidates(
     input: GenerateElementCandidatesValues,
   ):
@@ -1782,21 +1995,62 @@ function CharactersModule({
   onUpdateCharacter(input: UpdateCharacterValues): Promise<void> | void;
 }) {
   const [form] = Form.useForm<CreateCharacterValues>();
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
-  const selectedCharacter =
-    characters.find((character) => character.id === selectedCharacterId) ?? null;
-  const isEditingCharacter = selectedCharacterId !== null && selectedCharacter !== null;
+  const [characterModalMode, setCharacterModalMode] = useState<"create" | "edit" | null>(null);
+  const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
+  const [characterAiModalOpen, setCharacterAiModalOpen] = useState(false);
+  const [deletingCharacter, setDeletingCharacter] = useState<CharacterElement | null>(null);
+  const [stateCharacterId, setStateCharacterId] = useState<string | null>(null);
+  const editingCharacter =
+    editingCharacterId === null
+      ? null
+      : (characters.find((character) => character.id === editingCharacterId) ?? null);
+  const isEditingCharacter = characterModalMode === "edit" && editingCharacter !== null;
+  const stateCharacter =
+    stateCharacterId === null
+      ? null
+      : (characters.find((character) => character.id === stateCharacterId) ?? null);
 
   useEffect(() => {
-    if (selectedCharacter) {
-      form.setFieldsValue(characterToFormValues(selectedCharacter));
+    if (characterModalMode === "edit" && editingCharacter) {
+      form.setFieldsValue(characterToFormValues(editingCharacter));
+      return;
     }
-  }, [form, selectedCharacter]);
 
-  const resetCharacterForm = () => {
-    setSelectedCharacterId(null);
+    if (characterModalMode === "create") {
+      form.resetFields();
+      form.setFieldsValue(CHARACTER_FORM_DEFAULTS);
+    }
+  }, [characterModalMode, editingCharacter, form]);
+
+  const closeCharacterModal = () => {
+    setCharacterModalMode(null);
+    setEditingCharacterId(null);
     form.resetFields();
     form.setFieldsValue(CHARACTER_FORM_DEFAULTS);
+  };
+
+  const openCreateCharacterModal = () => {
+    setEditingCharacterId(null);
+    setCharacterModalMode("create");
+  };
+
+  const openEditCharacterModal = (character: CharacterElement) => {
+    setEditingCharacterId(character.id);
+    setCharacterModalMode("edit");
+  };
+
+  const handleCharacterSubmit = async (values: CreateCharacterValues) => {
+    if (isEditingCharacter) {
+      await onUpdateCharacter({
+        characterId: editingCharacter.id,
+        patch: normalizeCharacterPatchValues(values),
+      });
+      closeCharacterModal();
+      return;
+    }
+
+    await onCreateCharacter(normalizeCharacterValues(values));
+    closeCharacterModal();
   };
 
   return (
@@ -1809,330 +2063,389 @@ function CharactersModule({
             className="character-design-pane character-design-list"
           >
             <header className="character-design-pane__header">
-              <Title level={5}>角色列表</Title>
+              <div>
+                <Title level={5}>角色列表</Title>
+                <Text type="secondary">先管理人物清单，再进入单个角色的档案编辑。</Text>
+              </div>
               <Text type="secondary">{characters.length} 个角色</Text>
             </header>
+            <Space className="character-list-actions" wrap>
+              <Button
+                aria-label="新建角色"
+                icon={<PlusOutlined />}
+                onClick={openCreateCharacterModal}
+                type="primary"
+              >
+                新建角色
+              </Button>
+              <Button
+                aria-label="AI 生成角色候选"
+                icon={<ThunderboltOutlined />}
+                onClick={() => setCharacterAiModalOpen(true)}
+              >
+                AI 生成角色候选
+              </Button>
+              <Button
+                aria-label="完成角色设计"
+                icon={<CheckCircleOutlined />}
+                onClick={() => onAdvanceStage({ mode: "strict", stageKey: "characters" })}
+              >
+                完成角色设计
+              </Button>
+            </Space>
             <CharacterRoster
               characters={characters}
-              selectedCharacterId={selectedCharacterId}
-              onSelectCharacter={setSelectedCharacterId}
+              onDeleteCharacter={setDeletingCharacter}
+              onEditCharacter={openEditCharacterModal}
+              onShowState={(character) => setStateCharacterId(character.id)}
             />
           </section>
 
-          <section
-            aria-label="角色档案表单"
-            className="character-design-pane character-design-form"
-          >
-            <header className="character-design-pane__header">
-              <Title level={5}>角色档案</Title>
-              <Text type="secondary">先确定人物在故事里的作用，再补外形、弧线和声音。</Text>
-            </header>
-            <Form
-              form={form}
-              initialValues={CHARACTER_FORM_DEFAULTS}
-              layout="vertical"
-              onFinish={async (values) => {
-                if (isEditingCharacter) {
-                  await onUpdateCharacter({
-                    characterId: selectedCharacterId,
-                    patch: normalizeCharacterPatchValues(values),
-                  });
-                  return;
-                }
-
-                await onCreateCharacter(normalizeCharacterValues(values));
-                resetCharacterForm();
-              }}
+          {characterModalMode !== null ? (
+            <Modal
+              className="creative-form-modal"
+              footer={null}
+              onCancel={closeCharacterModal}
+              open
+              title={
+                isEditingCharacter && editingCharacter
+                  ? `编辑角色：${editingCharacter.name}`
+                  : "新建角色"
+              }
+              width={960}
             >
-              <div className="character-form-grid">
-                <Form.Item
-                  label={characterFieldLabel(
-                    "人物名称",
-                    "读者识别人物的第一入口。名称要和题材、时代、阵营气质一致。",
-                  )}
-                  name="name"
-                  rules={[
-                    { required: true, message: "请输入人物名称" },
-                    { max: 80, message: "人物名称最多 80 字" },
-                  ]}
+              <section aria-label="角色档案表单" className="creative-form-modal__body">
+                <header className="character-design-pane__header">
+                  <Title level={5}>角色档案</Title>
+                  <Text type="secondary">先确定人物在故事里的作用，再补外形、弧线和声音。</Text>
+                </header>
+                <Form
+                  form={form}
+                  initialValues={CHARACTER_FORM_DEFAULTS}
+                  layout="vertical"
+                  onFinish={handleCharacterSubmit}
                 >
-                  <Input aria-label="人物名称" placeholder="如：林鸢" />
-                </Form.Item>
-                <Form.Item label="人物定位" name="role">
-                  <Select aria-label="人物定位" options={[...CHARACTER_ROLE_OPTIONS]} />
-                </Form.Item>
-                <Form.Item label="重要程度" name="importance">
-                  <Select aria-label="重要程度" options={[...CHARACTER_IMPORTANCE_OPTIONS]} />
-                </Form.Item>
-                <Form.Item label="叙事功能" name="narrativeFunction">
-                  <Select
-                    aria-label="叙事功能"
-                    options={[...CHARACTER_NARRATIVE_FUNCTION_OPTIONS]}
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "年龄/身份",
-                    "写清年龄段、社会身份、当前处境，帮助后续判断行为可信度。",
-                  )}
-                  name="genderAge"
-                  rules={[{ max: 80, message: "年龄/身份最多 80 字" }]}
-                >
-                  <Input aria-label="年龄/身份" placeholder="如：女，27 岁，前刑警" />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "首次登场",
-                    "记录角色第一次出现的位置或场景，方便大纲阶段安排铺垫。",
-                  )}
-                  name="firstAppearance"
-                  rules={[{ max: 80, message: "首次登场最多 80 字" }]}
-                >
-                  <Input aria-label="首次登场" placeholder="如：第 1 章，钟楼旧档案室" />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "原型标签",
-                    "用一句话概括角色类型，不等于人设全文，例如离队调查者、沉默继承人。",
-                  )}
-                  name="archetype"
-                  rules={[{ max: 80, message: "原型标签最多 80 字" }]}
-                >
-                  <Input aria-label="原型标签" placeholder="如：离队调查者" />
-                </Form.Item>
-                <Form.Item
-                  className="character-form-grid__wide"
-                  label={characterFieldLabel(
-                    "剧情任务",
-                    "这个人物必须为主线制造什么信息、选择、冲突或代价。没有剧情任务的角色容易变成装饰。",
-                  )}
-                  name="storyTask"
-                  rules={[{ max: 500, message: "剧情任务最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="剧情任务"
-                    autoSize={{ maxRows: 5, minRows: 3 }}
-                    maxLength={500}
-                    placeholder="如：把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "外在目标",
-                    "角色主动追求的可见目标，最好能被阻拦、被误导、被迫付出代价。",
-                  )}
-                  name="goal"
-                  rules={[{ max: 500, message: "外在目标最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="外在目标"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：查清旧信来源"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "内在需求",
-                    "角色真正需要补上的心理缺口，通常决定人物弧线是否成立。",
-                  )}
-                  name="need"
-                  rules={[{ max: 500, message: "内在需求最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="内在需求"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：重新学会信任他人"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "致命缺陷",
-                    "会反复让角色做错选择的弱点，用来生成冲突而不是贴标签。",
-                  )}
-                  name="flaw"
-                  rules={[{ max: 500, message: "致命缺陷最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="致命缺陷"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：过度自责，遇到关键证据时会先怀疑自己"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "秘密",
-                    "角色隐瞒的信息、罪责、身份或误会，应该能在剧情中产生揭示价值。",
-                  )}
-                  name="secret"
-                  rules={[{ max: 500, message: "秘密最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="秘密"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：十年前曾到过案发现场"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  className="character-form-grid__wide"
-                  label={characterFieldLabel(
-                    "关系钩子",
-                    "说明这个人物和主角、反派、组织或核心秘密之间的可持续牵引。",
-                  )}
-                  name="relationshipHook"
-                  rules={[{ max: 500, message: "关系钩子最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="关系钩子"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：与钟楼守档人互相试探，既需要合作又互相防备。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "初始状态",
-                    "故事开始时人物相信什么、害怕什么、困在哪里。",
-                  )}
-                  name="arcStart"
-                  rules={[{ max: 500, message: "初始状态最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="初始状态"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：逃避旧案，只想离开旧城。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "关键转折",
-                    "人物被迫改变的决定性节点，用来指导中段剧情。",
-                  )}
-                  name="arcTurn"
-                  rules={[{ max: 500, message: "关键转折最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="关键转折"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：发现证人仍被追杀后决定回头。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "结局状态",
-                    "经历故事后人物成为怎样的人，或者为什么无法改变。",
-                  )}
-                  name="arcEnd"
-                  rules={[{ max: 500, message: "结局状态最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="结局状态"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：愿意公开旧案证据并承担代价。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "说话风格",
-                    "句式、词汇、节奏和回避话题的习惯，帮助正文保持人物声音稳定。",
-                  )}
-                  name="voiceProfile"
-                  rules={[{ max: 500, message: "说话风格最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="说话风格"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：克制、短句、偏观察细节。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "外形记忆点",
-                    "少量高辨识度视觉细节，便于读者记住角色，不需要堆砌外貌描写。",
-                  )}
-                  name="appearance"
-                  rules={[{ max: 500, message: "外形记忆点最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="外形记忆点"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：旧风衣、随身旧笔记本，观察时会按住袖口。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  className="character-form-grid__wide"
-                  label={characterFieldLabel(
-                    "人物小传",
-                    "只写影响当前剧情的履历和伤痕，避免把小传写成百科。",
-                  )}
-                  name="biography"
-                  rules={[{ max: 500, message: "人物小传最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="人物小传"
-                    autoSize={{ maxRows: 5, minRows: 3 }}
-                    maxLength={500}
-                    placeholder="如：前刑警，因十年前钟楼案离队。"
-                    showCount
-                  />
-                </Form.Item>
-              </div>
-              <Space className="character-form-actions" wrap>
-                <Button
-                  aria-label={isEditingCharacter ? "保存修改" : "创建人物"}
-                  htmlType="submit"
-                  icon={isEditingCharacter ? <SaveOutlined /> : <PlusOutlined />}
-                  type="primary"
-                >
-                  {isEditingCharacter ? "保存修改" : "创建人物"}
-                </Button>
-                {isEditingCharacter ? (
-                  <Button aria-label="新建角色" onClick={resetCharacterForm}>
-                    新建角色
-                  </Button>
-                ) : null}
-                <Button
-                  aria-label="完成角色设计"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => onAdvanceStage({ mode: "strict", stageKey: "characters" })}
-                >
-                  完成角色设计
-                </Button>
-              </Space>
-            </Form>
-          </section>
+                  <div className="character-form-grid">
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "人物名称",
+                        "读者识别人物的第一入口。名称要和题材、时代、阵营气质一致。",
+                      )}
+                      name="name"
+                      rules={[
+                        { required: true, message: "请输入人物名称" },
+                        { max: 80, message: "人物名称最多 80 字" },
+                      ]}
+                    >
+                      <Input aria-label="人物名称" placeholder="如：林鸢" />
+                    </Form.Item>
+                    <Form.Item label="人物定位" name="role">
+                      <Select aria-label="人物定位" options={[...CHARACTER_ROLE_OPTIONS]} />
+                    </Form.Item>
+                    <Form.Item label="重要程度" name="importance">
+                      <Select aria-label="重要程度" options={[...CHARACTER_IMPORTANCE_OPTIONS]} />
+                    </Form.Item>
+                    <Form.Item label="叙事功能" name="narrativeFunction">
+                      <Select
+                        aria-label="叙事功能"
+                        options={[...CHARACTER_NARRATIVE_FUNCTION_OPTIONS]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "年龄/身份",
+                        "写清年龄段、社会身份、当前处境，帮助后续判断行为可信度。",
+                      )}
+                      name="genderAge"
+                      rules={[{ max: 80, message: "年龄/身份最多 80 字" }]}
+                    >
+                      <Input aria-label="年龄/身份" placeholder="如：女，27 岁，前刑警" />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "首次登场",
+                        "记录角色第一次出现的位置或场景，方便大纲阶段安排铺垫。",
+                      )}
+                      name="firstAppearance"
+                      rules={[{ max: 80, message: "首次登场最多 80 字" }]}
+                    >
+                      <Input aria-label="首次登场" placeholder="如：第 1 章，钟楼旧档案室" />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "原型标签",
+                        "用一句话概括角色类型，不等于人设全文，例如离队调查者、沉默继承人。",
+                      )}
+                      name="archetype"
+                      rules={[{ max: 80, message: "原型标签最多 80 字" }]}
+                    >
+                      <Input aria-label="原型标签" placeholder="如：离队调查者" />
+                    </Form.Item>
+                    <Form.Item
+                      className="character-form-grid__wide"
+                      label={characterFieldLabel(
+                        "剧情任务",
+                        "这个人物必须为主线制造什么信息、选择、冲突或代价。没有剧情任务的角色容易变成装饰。",
+                      )}
+                      name="storyTask"
+                      rules={[{ max: 500, message: "剧情任务最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="剧情任务"
+                        autoSize={{ maxRows: 5, minRows: 3 }}
+                        maxLength={500}
+                        placeholder="如：把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "外在目标",
+                        "角色主动追求的可见目标，最好能被阻拦、被误导、被迫付出代价。",
+                      )}
+                      name="goal"
+                      rules={[{ max: 500, message: "外在目标最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="外在目标"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：查清旧信来源"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "内在需求",
+                        "角色真正需要补上的心理缺口，通常决定人物弧线是否成立。",
+                      )}
+                      name="need"
+                      rules={[{ max: 500, message: "内在需求最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="内在需求"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：重新学会信任他人"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "致命缺陷",
+                        "会反复让角色做错选择的弱点，用来生成冲突而不是贴标签。",
+                      )}
+                      name="flaw"
+                      rules={[{ max: 500, message: "致命缺陷最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="致命缺陷"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：过度自责，遇到关键证据时会先怀疑自己"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "秘密",
+                        "角色隐瞒的信息、罪责、身份或误会，应该能在剧情中产生揭示价值。",
+                      )}
+                      name="secret"
+                      rules={[{ max: 500, message: "秘密最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="秘密"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：十年前曾到过案发现场"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      className="character-form-grid__wide"
+                      label={characterFieldLabel(
+                        "关系钩子",
+                        "说明这个人物和主角、反派、组织或核心秘密之间的可持续牵引。",
+                      )}
+                      name="relationshipHook"
+                      rules={[{ max: 500, message: "关系钩子最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="关系钩子"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：与钟楼守档人互相试探，既需要合作又互相防备。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "初始状态",
+                        "故事开始时人物相信什么、害怕什么、困在哪里。",
+                      )}
+                      name="arcStart"
+                      rules={[{ max: 500, message: "初始状态最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="初始状态"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：逃避旧案，只想离开旧城。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "关键转折",
+                        "人物被迫改变的决定性节点，用来指导中段剧情。",
+                      )}
+                      name="arcTurn"
+                      rules={[{ max: 500, message: "关键转折最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="关键转折"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：发现证人仍被追杀后决定回头。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "结局状态",
+                        "经历故事后人物成为怎样的人，或者为什么无法改变。",
+                      )}
+                      name="arcEnd"
+                      rules={[{ max: 500, message: "结局状态最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="结局状态"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：愿意公开旧案证据并承担代价。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "说话风格",
+                        "句式、词汇、节奏和回避话题的习惯，帮助正文保持人物声音稳定。",
+                      )}
+                      name="voiceProfile"
+                      rules={[{ max: 500, message: "说话风格最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="说话风格"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：克制、短句、偏观察细节。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "外形记忆点",
+                        "少量高辨识度视觉细节，便于读者记住角色，不需要堆砌外貌描写。",
+                      )}
+                      name="appearance"
+                      rules={[{ max: 500, message: "外形记忆点最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="外形记忆点"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：旧风衣、随身旧笔记本，观察时会按住袖口。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      className="character-form-grid__wide"
+                      label={characterFieldLabel(
+                        "人物小传",
+                        "只写影响当前剧情的履历和伤痕，避免把小传写成百科。",
+                      )}
+                      name="biography"
+                      rules={[{ max: 500, message: "人物小传最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="人物小传"
+                        autoSize={{ maxRows: 5, minRows: 3 }}
+                        maxLength={500}
+                        placeholder="如：前刑警，因十年前钟楼案离队。"
+                        showCount
+                      />
+                    </Form.Item>
+                  </div>
+                  <Space className="character-form-actions" wrap>
+                    <Button
+                      aria-label={isEditingCharacter ? "保存修改" : "创建人物"}
+                      htmlType="submit"
+                      icon={isEditingCharacter ? <SaveOutlined /> : <PlusOutlined />}
+                      type="primary"
+                    >
+                      {isEditingCharacter ? "保存修改" : "创建人物"}
+                    </Button>
+                    <Button aria-label="取消" onClick={closeCharacterModal}>
+                      取消
+                    </Button>
+                  </Space>
+                </Form>
+              </section>
+            </Modal>
+          ) : null}
         </div>
 
-        <ElementCandidateSection
-          className="character-design-candidate"
-          defaultElementType="character_name"
-          generateButtonLabel="生成角色候选"
-          onAcceptElementCandidates={onAcceptElementCandidates}
-          onGenerateElementCandidates={onGenerateElementCandidates}
-          project={project}
-          title="AI 辅助"
-          worldRules={worldRules}
-        />
+        {characterAiModalOpen ? (
+          <Modal
+            className="creative-form-modal"
+            footer={null}
+            onCancel={() => setCharacterAiModalOpen(false)}
+            open
+            title="AI 生成角色候选"
+            width={720}
+          >
+            <ElementCandidateSection
+              className="character-design-candidate"
+              defaultElementType="character_name"
+              generateButtonLabel="生成角色候选"
+              onAcceptElementCandidates={async (input) => {
+                await onAcceptElementCandidates(input);
+                setCharacterAiModalOpen(false);
+              }}
+              onGenerateElementCandidates={onGenerateElementCandidates}
+              project={project}
+              title="AI 辅助"
+              worldRules={worldRules}
+            />
+          </Modal>
+        ) : null}
       </div>
+      {stateCharacter ? (
+        <CharacterStateTimelineModal
+          character={stateCharacter}
+          onClose={() => setStateCharacterId(null)}
+          snapshots={characterStateSnapshots.filter(
+            (snapshot) => snapshot.characterId === stateCharacter.id,
+          )}
+        />
+      ) : null}
+      {deletingCharacter ? (
+        <Modal
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          okText="确认删除"
+          onCancel={() => setDeletingCharacter(null)}
+          onOk={async () => {
+            await onDeleteCharacter({ characterId: deletingCharacter.id });
+            setDeletingCharacter(null);
+          }}
+          open
+          title="删除角色"
+        >
+          <Text>删除后会从当前作品的角色列表中移除。</Text>
+        </Modal>
+      ) : null}
     </div>
   );
 }
@@ -2143,6 +2456,7 @@ function StorylinesModule({
   onAdvanceStage,
   onCreatePlotline,
   onCreatePlotlineNode,
+  onDeletePlotline,
   onUpdatePlotline,
   onUpdatePlotlineNode,
   plotlines,
@@ -2160,20 +2474,25 @@ function StorylinesModule({
   }): Promise<void> | void;
   onCreatePlotlineNode(input: CreatePlotlineNodeValues): Promise<void> | void;
   onCreatePlotline(input: CreatePlotlineValues): Promise<void> | void;
+  onDeletePlotline(input: DeletePlotlineValues): Promise<void> | void;
   onUpdatePlotline(input: UpdatePlotlineValues): Promise<void> | void;
   onUpdatePlotlineNode(input: UpdatePlotlineNodeValues): Promise<void> | void;
 }) {
   const [plotlineForm] = Form.useForm<CreatePlotlineValues>();
   const [nodeForm] = Form.useForm<Omit<CreatePlotlineNodeValues, "plotlineId">>();
-  const [selectedPlotlineId, setSelectedPlotlineId] = useState<string | null>(
-    () => plotlines[0]?.id ?? null,
-  );
-  const selectedPlotline =
-    selectedPlotlineId === null
+  const [plotlineModalMode, setPlotlineModalMode] = useState<"create" | "edit" | null>(null);
+  const [editingPlotlineId, setEditingPlotlineId] = useState<string | null>(null);
+  const [nodeTargetPlotlineId, setNodeTargetPlotlineId] = useState<string | null>(null);
+  const [deletingPlotline, setDeletingPlotline] = useState<PlotlineElement | null>(null);
+  const editingPlotline =
+    editingPlotlineId === null
       ? null
-      : (plotlines.find((plotline) => plotline.id === selectedPlotlineId) ?? null);
-  const isEditingPlotline = selectedPlotline !== null;
-  const selectedPlotlineNodes = selectedPlotline?.nodes ?? [];
+      : (plotlines.find((plotline) => plotline.id === editingPlotlineId) ?? null);
+  const nodeTargetPlotline =
+    nodeTargetPlotlineId === null
+      ? null
+      : (plotlines.find((plotline) => plotline.id === nodeTargetPlotlineId) ?? null);
+  const isEditingPlotline = plotlineModalMode === "edit" && editingPlotline !== null;
   const characterOptions = useMemo(
     () => characters.map((character) => ({ label: character.name, value: character.id })),
     [characters],
@@ -2196,24 +2515,69 @@ function StorylinesModule({
   );
 
   useLayoutEffect(() => {
-    if (selectedPlotline) {
-      plotlineForm.setFieldsValue(plotlineToFormValues(selectedPlotline));
+    if (plotlineModalMode === "edit" && editingPlotline) {
+      plotlineForm.setFieldsValue(plotlineToFormValues(editingPlotline));
       return;
     }
 
-    plotlineForm.resetFields();
-    plotlineForm.setFieldsValue(PLOTLINE_FORM_DEFAULTS);
-  }, [plotlineForm, selectedPlotline]);
+    if (plotlineModalMode === "create") {
+      plotlineForm.resetFields();
+      plotlineForm.setFieldsValue(PLOTLINE_FORM_DEFAULTS);
+    }
+  }, [editingPlotline, plotlineForm, plotlineModalMode]);
 
   useLayoutEffect(() => {
-    nodeForm.resetFields();
-    nodeForm.setFieldsValue(PLOTLINE_NODE_FORM_DEFAULTS);
-  }, [nodeForm, selectedPlotlineId]);
+    if (nodeTargetPlotlineId !== null) {
+      nodeForm.resetFields();
+      nodeForm.setFieldsValue(PLOTLINE_NODE_FORM_DEFAULTS);
+    }
+  }, [nodeForm, nodeTargetPlotlineId]);
 
-  const resetPlotlineForm = () => {
-    setSelectedPlotlineId(null);
+  const closePlotlineModal = () => {
+    setPlotlineModalMode(null);
+    setEditingPlotlineId(null);
     plotlineForm.resetFields();
     plotlineForm.setFieldsValue(PLOTLINE_FORM_DEFAULTS);
+  };
+
+  const openCreatePlotlineModal = () => {
+    setEditingPlotlineId(null);
+    setPlotlineModalMode("create");
+  };
+
+  const openEditPlotlineModal = (plotline: PlotlineElement) => {
+    setEditingPlotlineId(plotline.id);
+    setPlotlineModalMode("edit");
+  };
+
+  const closeNodeModal = () => {
+    setNodeTargetPlotlineId(null);
+    nodeForm.resetFields();
+    nodeForm.setFieldsValue(PLOTLINE_NODE_FORM_DEFAULTS);
+  };
+
+  const handlePlotlineSubmit = async (values: CreatePlotlineValues) => {
+    const normalizedValues = normalizePlotlineValues(values);
+    if (isEditingPlotline) {
+      await onUpdatePlotline({
+        patch: normalizedValues,
+        plotlineId: editingPlotline.id,
+      });
+      closePlotlineModal();
+      return;
+    }
+
+    await onCreatePlotline(normalizedValues);
+    closePlotlineModal();
+  };
+
+  const handlePlotlineNodeSubmit = async (values: Omit<CreatePlotlineNodeValues, "plotlineId">) => {
+    if (!nodeTargetPlotline) {
+      return;
+    }
+
+    await onCreatePlotlineNode(normalizePlotlineNodeValues(values, nodeTargetPlotline.id));
+    closeNodeModal();
   };
 
   return (
@@ -2226,270 +2590,292 @@ function StorylinesModule({
             className="storyline-design-pane storyline-design-list"
           >
             <header className="storyline-design-pane__header">
-              <Title level={5}>故事线列表</Title>
+              <div>
+                <Title level={5}>故事线列表</Title>
+                <Text type="secondary">先管理故事线清单，再进入单条线和节点编排。</Text>
+              </div>
               <Text type="secondary">{plotlines.length} 条线</Text>
             </header>
+            <Space className="storyline-list-actions" wrap>
+              <Button
+                aria-label="新建故事线"
+                icon={<PlusOutlined />}
+                onClick={openCreatePlotlineModal}
+                type="primary"
+              >
+                新建故事线
+              </Button>
+              <Button
+                aria-label="完成故事线设计"
+                icon={<CheckCircleOutlined />}
+                onClick={() => onAdvanceStage({ mode: "strict", stageKey: "plot_arcs" })}
+              >
+                完成故事线设计
+              </Button>
+            </Space>
             <StorylineRoster
               plotlines={plotlines}
-              selectedPlotlineId={selectedPlotlineId}
-              onSelectPlotline={setSelectedPlotlineId}
+              onAddNode={(plotline) => setNodeTargetPlotlineId(plotline.id)}
+              onDeletePlotline={setDeletingPlotline}
+              onEditPlotline={openEditPlotlineModal}
+              onResolveNode={(nodeId) =>
+                onUpdatePlotlineNode({
+                  patch: { status: "resolved" },
+                  plotlineNodeId: nodeId,
+                })
+              }
             />
           </section>
 
-          <section
-            aria-label="故事线档案表单"
-            className="storyline-design-pane storyline-design-form"
-          >
-            <header className="storyline-design-pane__header">
-              <Title level={5}>故事线档案</Title>
-              <Text type="secondary">先确定追问、阻力、情绪承诺和回收方式，再落到章节节点。</Text>
-            </header>
-            <Form
-              form={plotlineForm}
-              initialValues={PLOTLINE_FORM_DEFAULTS}
-              layout="vertical"
-              name="storylineProfileForm"
-              onFinish={async (values) => {
-                const normalizedValues = normalizePlotlineValues(values);
-                if (isEditingPlotline) {
-                  await onUpdatePlotline({
-                    patch: normalizedValues,
-                    plotlineId: selectedPlotline.id,
-                  });
-                  return;
-                }
-
-                await onCreatePlotline(normalizedValues);
-                resetPlotlineForm();
-              }}
+          {plotlineModalMode !== null ? (
+            <Modal
+              className="creative-form-modal"
+              footer={null}
+              onCancel={closePlotlineModal}
+              open
+              title={
+                isEditingPlotline && editingPlotline
+                  ? `编辑故事线：${editingPlotline.name}`
+                  : "新建故事线"
+              }
+              width={960}
             >
-              <div className="storyline-form-grid">
-                <Form.Item
-                  label={characterFieldLabel(
-                    "故事线名称",
-                    "用短名称帮助作者和 AI 识别这条线，例如旧信谜团、师徒裂痕、王都夺权。",
-                  )}
-                  name="title"
-                  rules={[
-                    { required: true, message: "请输入故事线名称" },
-                    { max: 80, message: "故事线名称最多 80 字" },
-                  ]}
+              <section aria-label="故事线档案表单" className="creative-form-modal__body">
+                <header className="storyline-design-pane__header">
+                  <Title level={5}>故事线档案</Title>
+                  <Text type="secondary">
+                    先确定追问、阻力、情绪承诺和回收方式，再落到章节节点。
+                  </Text>
+                </header>
+                <Form
+                  form={plotlineForm}
+                  initialValues={PLOTLINE_FORM_DEFAULTS}
+                  layout="vertical"
+                  name="storylineProfileForm"
+                  onFinish={handlePlotlineSubmit}
                 >
-                  <Input aria-label="故事线名称" placeholder="如：旧信谜团" />
-                </Form.Item>
-                <Form.Item label="故事线类型" name="kind">
-                  <Select aria-label="故事线类型" options={[...PLOTLINE_KIND_OPTIONS]} />
-                </Form.Item>
-                <Form.Item label="叙事作用" name="narrativeRole">
-                  <Select aria-label="叙事作用" options={[...PLOTLINE_NARRATIVE_ROLE_OPTIONS]} />
-                </Form.Item>
-                <Form.Item label="重要程度" name="importance">
-                  <Select aria-label="重要程度" options={[...PLOTLINE_IMPORTANCE_OPTIONS]} />
-                </Form.Item>
-                <Form.Item label="状态" name="status">
-                  <Select aria-label="状态" options={[...PLOTLINE_STATUS_OPTIONS]} />
-                </Form.Item>
-                <Form.Item label="排序权重" name="priority">
-                  <InputNumber aria-label="排序权重" min={0} style={{ width: "100%" }} />
-                </Form.Item>
-                <Form.Item
-                  className="storyline-form-grid__wide"
-                  label={characterFieldLabel(
-                    "故事线摘要",
-                    "一句话说明这条线的范围，不需要写成完整大纲。",
-                  )}
-                  name="summary"
-                  rules={[{ max: 500, message: "故事线摘要最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="故事线摘要"
-                    autoSize={{ maxRows: 5, minRows: 3 }}
-                    maxLength={500}
-                    placeholder="如：围绕旧信来源展开的调查线。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "核心问题",
-                    "读者会持续追问的问题。悬疑线是谜面，成长线是人物能否改变，权谋线是谁会赢。",
-                  )}
-                  name="centralQuestion"
-                  rules={[{ max: 500, message: "核心问题最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="核心问题"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：旧信到底是谁寄出的？"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "推进机制",
-                    "这条线靠什么持续前进：线索投放、目标受阻、关系变化、资源争夺或规则升级。",
-                  )}
-                  name="driver"
-                  rules={[{ max: 500, message: "推进机制最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="推进机制"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：每三章投放一条可验证线索，并用一次误导制造新的问题。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "起点状态",
-                    "这条线开始时，人物知道什么、不知道什么，局面停在哪个不稳定状态。",
-                  )}
-                  name="startState"
-                  rules={[{ max: 500, message: "起点状态最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="起点状态"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：主角只知道旧信存在，不知道背后牵连旧案。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "中段升级",
-                    "中段必须扩大的阻力或信息量，避免故事线停留在同一种重复事件里。",
-                  )}
-                  name="midEscalation"
-                  rules={[{ max: 500, message: "中段升级最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="中段升级"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：线索从旧信转向档案伪造和证人追杀。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "回收方式",
-                    "说明这条线最终如何兑现：揭示真相、改变关系、造成代价或打开更大矛盾。",
-                  )}
-                  name="payoffPlan"
-                  rules={[{ max: 500, message: "回收方式最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="回收方式"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：卷末揭示寄信人身份，并回收信纸水印伏笔。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  className="storyline-form-grid__wide"
-                  label={characterFieldLabel(
-                    "情绪承诺",
-                    "这条线给读者的追读奖励，例如解谜、反转、甜虐、热血、压迫感或成长满足。",
-                  )}
-                  name="emotionalPromise"
-                  rules={[{ max: 500, message: "情绪承诺最多 500 字" }]}
-                >
-                  <Input.TextArea
-                    aria-label="情绪承诺"
-                    autoSize={{ maxRows: 4, minRows: 2 }}
-                    maxLength={500}
-                    placeholder="如：持续解谜、反转和真相逼近。"
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item label="关联角色" name="relatedCharacterIds">
-                  <Select
-                    allowClear
-                    aria-label="关联角色"
-                    mode="multiple"
-                    options={characterOptions}
-                    placeholder="选择和这条线强相关的人物"
-                  />
-                </Form.Item>
-                <Form.Item label="关联世界观" name="relatedWorldRuleIds">
-                  <Select
-                    allowClear
-                    aria-label="关联世界观"
-                    mode="multiple"
-                    options={worldRuleOptions}
-                    placeholder="选择支撑这条线的规则"
-                  />
-                </Form.Item>
-                <Form.Item label="关联伏笔" name="relatedForeshadowingIds">
-                  <Select
-                    allowClear
-                    aria-label="关联伏笔"
-                    mode="multiple"
-                    options={foreshadowingOptions}
-                    placeholder="选择要投放或回收的伏笔"
-                  />
-                </Form.Item>
-                <Form.Item label="关联剧情节点" name="relatedStoryEventIds">
-                  <Select
-                    allowClear
-                    aria-label="关联剧情节点"
-                    mode="multiple"
-                    options={storyEventOptions}
-                    placeholder="选择已经存在的关键事件"
-                  />
-                </Form.Item>
-              </div>
-              <Space className="storyline-form-actions" wrap>
-                <Button
-                  aria-label={isEditingPlotline ? "保存修改" : "创建故事线"}
-                  htmlType="submit"
-                  icon={isEditingPlotline ? <SaveOutlined /> : <PlusOutlined />}
-                  type="primary"
-                >
-                  {isEditingPlotline ? "保存修改" : "创建故事线"}
-                </Button>
-                {isEditingPlotline ? (
-                  <Button aria-label="新建故事线" onClick={resetPlotlineForm}>
-                    新建故事线
-                  </Button>
-                ) : null}
-                <Button
-                  aria-label="完成故事线设计"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => onAdvanceStage({ mode: "strict", stageKey: "plot_arcs" })}
-                >
-                  完成故事线设计
-                </Button>
-              </Space>
-            </Form>
-          </section>
+                  <div className="storyline-form-grid">
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "故事线名称",
+                        "用短名称帮助作者和 AI 识别这条线，例如旧信谜团、师徒裂痕、王都夺权。",
+                      )}
+                      name="title"
+                      rules={[
+                        { required: true, message: "请输入故事线名称" },
+                        { max: 80, message: "故事线名称最多 80 字" },
+                      ]}
+                    >
+                      <Input aria-label="故事线名称" placeholder="如：旧信谜团" />
+                    </Form.Item>
+                    <Form.Item label="故事线类型" name="kind">
+                      <Select aria-label="故事线类型" options={[...PLOTLINE_KIND_OPTIONS]} />
+                    </Form.Item>
+                    <Form.Item label="叙事作用" name="narrativeRole">
+                      <Select
+                        aria-label="叙事作用"
+                        options={[...PLOTLINE_NARRATIVE_ROLE_OPTIONS]}
+                      />
+                    </Form.Item>
+                    <Form.Item label="重要程度" name="importance">
+                      <Select aria-label="重要程度" options={[...PLOTLINE_IMPORTANCE_OPTIONS]} />
+                    </Form.Item>
+                    <Form.Item label="状态" name="status">
+                      <Select aria-label="状态" options={[...PLOTLINE_STATUS_OPTIONS]} />
+                    </Form.Item>
+                    <Form.Item label="排序权重" name="priority">
+                      <InputNumber aria-label="排序权重" min={0} style={{ width: "100%" }} />
+                    </Form.Item>
+                    <Form.Item
+                      className="storyline-form-grid__wide"
+                      label={characterFieldLabel(
+                        "故事线摘要",
+                        "一句话说明这条线的范围，不需要写成完整大纲。",
+                      )}
+                      name="summary"
+                      rules={[{ max: 500, message: "故事线摘要最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="故事线摘要"
+                        autoSize={{ maxRows: 5, minRows: 3 }}
+                        maxLength={500}
+                        placeholder="如：围绕旧信来源展开的调查线。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "核心问题",
+                        "读者会持续追问的问题。悬疑线是谜面，成长线是人物能否改变，权谋线是谁会赢。",
+                      )}
+                      name="centralQuestion"
+                      rules={[{ max: 500, message: "核心问题最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="核心问题"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：旧信到底是谁寄出的？"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "推进机制",
+                        "这条线靠什么持续前进：线索投放、目标受阻、关系变化、资源争夺或规则升级。",
+                      )}
+                      name="driver"
+                      rules={[{ max: 500, message: "推进机制最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="推进机制"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：每三章投放一条可验证线索，并用一次误导制造新的问题。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "起点状态",
+                        "这条线开始时，人物知道什么、不知道什么，局面停在哪个不稳定状态。",
+                      )}
+                      name="startState"
+                      rules={[{ max: 500, message: "起点状态最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="起点状态"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：主角只知道旧信存在，不知道背后牵连旧案。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "中段升级",
+                        "中段必须扩大的阻力或信息量，避免故事线停留在同一种重复事件里。",
+                      )}
+                      name="midEscalation"
+                      rules={[{ max: 500, message: "中段升级最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="中段升级"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：线索从旧信转向档案伪造和证人追杀。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={characterFieldLabel(
+                        "回收方式",
+                        "说明这条线最终如何兑现：揭示真相、改变关系、造成代价或打开更大矛盾。",
+                      )}
+                      name="payoffPlan"
+                      rules={[{ max: 500, message: "回收方式最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="回收方式"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：卷末揭示寄信人身份，并回收信纸水印伏笔。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      className="storyline-form-grid__wide"
+                      label={characterFieldLabel(
+                        "情绪承诺",
+                        "这条线给读者的追读奖励，例如解谜、反转、甜虐、热血、压迫感或成长满足。",
+                      )}
+                      name="emotionalPromise"
+                      rules={[{ max: 500, message: "情绪承诺最多 500 字" }]}
+                    >
+                      <Input.TextArea
+                        aria-label="情绪承诺"
+                        autoSize={{ maxRows: 4, minRows: 2 }}
+                        maxLength={500}
+                        placeholder="如：持续解谜、反转和真相逼近。"
+                        showCount
+                      />
+                    </Form.Item>
+                    <Form.Item label="关联角色" name="relatedCharacterIds">
+                      <Select
+                        allowClear
+                        aria-label="关联角色"
+                        mode="multiple"
+                        options={characterOptions}
+                        placeholder="选择和这条线强相关的人物"
+                      />
+                    </Form.Item>
+                    <Form.Item label="关联世界观" name="relatedWorldRuleIds">
+                      <Select
+                        allowClear
+                        aria-label="关联世界观"
+                        mode="multiple"
+                        options={worldRuleOptions}
+                        placeholder="选择支撑这条线的规则"
+                      />
+                    </Form.Item>
+                    <Form.Item label="关联伏笔" name="relatedForeshadowingIds">
+                      <Select
+                        allowClear
+                        aria-label="关联伏笔"
+                        mode="multiple"
+                        options={foreshadowingOptions}
+                        placeholder="选择要投放或回收的伏笔"
+                      />
+                    </Form.Item>
+                    <Form.Item label="关联剧情节点" name="relatedStoryEventIds">
+                      <Select
+                        allowClear
+                        aria-label="关联剧情节点"
+                        mode="multiple"
+                        options={storyEventOptions}
+                        placeholder="选择已经存在的关键事件"
+                      />
+                    </Form.Item>
+                  </div>
+                  <Space className="storyline-form-actions" wrap>
+                    <Button
+                      aria-label={isEditingPlotline ? "保存修改" : "创建故事线"}
+                      htmlType="submit"
+                      icon={isEditingPlotline ? <SaveOutlined /> : <PlusOutlined />}
+                      type="primary"
+                    >
+                      {isEditingPlotline ? "保存修改" : "创建故事线"}
+                    </Button>
+                    <Button aria-label="取消" onClick={closePlotlineModal}>
+                      取消
+                    </Button>
+                  </Space>
+                </Form>
+              </section>
+            </Modal>
+          ) : null}
         </div>
 
-        <section aria-label="故事线节点编排" className="storyline-design-pane storyline-node-panel">
-          <header className="storyline-design-pane__header">
-            <Title level={5}>节点编排</Title>
-            <Text type="secondary">
-              {selectedPlotline ? `正在编辑：${selectedPlotline.name}` : "先选择或创建一条故事线"}
-            </Text>
-          </header>
-          {selectedPlotline ? (
-            <>
+        {nodeTargetPlotline ? (
+          <Modal
+            className="creative-form-modal"
+            footer={null}
+            onCancel={closeNodeModal}
+            open
+            title={`添加故事线节点：${nodeTargetPlotline.name}`}
+            width={820}
+          >
+            <section aria-label="故事线节点编排" className="creative-form-modal__body">
+              <header className="storyline-design-pane__header">
+                <Title level={5}>节点编排</Title>
+                <Text type="secondary">把这条线拆成可落到章节里的信息、选择和回收节点。</Text>
+              </header>
               <Form
                 form={nodeForm}
                 initialValues={PLOTLINE_NODE_FORM_DEFAULTS}
                 layout="vertical"
                 name="storylineNodeForm"
-                onFinish={async (values) => {
-                  await onCreatePlotlineNode(
-                    normalizePlotlineNodeValues(values, selectedPlotline.id),
-                  );
-                  nodeForm.resetFields();
-                  nodeForm.setFieldsValue(PLOTLINE_NODE_FORM_DEFAULTS);
-                }}
+                onFinish={handlePlotlineNodeSubmit}
               >
                 <div className="storyline-node-form-grid">
                   <Form.Item
@@ -2539,42 +2925,56 @@ function StorylinesModule({
                     />
                   </Form.Item>
                 </div>
-                <Button
-                  aria-label="添加节点"
-                  htmlType="submit"
-                  icon={<PlusOutlined />}
-                  type="primary"
-                >
-                  添加节点
-                </Button>
+                <Space className="storyline-form-actions" wrap>
+                  <Button
+                    aria-label="添加节点"
+                    htmlType="submit"
+                    icon={<PlusOutlined />}
+                    type="primary"
+                  >
+                    添加节点
+                  </Button>
+                  <Button aria-label="取消" onClick={closeNodeModal}>
+                    取消
+                  </Button>
+                </Space>
               </Form>
-              <StorylineNodeList
-                nodes={selectedPlotlineNodes}
-                onResolveNode={(nodeId) =>
-                  onUpdatePlotlineNode({
-                    patch: { status: "resolved" },
-                    plotlineNodeId: nodeId,
-                  })
-                }
-              />
-            </>
-          ) : (
-            <Empty description="暂无可编排的故事线" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-          )}
-        </section>
+            </section>
+          </Modal>
+        ) : null}
       </div>
+      {deletingPlotline ? (
+        <Modal
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          okText="确认删除"
+          onCancel={() => setDeletingPlotline(null)}
+          onOk={async () => {
+            await onDeletePlotline({ plotlineId: deletingPlotline.id });
+            setDeletingPlotline(null);
+          }}
+          open
+          title="删除故事线"
+        >
+          <Text>删除后会从当前作品的故事线列表中移除。</Text>
+        </Modal>
+      ) : null}
     </div>
   );
 }
 
 function StorylineRoster({
-  onSelectPlotline,
+  onAddNode,
+  onDeletePlotline,
+  onEditPlotline,
+  onResolveNode,
   plotlines,
-  selectedPlotlineId,
 }: {
   readonly plotlines: readonly PlotlineElement[];
-  readonly selectedPlotlineId: string | null;
-  onSelectPlotline(plotlineId: string): void;
+  onAddNode(plotline: PlotlineElement): void;
+  onDeletePlotline(plotline: PlotlineElement): void;
+  onEditPlotline(plotline: PlotlineElement): void;
+  onResolveNode(nodeId: string): Promise<void> | void;
 }) {
   if (plotlines.length === 0) {
     return <Empty description="暂无故事线" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
@@ -2584,18 +2984,11 @@ function StorylineRoster({
     <ul className="storyline-roster">
       {plotlines.map((plotline) => (
         <li key={plotline.id}>
-          <button
-            aria-label={`编辑故事线 ${plotline.name}`}
-            className={`storyline-roster__item${
-              selectedPlotlineId === plotline.id ? " storyline-roster__item--selected" : ""
-            }`}
-            onClick={() => onSelectPlotline(plotline.id)}
-            type="button"
-          >
-            <span className="storyline-roster__title-row">
+          <article className="storyline-roster__item">
+            <div className="storyline-roster__title-row">
               <strong>{plotline.name}</strong>
               <span>{plotline.nodes?.length ?? 0} 节点</span>
-            </span>
+            </div>
             <Space size={[6, 4]} wrap>
               <Tag>{getPlotlineKindLabel(plotline.type)}</Tag>
               <Tag>{getPlotlineNarrativeRoleLabel(plotline.narrativeRole)}</Tag>
@@ -2613,7 +3006,36 @@ function StorylineRoster({
             >
               <span style={{ width: `${getPlotlineCompletionScore(plotline)}%` }} />
             </span>
-          </button>
+            <Space className="storyline-roster__actions" size={8} wrap>
+              <Button
+                aria-label={`编辑故事线 ${plotline.name}`}
+                icon={<EditOutlined />}
+                onClick={() => onEditPlotline(plotline)}
+              >
+                编辑
+              </Button>
+              <Button
+                aria-label={`添加节点 ${plotline.name}`}
+                icon={<PlusOutlined />}
+                onClick={() => onAddNode(plotline)}
+              >
+                添加节点
+              </Button>
+              <Button
+                aria-label={`删除故事线 ${plotline.name}`}
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => onDeletePlotline(plotline)}
+              >
+                删除
+              </Button>
+            </Space>
+            {(plotline.nodes?.length ?? 0) > 0 ? (
+              <div className="storyline-roster__nodes">
+                <StorylineNodeList nodes={plotline.nodes ?? []} onResolveNode={onResolveNode} />
+              </div>
+            ) : null}
+          </article>
         </li>
       ))}
     </ul>
@@ -2659,672 +3081,6 @@ function StorylineNodeList({
   );
 }
 
-function BookOutlineModule({
-  creativePath,
-  onGenerateBookPlan,
-  onSaveArcPlan,
-  onSaveBookPlanDraft,
-  onSaveVolumePlan,
-  plotlines,
-  project,
-}: {
-  readonly creativePath: CreativePathBoard;
-  readonly plotlines: readonly PlotlineElement[];
-  readonly project: WorkbenchProject;
-  onGenerateBookPlan(input: {
-    readonly targetWordCount: number;
-    readonly volumeCount: number;
-  }): Promise<void> | void;
-  onSaveBookPlanDraft(input: SaveBookPlanDraftValues): Promise<void> | void;
-  onSaveVolumePlan(input: SaveVolumePlanValues): Promise<void> | void;
-  onSaveArcPlan(input: SaveArcPlanValues): Promise<void> | void;
-}) {
-  const [bookForm] = Form.useForm<BookPlanFormValues>();
-  const [volumeForm] = Form.useForm<VolumePlanFormValues>();
-  const [arcForm] = Form.useForm<ArcPlanFormValues>();
-  const [generateForm] = Form.useForm<BookPlanGenerateFormValues>();
-  const [selectedBookPlanId, setSelectedBookPlanId] = useState<string | null>(
-    () => creativePath.bookPlans[0]?.id ?? null,
-  );
-  const [selectedVolumePlanId, setSelectedVolumePlanId] = useState<string | null>(
-    () => creativePath.volumePlans[0]?.id ?? null,
-  );
-  const [selectedArcPlanId, setSelectedArcPlanId] = useState<string | null>(
-    () => creativePath.arcPlans[0]?.id ?? null,
-  );
-
-  const selectedBookPlan =
-    creativePath.bookPlans.find((plan) => plan.id === selectedBookPlanId) ?? null;
-  const visibleVolumePlans = selectedBookPlan
-    ? creativePath.volumePlans.filter((plan) => plan.bookPlanId === selectedBookPlan.id)
-    : creativePath.volumePlans;
-  const selectedVolumePlan =
-    visibleVolumePlans.find((plan) => plan.id === selectedVolumePlanId) ?? null;
-  const visibleArcPlans = selectedVolumePlan
-    ? creativePath.arcPlans.filter((plan) => plan.volumePlanId === selectedVolumePlan.id)
-    : creativePath.arcPlans;
-  const selectedArcPlan = visibleArcPlans.find((plan) => plan.id === selectedArcPlanId) ?? null;
-  const bookPlanOptions = creativePath.bookPlans.map((plan) => ({
-    label: plan.title,
-    value: plan.id,
-  }));
-  const volumePlanOptions = creativePath.volumePlans.map((plan) => ({
-    label: `${plan.volumeIndex}. ${plan.title}`,
-    value: plan.id,
-  }));
-  const plotlineOptions = plotlines.map((plotline) => ({
-    label: plotline.name,
-    value: plotline.id,
-  }));
-
-  useLayoutEffect(() => {
-    bookForm.setFieldsValue(
-      bookPlanToFormValues(selectedBookPlan, {
-        estimatedWordCount:
-          creativePath.brief?.estimatedWordCount ?? project.wordCountGoal ?? 800_000,
-        title: project.title,
-      }),
-    );
-  }, [
-    bookForm,
-    creativePath.brief?.estimatedWordCount,
-    project.title,
-    project.wordCountGoal,
-    selectedBookPlan,
-  ]);
-
-  useLayoutEffect(() => {
-    volumeForm.setFieldsValue(
-      volumePlanToFormValues(selectedVolumePlan, {
-        bookPlanId: selectedBookPlan?.id ?? creativePath.bookPlans[0]?.id ?? "",
-        targetWordCount: estimateNextVolumeWordCount(selectedBookPlan),
-        volumeIndex: getNextVolumeIndex(creativePath.volumePlans),
-      }),
-    );
-  }, [
-    creativePath.bookPlans,
-    creativePath.volumePlans,
-    selectedBookPlan,
-    selectedVolumePlan,
-    volumeForm,
-  ]);
-
-  useLayoutEffect(() => {
-    arcForm.setFieldsValue(
-      arcPlanToFormValues(selectedArcPlan, {
-        arcIndex: getNextArcIndex(creativePath.arcPlans, selectedVolumePlan?.id),
-        volumePlanId: selectedVolumePlan?.id ?? creativePath.volumePlans[0]?.id ?? "",
-      }),
-    );
-  }, [
-    arcForm,
-    creativePath.arcPlans,
-    creativePath.volumePlans,
-    selectedArcPlan,
-    selectedVolumePlan,
-  ]);
-
-  useLayoutEffect(() => {
-    generateForm.setFieldsValue({
-      targetWordCount:
-        selectedBookPlan?.targetWordCount ??
-        creativePath.brief?.estimatedWordCount ??
-        project.wordCountGoal ??
-        800_000,
-      volumeCount: Math.max(creativePath.volumePlans.length, 6),
-    });
-  }, [
-    creativePath.brief?.estimatedWordCount,
-    creativePath.volumePlans.length,
-    generateForm,
-    project.wordCountGoal,
-    selectedBookPlan,
-  ]);
-
-  const handleSelectBookPlan = (plan: BookPlanItem) => {
-    const firstVolume = creativePath.volumePlans.find((volume) => volume.bookPlanId === plan.id);
-    const firstArc = firstVolume
-      ? creativePath.arcPlans.find((arc) => arc.volumePlanId === firstVolume.id)
-      : undefined;
-    setSelectedBookPlanId(plan.id);
-    setSelectedVolumePlanId(firstVolume?.id ?? null);
-    setSelectedArcPlanId(firstArc?.id ?? null);
-  };
-
-  const handleSelectVolumePlan = (plan: VolumePlanItem) => {
-    const bookPlan = creativePath.bookPlans.find((candidate) => candidate.id === plan.bookPlanId);
-    const firstArc = creativePath.arcPlans.find((arc) => arc.volumePlanId === plan.id);
-    setSelectedBookPlanId(bookPlan?.id ?? null);
-    setSelectedVolumePlanId(plan.id);
-    setSelectedArcPlanId(firstArc?.id ?? null);
-  };
-
-  const handleSelectArcPlan = (plan: ArcPlanItem) => {
-    const volumePlan = creativePath.volumePlans.find(
-      (candidate) => candidate.id === plan.volumePlanId,
-    );
-    const bookPlan = volumePlan
-      ? creativePath.bookPlans.find((candidate) => candidate.id === volumePlan.bookPlanId)
-      : undefined;
-    setSelectedBookPlanId(bookPlan?.id ?? null);
-    setSelectedVolumePlanId(volumePlan?.id ?? null);
-    setSelectedArcPlanId(plan.id);
-  };
-
-  return (
-    <div className="module-stack book-outline-workspace">
-      <ModuleHeader eyebrow="6 / 9" title="全书大纲" />
-      <div className="book-outline-primary">
-        <section aria-label="大纲层级列表" className="book-outline-pane book-outline-tier-list">
-          <header className="book-outline-pane__header">
-            <Title level={5}>大纲层级</Title>
-            <Space size={6}>
-              <Tag>{creativePath.bookPlans.length} 本</Tag>
-              <Tag>{creativePath.volumePlans.length} 卷</Tag>
-              <Tag>{creativePath.arcPlans.length} 弧线</Tag>
-            </Space>
-          </header>
-          <BookOutlineTierGroup
-            emptyText="暂无全书计划"
-            items={creativePath.bookPlans}
-            renderMeta={(plan) => formatPlanWordCount(plan.targetWordCount)}
-            renderTitle={(plan) => plan.title}
-            selectedId={selectedBookPlan?.id ?? null}
-            title="全书计划"
-            toAriaLabel={(plan) => `编辑全书规划 ${plan.title}`}
-            onSelect={handleSelectBookPlan}
-          />
-          <BookOutlineTierGroup
-            emptyText="暂无卷规划"
-            items={visibleVolumePlans}
-            renderMeta={(plan) =>
-              `${OUTLINE_PLAN_STATUS_LABELS[plan.status as SaveBookPlanDraftValues["status"]] ?? plan.status} · ${formatPlanWordCount(plan.targetWordCount)}`
-            }
-            renderTitle={(plan) => `${plan.volumeIndex}. ${plan.title}`}
-            selectedId={selectedVolumePlan?.id ?? null}
-            title="卷规划"
-            toAriaLabel={(plan) => `编辑卷规划 ${plan.title}`}
-            onSelect={handleSelectVolumePlan}
-          />
-          <BookOutlineTierGroup
-            emptyText="暂无阶段弧线"
-            items={visibleArcPlans}
-            renderMeta={(plan) => `第 ${plan.arcIndex} 段 · ${plan.escalation.length} 个升级点`}
-            renderTitle={(plan) => plan.title}
-            selectedId={selectedArcPlan?.id ?? null}
-            title="阶段弧线"
-            toAriaLabel={(plan) => `编辑阶段弧线 ${plan.title}`}
-            onSelect={handleSelectArcPlan}
-          />
-        </section>
-
-        <section aria-label="大纲编辑表单" className="book-outline-pane book-outline-editor">
-          <header className="book-outline-pane__header">
-            <Title level={5}>大纲编辑</Title>
-            <Space size={8} wrap>
-              <Button
-                aria-label="新建全书计划"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setSelectedBookPlanId(null);
-                  setSelectedVolumePlanId(null);
-                  setSelectedArcPlanId(null);
-                }}
-              >
-                新建全书
-              </Button>
-              <Button
-                aria-label="新建卷规划"
-                disabled={creativePath.bookPlans.length === 0}
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setSelectedVolumePlanId(null);
-                  setSelectedArcPlanId(null);
-                }}
-              >
-                新建卷
-              </Button>
-              <Button
-                aria-label="新建阶段弧线"
-                disabled={creativePath.volumePlans.length === 0}
-                icon={<PlusOutlined />}
-                onClick={() => setSelectedArcPlanId(null)}
-              >
-                新建弧线
-              </Button>
-            </Space>
-          </header>
-
-          <div className="book-outline-editor-grid">
-            <section className="book-outline-form-block">
-              <Title level={5}>全书计划</Title>
-              <Form
-                form={bookForm}
-                layout="vertical"
-                onFinish={async (values) => {
-                  const payload: SaveBookPlanDraftValues = {
-                    corePromise: values.corePromise?.trim() ?? "",
-                    endingDirection: normalizedNullableFormText(values.endingDirection),
-                    mainPlotlineId: normalizedNullableFormText(values.mainPlotlineId),
-                    status: values.status ?? "draft",
-                    targetWordCount: values.targetWordCount ?? 800_000,
-                    title: values.title?.trim() ?? project.title,
-                    ...(selectedBookPlan ? { bookPlanId: selectedBookPlan.id } : {}),
-                  };
-                  await onSaveBookPlanDraft(payload);
-                }}
-              >
-                <div className="book-outline-form-grid">
-                  <Form.Item
-                    label="全书标题"
-                    name="title"
-                    rules={[{ message: "请输入全书标题", required: true }]}
-                  >
-                    <Input
-                      aria-label="全书标题"
-                      maxLength={120}
-                      placeholder="如：布衣天子全书大纲"
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    label={
-                      <FieldLabelWithHelp
-                        description={BOOK_PLAN_FIELD_HELP.targetWordCount.description}
-                        label="目标字数"
-                        question={BOOK_PLAN_FIELD_HELP.targetWordCount.question}
-                      />
-                    }
-                    name="targetWordCount"
-                    rules={[{ message: "请输入目标字数", required: true }]}
-                  >
-                    <InputNumber
-                      aria-label="目标字数"
-                      max={10_000_000}
-                      min={100_000}
-                      step={100_000}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    label={
-                      <FieldLabelWithHelp
-                        description={BOOK_PLAN_FIELD_HELP.mainPlotlineId.description}
-                        label="主故事线"
-                        question={BOOK_PLAN_FIELD_HELP.mainPlotlineId.question}
-                      />
-                    }
-                    name="mainPlotlineId"
-                  >
-                    <Select
-                      allowClear
-                      aria-label="主故事线"
-                      options={plotlineOptions}
-                      placeholder="选择主故事线"
-                    />
-                  </Form.Item>
-                  <Form.Item label="状态" name="status">
-                    <Select aria-label="全书状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
-                  </Form.Item>
-                  <Form.Item
-                    className="book-outline-form-grid__wide"
-                    label={
-                      <FieldLabelWithHelp
-                        description={BOOK_PLAN_FIELD_HELP.corePromise.description}
-                        label="核心承诺"
-                        question={BOOK_PLAN_FIELD_HELP.corePromise.question}
-                      />
-                    }
-                    name="corePromise"
-                  >
-                    <Input.TextArea
-                      aria-label="核心承诺"
-                      autoSize={{ maxRows: 6, minRows: 3 }}
-                      maxLength={800}
-                      placeholder="如：每卷一次公开胜利和一次隐藏损失。"
-                      showCount
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    className="book-outline-form-grid__wide"
-                    label={
-                      <FieldLabelWithHelp
-                        description={BOOK_PLAN_FIELD_HELP.endingDirection.description}
-                        label="结局方向"
-                        question={BOOK_PLAN_FIELD_HELP.endingDirection.question}
-                      />
-                    }
-                    name="endingDirection"
-                  >
-                    <Input.TextArea
-                      aria-label="结局方向"
-                      autoSize={{ maxRows: 5, minRows: 2 }}
-                      maxLength={800}
-                      placeholder="如：公开真相后，主角放弃旧身份。"
-                      showCount
-                    />
-                  </Form.Item>
-                </div>
-                <Button
-                  aria-label="保存全书规划"
-                  htmlType="submit"
-                  icon={<SaveOutlined />}
-                  type="primary"
-                >
-                  保存全书规划
-                </Button>
-              </Form>
-            </section>
-
-            <section className="book-outline-form-block">
-              <Title level={5}>卷规划</Title>
-              <Form
-                form={volumeForm}
-                layout="vertical"
-                onFinish={async (values) => {
-                  const payload: SaveVolumePlanValues = {
-                    bookPlanId: values.bookPlanId ?? selectedBookPlan?.id ?? "",
-                    climax: normalizedNullableFormText(values.climax),
-                    majorConflict: values.majorConflict?.trim() ?? "",
-                    purpose: values.purpose?.trim() ?? "",
-                    status: values.status ?? "draft",
-                    targetWordCount:
-                      values.targetWordCount ?? estimateNextVolumeWordCount(selectedBookPlan),
-                    title: values.title?.trim() ?? "未命名卷",
-                    volumeIndex: values.volumeIndex ?? getNextVolumeIndex(creativePath.volumePlans),
-                    ...(selectedVolumePlan ? { volumePlanId: selectedVolumePlan.id } : {}),
-                  };
-                  await onSaveVolumePlan(payload);
-                }}
-              >
-                <div className="book-outline-form-grid">
-                  <Form.Item
-                    label="所属全书规划"
-                    name="bookPlanId"
-                    rules={[{ message: "请先选择全书规划", required: true }]}
-                  >
-                    <Select
-                      aria-label="所属全书规划"
-                      disabled={bookPlanOptions.length === 0}
-                      options={bookPlanOptions}
-                    />
-                  </Form.Item>
-                  <Form.Item label="卷序号" name="volumeIndex">
-                    <InputNumber aria-label="卷序号" max={100} min={1} />
-                  </Form.Item>
-                  <Form.Item
-                    label="卷标题"
-                    name="title"
-                    rules={[{ message: "请输入卷标题", required: true }]}
-                  >
-                    <Input aria-label="卷标题" maxLength={120} placeholder="如：第一卷 寒门入局" />
-                  </Form.Item>
-                  <Form.Item
-                    label={
-                      <FieldLabelWithHelp
-                        description={VOLUME_PLAN_FIELD_HELP.targetWordCount.description}
-                        label="卷目标字数"
-                        question={VOLUME_PLAN_FIELD_HELP.targetWordCount.question}
-                      />
-                    }
-                    name="targetWordCount"
-                  >
-                    <InputNumber
-                      aria-label="卷目标字数"
-                      max={2_000_000}
-                      min={10_000}
-                      step={10_000}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    className="book-outline-form-grid__wide"
-                    label={
-                      <FieldLabelWithHelp
-                        description={VOLUME_PLAN_FIELD_HELP.purpose.description}
-                        label="卷叙事任务"
-                        question={VOLUME_PLAN_FIELD_HELP.purpose.question}
-                      />
-                    }
-                    name="purpose"
-                  >
-                    <Input.TextArea
-                      aria-label="卷叙事任务"
-                      autoSize={{ maxRows: 5, minRows: 2 }}
-                      maxLength={800}
-                      placeholder="如：完成身份压迫、入局动机和第一次公开胜利。"
-                      showCount
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    className="book-outline-form-grid__wide"
-                    label={
-                      <FieldLabelWithHelp
-                        description={VOLUME_PLAN_FIELD_HELP.majorConflict.description}
-                        label="卷核心冲突"
-                        question={VOLUME_PLAN_FIELD_HELP.majorConflict.question}
-                      />
-                    }
-                    name="majorConflict"
-                  >
-                    <Input.TextArea
-                      aria-label="卷核心冲突"
-                      autoSize={{ maxRows: 5, minRows: 2 }}
-                      maxLength={800}
-                      placeholder="如：寒门新官必须用民案撬动旧贵族封锁。"
-                      showCount
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    className="book-outline-form-grid__wide"
-                    label={
-                      <FieldLabelWithHelp
-                        description={VOLUME_PLAN_FIELD_HELP.climax.description}
-                        label="卷末高潮"
-                        question={VOLUME_PLAN_FIELD_HELP.climax.question}
-                      />
-                    }
-                    name="climax"
-                  >
-                    <Input.TextArea
-                      aria-label="卷末高潮"
-                      autoSize={{ maxRows: 5, minRows: 2 }}
-                      maxLength={800}
-                      placeholder="如：主角在公堂反杀第一次构陷。"
-                      showCount
-                    />
-                  </Form.Item>
-                  <Form.Item label="卷状态" name="status">
-                    <Select aria-label="卷状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
-                  </Form.Item>
-                </div>
-                <Button
-                  aria-label="保存卷规划"
-                  disabled={bookPlanOptions.length === 0}
-                  htmlType="submit"
-                  icon={<SaveOutlined />}
-                  type="primary"
-                >
-                  保存卷规划
-                </Button>
-              </Form>
-            </section>
-
-            <section className="book-outline-form-block book-outline-form-block--wide">
-              <Title level={5}>阶段弧线</Title>
-              <Form
-                form={arcForm}
-                layout="vertical"
-                onFinish={async (values) => {
-                  const payload: SaveArcPlanValues = {
-                    arcIndex:
-                      values.arcIndex ??
-                      getNextArcIndex(creativePath.arcPlans, values.volumePlanId),
-                    characterArcId: normalizedNullableFormText(values.characterArcId),
-                    endChapterIndex: values.endChapterIndex ?? null,
-                    escalation: parseEscalationText(values.escalationText),
-                    plotlineId: normalizedNullableFormText(values.plotlineId),
-                    purpose: values.purpose?.trim() ?? "",
-                    startChapterIndex: values.startChapterIndex ?? null,
-                    status: values.status ?? "draft",
-                    title: values.title?.trim() ?? "未命名阶段弧线",
-                    volumePlanId: values.volumePlanId ?? selectedVolumePlan?.id ?? "",
-                    ...(selectedArcPlan ? { arcPlanId: selectedArcPlan.id } : {}),
-                  };
-                  await onSaveArcPlan(payload);
-                }}
-              >
-                <Form.Item hidden name="characterArcId">
-                  <Input aria-label="关联人物弧线" />
-                </Form.Item>
-                <div className="book-outline-form-grid book-outline-form-grid--arc">
-                  <Form.Item
-                    label="所属卷规划"
-                    name="volumePlanId"
-                    rules={[{ message: "请先选择卷规划", required: true }]}
-                  >
-                    <Select
-                      aria-label="所属卷规划"
-                      disabled={volumePlanOptions.length === 0}
-                      options={volumePlanOptions}
-                    />
-                  </Form.Item>
-                  <Form.Item label="弧线序号" name="arcIndex">
-                    <InputNumber aria-label="弧线序号" max={300} min={1} />
-                  </Form.Item>
-                  <Form.Item
-                    label="弧线标题"
-                    name="title"
-                    rules={[{ message: "请输入弧线标题", required: true }]}
-                  >
-                    <Input aria-label="弧线标题" maxLength={120} placeholder="如：旧案破口" />
-                  </Form.Item>
-                  <Form.Item
-                    label={
-                      <FieldLabelWithHelp
-                        description={ARC_PLAN_FIELD_HELP.plotlineId.description}
-                        label="关联故事线"
-                        question={ARC_PLAN_FIELD_HELP.plotlineId.question}
-                      />
-                    }
-                    name="plotlineId"
-                  >
-                    <Select
-                      allowClear
-                      aria-label="关联故事线"
-                      options={plotlineOptions}
-                      placeholder="选择故事线"
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    label={
-                      <FieldLabelWithHelp
-                        description={ARC_PLAN_FIELD_HELP.chapterRange.description}
-                        label="起始章节"
-                        question={ARC_PLAN_FIELD_HELP.chapterRange.question}
-                      />
-                    }
-                    name="startChapterIndex"
-                  >
-                    <InputNumber aria-label="起始章节" min={1} />
-                  </Form.Item>
-                  <Form.Item label="结束章节" name="endChapterIndex">
-                    <InputNumber aria-label="结束章节" min={1} />
-                  </Form.Item>
-                  <Form.Item label="弧线状态" name="status">
-                    <Select aria-label="弧线状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
-                  </Form.Item>
-                  <Form.Item
-                    className="book-outline-form-grid__wide"
-                    label={
-                      <FieldLabelWithHelp
-                        description={ARC_PLAN_FIELD_HELP.purpose.description}
-                        label="阶段目的"
-                        question={ARC_PLAN_FIELD_HELP.purpose.question}
-                      />
-                    }
-                    name="purpose"
-                  >
-                    <Input.TextArea
-                      aria-label="阶段目的"
-                      autoSize={{ maxRows: 5, minRows: 2 }}
-                      maxLength={800}
-                      placeholder="如：让主角从被动受害转为主动查案。"
-                      showCount
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    className="book-outline-form-grid__wide"
-                    label={
-                      <FieldLabelWithHelp
-                        description={ARC_PLAN_FIELD_HELP.escalation.description}
-                        label="升级链"
-                        question={ARC_PLAN_FIELD_HELP.escalation.question}
-                      />
-                    }
-                    name="escalationText"
-                  >
-                    <Input.TextArea
-                      aria-label="升级链"
-                      autoSize={{ maxRows: 8, minRows: 4 }}
-                      maxLength={1200}
-                      placeholder={"旧案开场\n证人失踪\n公堂反杀"}
-                    />
-                  </Form.Item>
-                </div>
-                <Button
-                  aria-label="保存阶段弧线"
-                  disabled={volumePlanOptions.length === 0}
-                  htmlType="submit"
-                  icon={<SaveOutlined />}
-                  type="primary"
-                >
-                  保存阶段弧线
-                </Button>
-              </Form>
-            </section>
-          </div>
-        </section>
-      </div>
-
-      <section aria-label="AI 辅助规划" className="book-outline-pane book-outline-assistant">
-        <header className="book-outline-pane__header">
-          <Title level={5}>AI 辅助规划</Title>
-        </header>
-        <Form
-          form={generateForm}
-          layout="vertical"
-          onFinish={async (values) => {
-            await onGenerateBookPlan({
-              targetWordCount: values.targetWordCount ?? 800_000,
-              volumeCount: values.volumeCount ?? 6,
-            });
-          }}
-        >
-          <div className="book-outline-generate-grid">
-            <Form.Item label="生成目标字数" name="targetWordCount">
-              <InputNumber
-                aria-label="生成目标字数"
-                max={10_000_000}
-                min={100_000}
-                step={100_000}
-              />
-            </Form.Item>
-            <Form.Item label="生成预计卷数" name="volumeCount">
-              <InputNumber aria-label="生成预计卷数" max={30} min={1} />
-            </Form.Item>
-          </div>
-          <Button
-            aria-label="生成全书规划"
-            htmlType="submit"
-            icon={<ThunderboltOutlined />}
-            type="primary"
-          >
-            生成全书规划
-          </Button>
-        </Form>
-      </section>
-    </div>
-  );
-}
-
 interface BookPlanFormValues {
   readonly corePromise?: string;
   readonly endingDirection?: string | null | undefined;
@@ -3361,59 +3117,6 @@ interface ArcPlanFormValues {
 interface BookPlanGenerateFormValues {
   readonly targetWordCount?: number;
   readonly volumeCount?: number;
-}
-
-function BookOutlineTierGroup<TItem extends { readonly id: string }>({
-  emptyText,
-  items,
-  onSelect,
-  renderMeta,
-  renderTitle,
-  selectedId,
-  title,
-  toAriaLabel,
-}: {
-  readonly emptyText: string;
-  readonly items: readonly TItem[];
-  readonly selectedId: string | null;
-  readonly title: string;
-  renderMeta(item: TItem): string;
-  renderTitle(item: TItem): string;
-  toAriaLabel(item: TItem): string;
-  onSelect(item: TItem): void;
-}) {
-  return (
-    <section className="book-outline-tier-list__section">
-      <header>
-        <Text strong>{title}</Text>
-        <Tag>{items.length}</Tag>
-      </header>
-      {items.length === 0 ? (
-        <Empty description={emptyText} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      ) : (
-        <ul className="book-outline-tier-list__items">
-          {items.map((item) => (
-            <li key={item.id}>
-              <button
-                aria-label={toAriaLabel(item)}
-                className={[
-                  "book-outline-tier-list__item",
-                  selectedId === item.id ? "book-outline-tier-list__item--selected" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                type="button"
-                onClick={() => onSelect(item)}
-              >
-                <strong>{renderTitle(item)}</strong>
-                <span>{renderMeta(item)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
 }
 
 function bookPlanToFormValues(
@@ -3510,6 +3213,1219 @@ function formatPlanWordCount(wordCount: number): string {
   return `${wordCount.toLocaleString()} 字`;
 }
 
+type BookOutlineModalState =
+  | { readonly type: "book"; readonly bookPlanId?: string }
+  | { readonly type: "volume"; readonly bookPlanId?: string; readonly volumePlanId?: string }
+  | { readonly type: "arc"; readonly arcPlanId?: string; readonly volumePlanId?: string }
+  | { readonly type: "generate" };
+
+type BookOutlineDeleteTarget =
+  | { readonly plan: BookPlanItem; readonly type: "book" }
+  | { readonly plan: VolumePlanItem; readonly type: "volume" }
+  | { readonly plan: ArcPlanItem; readonly type: "arc" };
+
+function BookOutlineModuleV2({
+  creativePath,
+  onDeleteArcPlan,
+  onDeleteBookPlan,
+  onDeleteVolumePlan,
+  onGenerateBookPlan,
+  onSaveArcPlan,
+  onSaveBookPlanDraft,
+  onSaveVolumePlan,
+  plotlines,
+  project,
+}: {
+  readonly creativePath: CreativePathBoard;
+  readonly plotlines: readonly PlotlineElement[];
+  readonly project: WorkbenchProject;
+  onDeleteBookPlan(input: DeleteBookPlanValues): Promise<void> | void;
+  onDeleteVolumePlan(input: DeleteVolumePlanValues): Promise<void> | void;
+  onDeleteArcPlan(input: DeleteArcPlanValues): Promise<void> | void;
+  onGenerateBookPlan(input: {
+    readonly targetWordCount: number;
+    readonly volumeCount: number;
+  }): Promise<void> | void;
+  onSaveBookPlanDraft(input: SaveBookPlanDraftValues): Promise<void> | void;
+  onSaveVolumePlan(input: SaveVolumePlanValues): Promise<void> | void;
+  onSaveArcPlan(input: SaveArcPlanValues): Promise<void> | void;
+}) {
+  const [bookForm] = Form.useForm<BookPlanFormValues>();
+  const [volumeForm] = Form.useForm<VolumePlanFormValues>();
+  const [arcForm] = Form.useForm<ArcPlanFormValues>();
+  const [generateForm] = Form.useForm<BookPlanGenerateFormValues>();
+  const [outlineModal, setOutlineModal] = useState<BookOutlineModalState | null>(null);
+  const [deletingPlan, setDeletingPlan] = useState<BookOutlineDeleteTarget | null>(null);
+  const [selectedBookPlanId, setSelectedBookPlanId] = useState<string | null>(
+    () => creativePath.bookPlans[0]?.id ?? null,
+  );
+  const [selectedVolumePlanId, setSelectedVolumePlanId] = useState<string | null>(null);
+  const [selectedArcPlanId, setSelectedArcPlanId] = useState<string | null>(null);
+
+  const selectedBookPlan =
+    creativePath.bookPlans.find((plan) => plan.id === selectedBookPlanId) ?? null;
+  const visibleVolumePlans = selectedBookPlan
+    ? creativePath.volumePlans.filter((plan) => plan.bookPlanId === selectedBookPlan.id)
+    : creativePath.volumePlans;
+  const selectedVolumePlan =
+    visibleVolumePlans.find((plan) => plan.id === selectedVolumePlanId) ?? null;
+  const visibleArcPlans = selectedVolumePlan
+    ? creativePath.arcPlans.filter((plan) => plan.volumePlanId === selectedVolumePlan.id)
+    : creativePath.arcPlans;
+  const selectedArcPlan = visibleArcPlans.find((plan) => plan.id === selectedArcPlanId) ?? null;
+  const editingBookPlan =
+    outlineModal?.type === "book" && outlineModal.bookPlanId
+      ? (creativePath.bookPlans.find((plan) => plan.id === outlineModal.bookPlanId) ?? null)
+      : null;
+  const editingVolumePlan =
+    outlineModal?.type === "volume" && outlineModal.volumePlanId
+      ? (creativePath.volumePlans.find((plan) => plan.id === outlineModal.volumePlanId) ?? null)
+      : null;
+  const editingArcPlan =
+    outlineModal?.type === "arc" && outlineModal.arcPlanId
+      ? (creativePath.arcPlans.find((plan) => plan.id === outlineModal.arcPlanId) ?? null)
+      : null;
+  const bookPlanOptions = creativePath.bookPlans.map((plan) => ({
+    label: plan.title,
+    value: plan.id,
+  }));
+  const volumePlanOptions = creativePath.volumePlans.map((plan) => ({
+    label: `${plan.volumeIndex}. ${plan.title}`,
+    value: plan.id,
+  }));
+  const plotlineOptions = plotlines.map((plotline) => ({
+    label: plotline.name,
+    value: plotline.id,
+  }));
+
+  useLayoutEffect(() => {
+    if (outlineModal?.type !== "book") {
+      return;
+    }
+    bookForm.resetFields();
+    bookForm.setFieldsValue(
+      bookPlanToFormValues(editingBookPlan, {
+        estimatedWordCount:
+          creativePath.brief?.estimatedWordCount ?? project.wordCountGoal ?? 800_000,
+        title: project.title,
+      }),
+    );
+  }, [
+    bookForm,
+    creativePath.brief?.estimatedWordCount,
+    editingBookPlan,
+    outlineModal,
+    project.title,
+    project.wordCountGoal,
+  ]);
+
+  useLayoutEffect(() => {
+    if (outlineModal?.type !== "volume") {
+      return;
+    }
+    const fallbackBookPlanId =
+      outlineModal.bookPlanId ??
+      editingVolumePlan?.bookPlanId ??
+      selectedBookPlan?.id ??
+      creativePath.bookPlans[0]?.id ??
+      "";
+    const fallbackBookPlan =
+      creativePath.bookPlans.find((plan) => plan.id === fallbackBookPlanId) ?? selectedBookPlan;
+    volumeForm.resetFields();
+    volumeForm.setFieldsValue(
+      volumePlanToFormValues(editingVolumePlan, {
+        bookPlanId: fallbackBookPlanId,
+        targetWordCount: estimateNextVolumeWordCount(fallbackBookPlan),
+        volumeIndex: getNextVolumeIndex(creativePath.volumePlans),
+      }),
+    );
+  }, [
+    creativePath.bookPlans,
+    creativePath.volumePlans,
+    editingVolumePlan,
+    outlineModal,
+    selectedBookPlan,
+    volumeForm,
+  ]);
+
+  useLayoutEffect(() => {
+    if (outlineModal?.type !== "arc") {
+      return;
+    }
+    const fallbackVolumePlanId =
+      outlineModal.volumePlanId ??
+      editingArcPlan?.volumePlanId ??
+      selectedVolumePlan?.id ??
+      creativePath.volumePlans[0]?.id ??
+      "";
+    arcForm.resetFields();
+    arcForm.setFieldsValue(
+      arcPlanToFormValues(editingArcPlan, {
+        arcIndex: getNextArcIndex(creativePath.arcPlans, fallbackVolumePlanId),
+        volumePlanId: fallbackVolumePlanId,
+      }),
+    );
+  }, [
+    arcForm,
+    creativePath.arcPlans,
+    creativePath.volumePlans,
+    editingArcPlan,
+    outlineModal,
+    selectedVolumePlan,
+  ]);
+
+  useLayoutEffect(() => {
+    if (outlineModal?.type !== "generate") {
+      return;
+    }
+    generateForm.resetFields();
+    generateForm.setFieldsValue({
+      targetWordCount:
+        selectedBookPlan?.targetWordCount ??
+        creativePath.brief?.estimatedWordCount ??
+        project.wordCountGoal ??
+        800_000,
+      volumeCount: Math.max(creativePath.volumePlans.length, 6),
+    });
+  }, [
+    creativePath.brief?.estimatedWordCount,
+    creativePath.volumePlans.length,
+    generateForm,
+    outlineModal,
+    project.wordCountGoal,
+    selectedBookPlan,
+  ]);
+
+  const closeOutlineModal = () => setOutlineModal(null);
+
+  const handleSelectBookPlan = (plan: BookPlanItem) => {
+    setSelectedBookPlanId(plan.id);
+    setSelectedVolumePlanId(null);
+    setSelectedArcPlanId(null);
+  };
+
+  const handleSelectVolumePlan = (plan: VolumePlanItem) => {
+    const bookPlan = creativePath.bookPlans.find((candidate) => candidate.id === plan.bookPlanId);
+    setSelectedBookPlanId(bookPlan?.id ?? null);
+    setSelectedVolumePlanId(plan.id);
+    setSelectedArcPlanId(null);
+  };
+
+  const handleSelectArcPlan = (plan: ArcPlanItem) => {
+    const volumePlan = creativePath.volumePlans.find(
+      (candidate) => candidate.id === plan.volumePlanId,
+    );
+    const bookPlan = volumePlan
+      ? creativePath.bookPlans.find((candidate) => candidate.id === volumePlan.bookPlanId)
+      : undefined;
+    setSelectedBookPlanId(bookPlan?.id ?? null);
+    setSelectedVolumePlanId(volumePlan?.id ?? null);
+    setSelectedArcPlanId(plan.id);
+  };
+
+  const handleSaveBookPlan = async (values: BookPlanFormValues) => {
+    const payload: SaveBookPlanDraftValues = {
+      corePromise: values.corePromise?.trim() ?? "",
+      endingDirection: normalizedNullableFormText(values.endingDirection),
+      mainPlotlineId: normalizedNullableFormText(values.mainPlotlineId),
+      status: values.status ?? "draft",
+      targetWordCount: values.targetWordCount ?? 800_000,
+      title: values.title?.trim() ?? project.title,
+      ...(outlineModal?.type === "book" && outlineModal.bookPlanId
+        ? { bookPlanId: outlineModal.bookPlanId }
+        : {}),
+    };
+    await onSaveBookPlanDraft(payload);
+    closeOutlineModal();
+  };
+
+  const handleSaveVolumePlan = async (values: VolumePlanFormValues) => {
+    const payload: SaveVolumePlanValues = {
+      bookPlanId: values.bookPlanId ?? selectedBookPlan?.id ?? "",
+      climax: normalizedNullableFormText(values.climax),
+      majorConflict: values.majorConflict?.trim() ?? "",
+      purpose: values.purpose?.trim() ?? "",
+      status: values.status ?? "draft",
+      targetWordCount: values.targetWordCount ?? estimateNextVolumeWordCount(selectedBookPlan),
+      title: values.title?.trim() ?? "未命名卷",
+      volumeIndex: values.volumeIndex ?? getNextVolumeIndex(creativePath.volumePlans),
+      ...(outlineModal?.type === "volume" && outlineModal.volumePlanId
+        ? { volumePlanId: outlineModal.volumePlanId }
+        : {}),
+    };
+    await onSaveVolumePlan(payload);
+    closeOutlineModal();
+  };
+
+  const handleSaveArcPlan = async (values: ArcPlanFormValues) => {
+    const payload: SaveArcPlanValues = {
+      arcIndex: values.arcIndex ?? getNextArcIndex(creativePath.arcPlans, values.volumePlanId),
+      characterArcId: normalizedNullableFormText(values.characterArcId),
+      endChapterIndex: values.endChapterIndex ?? null,
+      escalation: parseEscalationText(values.escalationText),
+      plotlineId: normalizedNullableFormText(values.plotlineId),
+      purpose: values.purpose?.trim() ?? "",
+      startChapterIndex: values.startChapterIndex ?? null,
+      status: values.status ?? "draft",
+      title: values.title?.trim() ?? "未命名阶段弧线",
+      volumePlanId: values.volumePlanId ?? selectedVolumePlan?.id ?? "",
+      ...(outlineModal?.type === "arc" && outlineModal.arcPlanId
+        ? { arcPlanId: outlineModal.arcPlanId }
+        : {}),
+    };
+    await onSaveArcPlan(payload);
+    closeOutlineModal();
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingPlan) {
+      return;
+    }
+    if (deletingPlan.type === "book") {
+      await onDeleteBookPlan({ bookPlanId: deletingPlan.plan.id });
+      if (selectedBookPlanId === deletingPlan.plan.id) {
+        setSelectedBookPlanId(null);
+        setSelectedVolumePlanId(null);
+        setSelectedArcPlanId(null);
+      }
+    } else if (deletingPlan.type === "volume") {
+      await onDeleteVolumePlan({ volumePlanId: deletingPlan.plan.id });
+      if (selectedVolumePlanId === deletingPlan.plan.id) {
+        setSelectedVolumePlanId(null);
+        setSelectedArcPlanId(null);
+      }
+    } else {
+      await onDeleteArcPlan({ arcPlanId: deletingPlan.plan.id });
+      if (selectedArcPlanId === deletingPlan.plan.id) {
+        setSelectedArcPlanId(null);
+      }
+    }
+    setDeletingPlan(null);
+  };
+
+  const deleteTitle =
+    deletingPlan?.type === "book"
+      ? "删除全书规划"
+      : deletingPlan?.type === "volume"
+        ? "删除卷规划"
+        : "删除阶段弧线";
+  const deleteDescription =
+    deletingPlan?.type === "book"
+      ? "删除后会同时移除该全书规划下的卷规划和阶段弧线。"
+      : deletingPlan?.type === "volume"
+        ? "删除后会同时移除该卷下的阶段弧线。"
+        : "删除后会从当前卷规划中移除这条阶段弧线。";
+
+  return (
+    <div className="module-stack book-outline-workspace">
+      <ModuleHeader eyebrow="6 / 9" title="全书大纲" />
+      <div className="book-outline-primary">
+        <section aria-label="大纲层级列表" className="book-outline-pane book-outline-tier-list">
+          <header className="book-outline-pane__header">
+            <Title level={5}>大纲层级</Title>
+            <Space size={6}>
+              <Tag>{creativePath.bookPlans.length} 本</Tag>
+              <Tag>{creativePath.volumePlans.length} 卷</Tag>
+              <Tag>{creativePath.arcPlans.length} 弧线</Tag>
+            </Space>
+          </header>
+          <BookOutlineTierGroupV2
+            emptyText="暂无全书计划"
+            items={creativePath.bookPlans}
+            renderActions={(plan) => (
+              <BookOutlineRowActionsV2
+                deleteLabel={`删除全书规划 ${plan.title}`}
+                editLabel={`编辑全书规划 ${plan.title}`}
+                extraLabel={`新增卷 ${plan.title}`}
+                onDelete={() => setDeletingPlan({ plan, type: "book" })}
+                onEdit={() => setOutlineModal({ bookPlanId: plan.id, type: "book" })}
+                onExtra={() => setOutlineModal({ bookPlanId: plan.id, type: "volume" })}
+              />
+            )}
+            renderMeta={(plan) => formatPlanWordCount(plan.targetWordCount)}
+            renderTitle={(plan) => plan.title}
+            selectedId={selectedBookPlan?.id ?? null}
+            title="全书计划"
+            toSelectAriaLabel={(plan) => `查看全书规划 ${plan.title}`}
+            onSelect={handleSelectBookPlan}
+          />
+          <BookOutlineTierGroupV2
+            emptyText="暂无卷规划"
+            items={visibleVolumePlans}
+            renderActions={(plan) => (
+              <BookOutlineRowActionsV2
+                deleteLabel={`删除卷规划 ${plan.title}`}
+                editLabel={`编辑卷规划 ${plan.title}`}
+                extraLabel={`新增阶段弧线 ${plan.title}`}
+                onDelete={() => setDeletingPlan({ plan, type: "volume" })}
+                onEdit={() => setOutlineModal({ type: "volume", volumePlanId: plan.id })}
+                onExtra={() => setOutlineModal({ type: "arc", volumePlanId: plan.id })}
+              />
+            )}
+            renderMeta={(plan) =>
+              `${OUTLINE_PLAN_STATUS_LABELS[plan.status as SaveBookPlanDraftValues["status"]] ?? plan.status} · ${formatPlanWordCount(plan.targetWordCount)}`
+            }
+            renderTitle={(plan) => `${plan.volumeIndex}. ${plan.title}`}
+            selectedId={selectedVolumePlan?.id ?? null}
+            title="卷规划"
+            toSelectAriaLabel={(plan) => `查看卷规划 ${plan.title}`}
+            onSelect={handleSelectVolumePlan}
+          />
+          <BookOutlineTierGroupV2
+            emptyText="暂无阶段弧线"
+            items={visibleArcPlans}
+            renderActions={(plan) => (
+              <BookOutlineRowActionsV2
+                deleteLabel={`删除阶段弧线 ${plan.title}`}
+                editLabel={`编辑阶段弧线 ${plan.title}`}
+                onDelete={() => setDeletingPlan({ plan, type: "arc" })}
+                onEdit={() => setOutlineModal({ arcPlanId: plan.id, type: "arc" })}
+              />
+            )}
+            renderMeta={(plan) => `第 ${plan.arcIndex} 段 · ${plan.escalation.length} 个升级点`}
+            renderTitle={(plan) => plan.title}
+            selectedId={selectedArcPlan?.id ?? null}
+            title="阶段弧线"
+            toSelectAriaLabel={(plan) => `查看阶段弧线 ${plan.title}`}
+            onSelect={handleSelectArcPlan}
+          />
+        </section>
+
+        <section aria-label="大纲详情" className="book-outline-pane book-outline-detail">
+          <header className="book-outline-pane__header">
+            <Title level={5}>
+              {selectedArcPlan
+                ? "阶段弧线详情"
+                : selectedVolumePlan
+                  ? "卷规划详情"
+                  : selectedBookPlan
+                    ? "全书规划详情"
+                    : "大纲总览"}
+            </Title>
+            <Space size={8} wrap>
+              <Button
+                aria-label="新建全书规划"
+                icon={<PlusOutlined />}
+                onClick={() => setOutlineModal({ type: "book" })}
+              >
+                新建全书
+              </Button>
+              <Button
+                aria-label="AI 生成全书规划"
+                icon={<ThunderboltOutlined />}
+                onClick={() => setOutlineModal({ type: "generate" })}
+                type="primary"
+              >
+                AI 生成全书规划
+              </Button>
+              {selectedBookPlan ? (
+                <Button
+                  aria-label="新增当前全书的卷规划"
+                  icon={<PlusOutlined />}
+                  onClick={() =>
+                    setOutlineModal({ bookPlanId: selectedBookPlan.id, type: "volume" })
+                  }
+                >
+                  新增卷
+                </Button>
+              ) : null}
+              {selectedVolumePlan ? (
+                <Button
+                  aria-label="新增当前卷的阶段弧线"
+                  icon={<PlusOutlined />}
+                  onClick={() =>
+                    setOutlineModal({ type: "arc", volumePlanId: selectedVolumePlan.id })
+                  }
+                >
+                  新增弧线
+                </Button>
+              ) : null}
+              <Button
+                aria-label="编辑当前大纲"
+                disabled={!selectedBookPlan && !selectedVolumePlan && !selectedArcPlan}
+                icon={<EditOutlined />}
+                onClick={() => {
+                  if (selectedArcPlan) {
+                    setOutlineModal({ arcPlanId: selectedArcPlan.id, type: "arc" });
+                    return;
+                  }
+                  if (selectedVolumePlan) {
+                    setOutlineModal({ type: "volume", volumePlanId: selectedVolumePlan.id });
+                    return;
+                  }
+                  if (selectedBookPlan) {
+                    setOutlineModal({ bookPlanId: selectedBookPlan.id, type: "book" });
+                  }
+                }}
+              >
+                编辑
+              </Button>
+              <Button
+                aria-label="删除当前大纲"
+                danger
+                disabled={!selectedBookPlan && !selectedVolumePlan && !selectedArcPlan}
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  if (selectedArcPlan) {
+                    setDeletingPlan({ plan: selectedArcPlan, type: "arc" });
+                    return;
+                  }
+                  if (selectedVolumePlan) {
+                    setDeletingPlan({ plan: selectedVolumePlan, type: "volume" });
+                    return;
+                  }
+                  if (selectedBookPlan) {
+                    setDeletingPlan({ plan: selectedBookPlan, type: "book" });
+                  }
+                }}
+              >
+                删除
+              </Button>
+            </Space>
+          </header>
+          <BookOutlineDetailBody
+            bookPlan={selectedBookPlan}
+            plotlines={plotlines}
+            selectedArcPlan={selectedArcPlan}
+            selectedVolumePlan={selectedVolumePlan}
+            volumePlans={creativePath.volumePlans}
+          />
+        </section>
+      </div>
+
+      {outlineModal?.type === "book" ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closeOutlineModal}
+          open
+          title={
+            outlineModal.bookPlanId && editingBookPlan
+              ? `编辑全书规划：${editingBookPlan.title}`
+              : "新建全书规划"
+          }
+          width={760}
+        >
+          <Form form={bookForm} layout="vertical" onFinish={handleSaveBookPlan}>
+            <BookPlanFieldsV2 plotlineOptions={plotlineOptions} />
+            <BookOutlineModalActionsV2 submitLabel="保存全书规划" onCancel={closeOutlineModal} />
+          </Form>
+        </Modal>
+      ) : null}
+
+      {outlineModal?.type === "volume" ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closeOutlineModal}
+          open
+          title={
+            outlineModal.volumePlanId && editingVolumePlan
+              ? `编辑卷规划：${editingVolumePlan.title}`
+              : "新建卷规划"
+          }
+          width={760}
+        >
+          <Form form={volumeForm} layout="vertical" onFinish={handleSaveVolumePlan}>
+            <VolumePlanFieldsV2 bookPlanOptions={bookPlanOptions} />
+            <BookOutlineModalActionsV2 submitLabel="保存卷规划" onCancel={closeOutlineModal} />
+          </Form>
+        </Modal>
+      ) : null}
+
+      {outlineModal?.type === "arc" ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closeOutlineModal}
+          open
+          title={
+            outlineModal.arcPlanId && editingArcPlan
+              ? `编辑阶段弧线：${editingArcPlan.title}`
+              : "新建阶段弧线"
+          }
+          width={760}
+        >
+          <Form form={arcForm} layout="vertical" onFinish={handleSaveArcPlan}>
+            <ArcPlanFieldsV2
+              plotlineOptions={plotlineOptions}
+              volumePlanOptions={volumePlanOptions}
+            />
+            <BookOutlineModalActionsV2 submitLabel="保存阶段弧线" onCancel={closeOutlineModal} />
+          </Form>
+        </Modal>
+      ) : null}
+
+      {outlineModal?.type === "generate" ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closeOutlineModal}
+          open
+          title="AI 生成全书规划"
+          width={640}
+        >
+          <Form
+            form={generateForm}
+            layout="vertical"
+            onFinish={async (values) => {
+              await onGenerateBookPlan({
+                targetWordCount: values.targetWordCount ?? 800_000,
+                volumeCount: values.volumeCount ?? 6,
+              });
+              closeOutlineModal();
+            }}
+          >
+            <div className="book-outline-form-grid book-outline-form-grid--single">
+              <Form.Item label="生成目标字数" name="targetWordCount">
+                <InputNumber
+                  aria-label="生成目标字数"
+                  max={10_000_000}
+                  min={100_000}
+                  step={100_000}
+                />
+              </Form.Item>
+              <Form.Item label="生成预计卷数" name="volumeCount">
+                <InputNumber aria-label="生成预计卷数" max={30} min={1} />
+              </Form.Item>
+            </div>
+            <BookOutlineModalActionsV2
+              icon={<ThunderboltOutlined />}
+              submitLabel="生成全书规划"
+              onCancel={closeOutlineModal}
+            />
+          </Form>
+        </Modal>
+      ) : null}
+
+      {deletingPlan ? (
+        <Modal
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          okText="确认删除"
+          onCancel={() => setDeletingPlan(null)}
+          onOk={handleConfirmDelete}
+          open
+          title={deleteTitle}
+        >
+          <Text>{deleteDescription}</Text>
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
+
+function BookOutlineTierGroupV2<TItem extends { readonly id: string }>({
+  emptyText,
+  items,
+  onSelect,
+  renderActions,
+  renderMeta,
+  renderTitle,
+  selectedId,
+  title,
+  toSelectAriaLabel,
+}: {
+  readonly emptyText: string;
+  readonly items: readonly TItem[];
+  readonly selectedId: string | null;
+  readonly title: string;
+  renderActions(item: TItem): ReactNode;
+  renderMeta(item: TItem): string;
+  renderTitle(item: TItem): string;
+  toSelectAriaLabel(item: TItem): string;
+  onSelect(item: TItem): void;
+}) {
+  return (
+    <section className="book-outline-tier-list__section">
+      <header>
+        <Text strong>{title}</Text>
+        <Tag>{items.length}</Tag>
+      </header>
+      {items.length === 0 ? (
+        <Empty description={emptyText} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <ul className="book-outline-tier-list__items">
+          {items.map((item) => (
+            <li key={item.id}>
+              <article
+                className={[
+                  "book-outline-tier-list__item",
+                  selectedId === item.id ? "book-outline-tier-list__item--selected" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <button
+                  aria-label={toSelectAriaLabel(item)}
+                  className="book-outline-tier-list__select"
+                  type="button"
+                  onClick={() => onSelect(item)}
+                >
+                  <strong>{renderTitle(item)}</strong>
+                  <span>{renderMeta(item)}</span>
+                </button>
+                <div className="book-outline-tier-list__actions">{renderActions(item)}</div>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function BookOutlineRowActionsV2({
+  deleteLabel,
+  editLabel,
+  extraLabel,
+  onDelete,
+  onEdit,
+  onExtra,
+}: {
+  readonly deleteLabel: string;
+  readonly editLabel: string;
+  readonly extraLabel?: string;
+  onDelete(): void;
+  onEdit(): void;
+  onExtra?(): void;
+}) {
+  return (
+    <Space size={2}>
+      {extraLabel && onExtra ? (
+        <Tooltip title="新增下级">
+          <Button
+            aria-label={extraLabel}
+            icon={<PlusOutlined />}
+            size="small"
+            type="text"
+            onClick={onExtra}
+          />
+        </Tooltip>
+      ) : null}
+      <Tooltip title="编辑">
+        <Button
+          aria-label={editLabel}
+          icon={<EditOutlined />}
+          size="small"
+          type="text"
+          onClick={onEdit}
+        />
+      </Tooltip>
+      <Tooltip title="删除">
+        <Button
+          aria-label={deleteLabel}
+          danger
+          icon={<DeleteOutlined />}
+          size="small"
+          type="text"
+          onClick={onDelete}
+        />
+      </Tooltip>
+    </Space>
+  );
+}
+
+function BookOutlineDetailBody({
+  bookPlan,
+  plotlines,
+  selectedArcPlan,
+  selectedVolumePlan,
+  volumePlans,
+}: {
+  readonly bookPlan: BookPlanItem | null;
+  readonly plotlines: readonly PlotlineElement[];
+  readonly selectedArcPlan: ArcPlanItem | null;
+  readonly selectedVolumePlan: VolumePlanItem | null;
+  readonly volumePlans: readonly VolumePlanItem[];
+}) {
+  if (selectedArcPlan) {
+    const volumePlan = volumePlans.find((plan) => plan.id === selectedArcPlan.volumePlanId) ?? null;
+    const plotline = plotlines.find((item) => item.id === selectedArcPlan.plotlineId) ?? null;
+
+    return (
+      <div className="book-outline-detail__body">
+        <div className="book-outline-detail__title-row">
+          <Title level={4}>{selectedArcPlan.title}</Title>
+          <Tag>
+            {OUTLINE_PLAN_STATUS_LABELS[
+              selectedArcPlan.status as SaveBookPlanDraftValues["status"]
+            ] ?? selectedArcPlan.status}
+          </Tag>
+        </div>
+        <dl className="book-outline-detail-list">
+          <BookOutlineDetailItem label="所属卷" value={volumePlan?.title ?? "未关联"} />
+          <BookOutlineDetailItem label="弧线序号" value={`第 ${selectedArcPlan.arcIndex} 段`} />
+          <BookOutlineDetailItem label="章节范围" value={formatChapterRange(selectedArcPlan)} />
+          <BookOutlineDetailItem label="关联故事线" value={plotline?.name ?? "未关联"} />
+          <BookOutlineDetailItem label="弧线作用" value={selectedArcPlan.purpose} wide />
+          <BookOutlineDetailItem
+            label="升级链"
+            value={
+              selectedArcPlan.escalation.length > 0 ? (
+                <ol className="book-outline-detail-list__ordered">
+                  {selectedArcPlan.escalation.map((item, index) => (
+                    <li key={`${item}-${index}`}>{item}</li>
+                  ))}
+                </ol>
+              ) : (
+                "未填写"
+              )
+            }
+            wide
+          />
+        </dl>
+      </div>
+    );
+  }
+
+  if (selectedVolumePlan) {
+    return (
+      <div className="book-outline-detail__body">
+        <div className="book-outline-detail__title-row">
+          <Title level={4}>
+            {selectedVolumePlan.volumeIndex}. {selectedVolumePlan.title}
+          </Title>
+          <Tag>
+            {OUTLINE_PLAN_STATUS_LABELS[
+              selectedVolumePlan.status as SaveBookPlanDraftValues["status"]
+            ] ?? selectedVolumePlan.status}
+          </Tag>
+        </div>
+        <dl className="book-outline-detail-list">
+          <BookOutlineDetailItem
+            label="目标字数"
+            value={formatPlanWordCount(selectedVolumePlan.targetWordCount)}
+          />
+          <BookOutlineDetailItem label="叙事任务" value={selectedVolumePlan.purpose} wide />
+          <BookOutlineDetailItem label="核心冲突" value={selectedVolumePlan.majorConflict} wide />
+          <BookOutlineDetailItem
+            label="卷末高潮"
+            value={selectedVolumePlan.climax ?? "未填写"}
+            wide
+          />
+        </dl>
+      </div>
+    );
+  }
+
+  if (bookPlan) {
+    const mainPlotline = plotlines.find((plotline) => plotline.id === bookPlan.mainPlotlineId);
+
+    return (
+      <div className="book-outline-detail__body">
+        <div className="book-outline-detail__title-row">
+          <Title level={4}>{bookPlan.title}</Title>
+          <Tag>
+            {OUTLINE_PLAN_STATUS_LABELS[bookPlan.status as SaveBookPlanDraftValues["status"]] ??
+              bookPlan.status}
+          </Tag>
+        </div>
+        <dl className="book-outline-detail-list">
+          <BookOutlineDetailItem
+            label="目标字数"
+            value={formatPlanWordCount(bookPlan.targetWordCount)}
+          />
+          <BookOutlineDetailItem label="主故事线" value={mainPlotline?.name ?? "未关联"} />
+          <BookOutlineDetailItem label="核心承诺" value={bookPlan.corePromise} wide />
+          <BookOutlineDetailItem
+            label="结局方向"
+            value={bookPlan.endingDirection ?? "未填写"}
+            wide
+          />
+        </dl>
+      </div>
+    );
+  }
+
+  return (
+    <div className="book-outline-detail__empty">
+      <Empty description="暂无大纲规划" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+    </div>
+  );
+}
+
+function BookOutlineDetailItem({
+  label,
+  value,
+  wide = false,
+}: {
+  readonly label: string;
+  readonly value: ReactNode;
+  readonly wide?: boolean;
+}) {
+  return (
+    <div
+      className={
+        wide
+          ? "book-outline-detail-list__item book-outline-detail-list__item--wide"
+          : "book-outline-detail-list__item"
+      }
+    >
+      <dt>{label}</dt>
+      <dd>{isEmptyDetailValue(value) ? <Text type="secondary">未填写</Text> : value}</dd>
+    </div>
+  );
+}
+
+function BookPlanFieldsV2({
+  plotlineOptions,
+}: {
+  readonly plotlineOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+}) {
+  return (
+    <div className="book-outline-form-grid book-outline-form-grid--single">
+      <Form.Item
+        label="全书标题"
+        name="title"
+        rules={[{ message: "请输入全书标题", required: true }]}
+      >
+        <Input aria-label="全书标题" maxLength={120} placeholder="如：布衣天子全书大纲" />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={BOOK_PLAN_FIELD_HELP.targetWordCount.description}
+            label="目标字数"
+            question={BOOK_PLAN_FIELD_HELP.targetWordCount.question}
+          />
+        }
+        name="targetWordCount"
+        rules={[{ message: "请输入目标字数", required: true }]}
+      >
+        <InputNumber aria-label="目标字数" max={10_000_000} min={100_000} step={100_000} />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={BOOK_PLAN_FIELD_HELP.mainPlotlineId.description}
+            label="主故事线"
+            question={BOOK_PLAN_FIELD_HELP.mainPlotlineId.question}
+          />
+        }
+        name="mainPlotlineId"
+      >
+        <Select
+          allowClear
+          aria-label="主故事线"
+          options={[...plotlineOptions]}
+          placeholder="选择主故事线"
+        />
+      </Form.Item>
+      <Form.Item label="状态" name="status">
+        <Select aria-label="全书状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={BOOK_PLAN_FIELD_HELP.corePromise.description}
+            label="核心承诺"
+            question={BOOK_PLAN_FIELD_HELP.corePromise.question}
+          />
+        }
+        name="corePromise"
+        rules={[{ message: "请输入核心承诺", required: true }]}
+      >
+        <Input.TextArea
+          aria-label="核心承诺"
+          autoSize={{ maxRows: 6, minRows: 3 }}
+          maxLength={800}
+          placeholder="如：每卷一次公开胜利和一次隐藏损失。"
+          showCount
+        />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={BOOK_PLAN_FIELD_HELP.endingDirection.description}
+            label="结局方向"
+            question={BOOK_PLAN_FIELD_HELP.endingDirection.question}
+          />
+        }
+        name="endingDirection"
+      >
+        <Input.TextArea
+          aria-label="结局方向"
+          autoSize={{ maxRows: 5, minRows: 2 }}
+          maxLength={800}
+          placeholder="如：公开真相后，主角放弃旧身份。"
+          showCount
+        />
+      </Form.Item>
+    </div>
+  );
+}
+
+function VolumePlanFieldsV2({
+  bookPlanOptions,
+}: {
+  readonly bookPlanOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+}) {
+  return (
+    <div className="book-outline-form-grid book-outline-form-grid--single">
+      <Form.Item
+        label="所属全书规划"
+        name="bookPlanId"
+        rules={[{ message: "请先选择全书规划", required: true }]}
+      >
+        <Select
+          aria-label="所属全书规划"
+          disabled={bookPlanOptions.length === 0}
+          options={[...bookPlanOptions]}
+        />
+      </Form.Item>
+      <Form.Item
+        label="卷序号"
+        name="volumeIndex"
+        rules={[{ message: "请输入卷序号", required: true }]}
+      >
+        <InputNumber aria-label="卷序号" max={100} min={1} />
+      </Form.Item>
+      <Form.Item label="卷标题" name="title" rules={[{ message: "请输入卷标题", required: true }]}>
+        <Input aria-label="卷标题" maxLength={120} placeholder="如：第一卷 寒门入局" />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={VOLUME_PLAN_FIELD_HELP.targetWordCount.description}
+            label="卷目标字数"
+            question={VOLUME_PLAN_FIELD_HELP.targetWordCount.question}
+          />
+        }
+        name="targetWordCount"
+        rules={[{ message: "请输入卷目标字数", required: true }]}
+      >
+        <InputNumber aria-label="卷目标字数" max={2_000_000} min={10_000} step={10_000} />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={VOLUME_PLAN_FIELD_HELP.purpose.description}
+            label="卷叙事任务"
+            question={VOLUME_PLAN_FIELD_HELP.purpose.question}
+          />
+        }
+        name="purpose"
+        rules={[{ message: "请输入卷叙事任务", required: true }]}
+      >
+        <Input.TextArea
+          aria-label="卷叙事任务"
+          autoSize={{ maxRows: 5, minRows: 2 }}
+          maxLength={800}
+          placeholder="如：完成身份压迫、入局动机和第一次公开胜利。"
+          showCount
+        />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={VOLUME_PLAN_FIELD_HELP.majorConflict.description}
+            label="卷核心冲突"
+            question={VOLUME_PLAN_FIELD_HELP.majorConflict.question}
+          />
+        }
+        name="majorConflict"
+        rules={[{ message: "请输入卷核心冲突", required: true }]}
+      >
+        <Input.TextArea
+          aria-label="卷核心冲突"
+          autoSize={{ maxRows: 5, minRows: 2 }}
+          maxLength={800}
+          placeholder="如：寒门新官必须用民案撬动旧贵族封锁。"
+          showCount
+        />
+      </Form.Item>
+      <Form.Item
+        label={
+          <FieldLabelWithHelp
+            description={VOLUME_PLAN_FIELD_HELP.climax.description}
+            label="卷末高潮"
+            question={VOLUME_PLAN_FIELD_HELP.climax.question}
+          />
+        }
+        name="climax"
+      >
+        <Input.TextArea
+          aria-label="卷末高潮"
+          autoSize={{ maxRows: 5, minRows: 2 }}
+          maxLength={800}
+          placeholder="如：主角在公堂反杀第一次构陷。"
+          showCount
+        />
+      </Form.Item>
+      <Form.Item label="卷状态" name="status">
+        <Select aria-label="卷状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
+      </Form.Item>
+    </div>
+  );
+}
+
+function ArcPlanFieldsV2({
+  plotlineOptions,
+  volumePlanOptions,
+}: {
+  readonly plotlineOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+  readonly volumePlanOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+}) {
+  return (
+    <>
+      <Form.Item hidden name="characterArcId">
+        <Input aria-label="关联人物弧线" />
+      </Form.Item>
+      <div className="book-outline-form-grid book-outline-form-grid--single">
+        <Form.Item
+          label="所属卷规划"
+          name="volumePlanId"
+          rules={[{ message: "请先选择卷规划", required: true }]}
+        >
+          <Select
+            aria-label="所属卷规划"
+            disabled={volumePlanOptions.length === 0}
+            options={[...volumePlanOptions]}
+          />
+        </Form.Item>
+        <Form.Item
+          label="弧线序号"
+          name="arcIndex"
+          rules={[{ message: "请输入弧线序号", required: true }]}
+        >
+          <InputNumber aria-label="弧线序号" max={300} min={1} />
+        </Form.Item>
+        <Form.Item
+          label="弧线标题"
+          name="title"
+          rules={[{ message: "请输入弧线标题", required: true }]}
+        >
+          <Input aria-label="弧线标题" maxLength={120} placeholder="如：旧案破口" />
+        </Form.Item>
+        <Form.Item
+          label={
+            <FieldLabelWithHelp
+              description={ARC_PLAN_FIELD_HELP.plotlineId.description}
+              label="关联故事线"
+              question={ARC_PLAN_FIELD_HELP.plotlineId.question}
+            />
+          }
+          name="plotlineId"
+        >
+          <Select
+            allowClear
+            aria-label="关联故事线"
+            options={[...plotlineOptions]}
+            placeholder="选择故事线"
+          />
+        </Form.Item>
+        <Form.Item
+          label={
+            <FieldLabelWithHelp
+              description={ARC_PLAN_FIELD_HELP.chapterRange.description}
+              label="起始章节"
+              question={ARC_PLAN_FIELD_HELP.chapterRange.question}
+            />
+          }
+          name="startChapterIndex"
+        >
+          <InputNumber aria-label="起始章节" min={1} />
+        </Form.Item>
+        <Form.Item label="结束章节" name="endChapterIndex">
+          <InputNumber aria-label="结束章节" min={1} />
+        </Form.Item>
+        <Form.Item label="弧线状态" name="status">
+          <Select aria-label="弧线状态" options={OUTLINE_PLAN_STATUS_OPTIONS} />
+        </Form.Item>
+        <Form.Item
+          label={
+            <FieldLabelWithHelp
+              description={ARC_PLAN_FIELD_HELP.purpose.description}
+              label="弧线作用"
+              question={ARC_PLAN_FIELD_HELP.purpose.question}
+            />
+          }
+          name="purpose"
+          rules={[{ message: "请输入弧线作用", required: true }]}
+        >
+          <Input.TextArea
+            aria-label="弧线作用"
+            autoSize={{ maxRows: 5, minRows: 2 }}
+            maxLength={800}
+            placeholder="如：让主角从被动受害转为主动查案。"
+            showCount
+          />
+        </Form.Item>
+        <Form.Item
+          label={
+            <FieldLabelWithHelp
+              description={ARC_PLAN_FIELD_HELP.escalation.description}
+              label="升级链"
+              question={ARC_PLAN_FIELD_HELP.escalation.question}
+            />
+          }
+          name="escalationText"
+        >
+          <Input.TextArea
+            aria-label="升级链"
+            autoSize={{ maxRows: 8, minRows: 4 }}
+            maxLength={1200}
+            placeholder={"旧案开场\n证人失踪\n公堂反杀"}
+          />
+        </Form.Item>
+      </div>
+    </>
+  );
+}
+
+function BookOutlineModalActionsV2({
+  icon,
+  onCancel,
+  submitLabel,
+}: {
+  readonly icon?: ReactNode;
+  readonly submitLabel: string;
+  onCancel(): void;
+}) {
+  return (
+    <Space className="book-outline-modal-actions" wrap>
+      <Button
+        aria-label={submitLabel}
+        htmlType="submit"
+        icon={icon ?? <SaveOutlined />}
+        type="primary"
+      >
+        {submitLabel}
+      </Button>
+      <Button aria-label="取消" onClick={onCancel}>
+        取消
+      </Button>
+    </Space>
+  );
+}
+
+function formatChapterRange(plan: ArcPlanItem): string {
+  if (plan.startChapterIndex && plan.endChapterIndex) {
+    return `第 ${plan.startChapterIndex} - ${plan.endChapterIndex} 章`;
+  }
+  if (plan.startChapterIndex) {
+    return `第 ${plan.startChapterIndex} 章起`;
+  }
+  if (plan.endChapterIndex) {
+    return `截至第 ${plan.endChapterIndex} 章`;
+  }
+  return "未设置";
+}
+
+function isEmptyDetailValue(value: ReactNode): boolean {
+  return typeof value === "string" && value.trim().length === 0;
+}
+
+type PlotNodeSelection =
+  | { readonly eventId: string; readonly type: "event" }
+  | { readonly foreshadowingId: string; readonly type: "foreshadowing" };
+
+type PlotNodeModalState =
+  | { readonly eventId?: string; readonly type: "event" }
+  | { readonly foreshadowingId?: string; readonly type: "foreshadowing" }
+  | { readonly type: "assistant" };
+
 function PlotNodesModule({
   chapters,
   characters,
@@ -3517,32 +4433,72 @@ function PlotNodesModule({
   onCreateForeshadowing,
   onCreateStoryEvent,
   onPlanForeshadowing,
+  onSavePlotDebt,
   onUpdateForeshadowing,
   onUpdateStoryEvent,
+  plotDebts,
+  plotlines,
   storyEvents,
+  worldRules,
 }: {
   readonly chapters: readonly WorkbenchChapter[];
   readonly characters: readonly CharacterElement[];
   readonly foreshadowings: readonly ForeshadowingElement[];
+  readonly plotDebts: readonly PlotDebtItem[];
+  readonly plotlines: readonly PlotlineElement[];
   readonly storyEvents: readonly StoryEventElement[];
+  readonly worldRules: readonly WorldRuleElement[];
   onCreateForeshadowing(input: CreateForeshadowingValues): Promise<void> | void;
   onCreateStoryEvent(input: CreateStoryEventValues): Promise<void> | void;
   onPlanForeshadowing(input: PlanForeshadowingValues): Promise<void> | void;
+  onSavePlotDebt(input: SavePlotDebtValues): Promise<void> | void;
   onUpdateForeshadowing(input: UpdateForeshadowingValues): Promise<void> | void;
   onUpdateStoryEvent(input: UpdateStoryEventValues): Promise<void> | void;
 }) {
   const [eventForm] = Form.useForm<StoryEventFormValues>();
   const [foreshadowingForm] = Form.useForm<ForeshadowingFormValues>();
   const [assistantForm] = Form.useForm<PlanForeshadowingValues>();
-  const [selectedEventId, setSelectedEventId] = useState<string | undefined>(storyEvents[0]?.id);
-  const [selectedForeshadowingId, setSelectedForeshadowingId] = useState<string | undefined>(
-    foreshadowings[0]?.id,
+  const [plotDebtForm] = Form.useForm<PlotDebtFormValues>();
+  const [plotNodeModal, setPlotNodeModal] = useState<PlotNodeModalState | null>(null);
+  const [editingPlotDebtId, setEditingPlotDebtId] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<PlotNodeSelection | null>(() =>
+    storyEvents[0]
+      ? { eventId: storyEvents[0].id, type: "event" }
+      : foreshadowings[0]
+        ? { foreshadowingId: foreshadowings[0].id, type: "foreshadowing" }
+        : null,
   );
 
+  const effectiveSelection =
+    selectedTarget?.type === "event" &&
+    storyEvents.some((event) => event.id === selectedTarget.eventId)
+      ? selectedTarget
+      : selectedTarget?.type === "foreshadowing" &&
+          foreshadowings.some(
+            (foreshadowing) => foreshadowing.id === selectedTarget.foreshadowingId,
+          )
+        ? selectedTarget
+        : storyEvents[0]
+          ? { eventId: storyEvents[0].id, type: "event" }
+          : foreshadowings[0]
+            ? { foreshadowingId: foreshadowings[0].id, type: "foreshadowing" }
+            : null;
+  const selectedEventId =
+    effectiveSelection?.type === "event" ? effectiveSelection.eventId : undefined;
+  const selectedForeshadowingId =
+    effectiveSelection?.type === "foreshadowing" ? effectiveSelection.foreshadowingId : undefined;
   const selectedEvent = storyEvents.find((event) => event.id === selectedEventId);
   const selectedForeshadowing = foreshadowings.find(
     (foreshadowing) => foreshadowing.id === selectedForeshadowingId,
   );
+  const editingEvent =
+    plotNodeModal?.type === "event" && plotNodeModal.eventId
+      ? storyEvents.find((event) => event.id === plotNodeModal.eventId)
+      : undefined;
+  const editingForeshadowing =
+    plotNodeModal?.type === "foreshadowing" && plotNodeModal.foreshadowingId
+      ? foreshadowings.find((foreshadowing) => foreshadowing.id === plotNodeModal.foreshadowingId)
+      : undefined;
   const chapterOptions = useMemo(
     () => chapters.map((chapter) => ({ label: chapter.title, value: chapter.id })),
     [chapters],
@@ -3555,37 +4511,134 @@ function PlotNodesModule({
     () => storyEvents.map((event) => ({ label: event.title, value: event.id })),
     [storyEvents],
   );
+  const foreshadowingOptions = useMemo(
+    () =>
+      foreshadowings.map((foreshadowing) => ({
+        label: foreshadowing.title,
+        value: foreshadowing.id,
+      })),
+    [foreshadowings],
+  );
+  const plotlineOptions = useMemo(
+    () => plotlines.map((plotline) => ({ label: plotline.name, value: plotline.id })),
+    [plotlines],
+  );
+  const worldRuleOptions = useMemo(
+    () => worldRules.map((rule) => ({ label: rule.title, value: rule.id })),
+    [worldRules],
+  );
+  const editingPlotDebt =
+    editingPlotDebtId === null
+      ? null
+      : (plotDebts.find((plotDebt) => plotDebt.id === editingPlotDebtId) ?? null);
 
   useLayoutEffect(() => {
-    if (selectedEvent) {
-      eventForm.setFieldsValue(storyEventToFormValues(selectedEvent));
+    if (plotNodeModal?.type !== "event") {
+      return;
+    }
+    eventForm.resetFields();
+    eventForm.setFieldsValue(
+      editingEvent
+        ? storyEventToFormValues(editingEvent)
+        : {
+            ...STORY_EVENT_FORM_DEFAULTS,
+            chapterId: undefined,
+            description: "",
+            storyTime: "",
+            title: "",
+          },
+    );
+  }, [editingEvent, eventForm, plotNodeModal]);
+
+  useLayoutEffect(() => {
+    if (plotNodeModal?.type !== "foreshadowing") {
+      return;
+    }
+    foreshadowingForm.resetFields();
+    foreshadowingForm.setFieldsValue(
+      editingForeshadowing
+        ? foreshadowingToFormValues(editingForeshadowing)
+        : {
+            ...FORESHADOWING_FORM_DEFAULTS,
+            description: "",
+            payoffEventId: undefined,
+            payoffExpectation: "",
+            seedEventId: undefined,
+            title: "",
+          },
+    );
+  }, [editingForeshadowing, foreshadowingForm, plotNodeModal]);
+
+  useLayoutEffect(() => {
+    if (plotNodeModal?.type !== "assistant") {
+      return;
+    }
+    assistantForm.resetFields();
+  }, [assistantForm, plotNodeModal]);
+
+  const closePlotNodeModal = () => setPlotNodeModal(null);
+  const closePlotDebtModal = () => {
+    setEditingPlotDebtId(null);
+    plotDebtForm.resetFields();
+    plotDebtForm.setFieldsValue(PLOT_DEBT_FORM_DEFAULTS);
+  };
+
+  useLayoutEffect(() => {
+    if (editingPlotDebtId === null) {
+      return;
+    }
+    plotDebtForm.resetFields();
+    plotDebtForm.setFieldsValue(
+      editingPlotDebt ? plotDebtToFormValues(editingPlotDebt) : PLOT_DEBT_FORM_DEFAULTS,
+    );
+  }, [editingPlotDebt, editingPlotDebtId, plotDebtForm]);
+
+  const openCreatePlotDebtModal = () => {
+    plotDebtForm.resetFields();
+    plotDebtForm.setFieldsValue(PLOT_DEBT_FORM_DEFAULTS);
+    setEditingPlotDebtId("");
+  };
+
+  const openEditPlotDebtModal = (plotDebt: PlotDebtItem) => {
+    setEditingPlotDebtId(plotDebt.id);
+  };
+
+  const handleSaveStoryEvent = async (values: StoryEventFormValues) => {
+    const normalized = normalizeStoryEventFormValues(values);
+
+    if (plotNodeModal?.type === "event" && plotNodeModal.eventId) {
+      await onUpdateStoryEvent({
+        patch: storyEventFormValuesToPatch(normalized),
+        storyEventId: plotNodeModal.eventId,
+      });
+      closePlotNodeModal();
       return;
     }
 
-    eventForm.setFieldsValue({
-      ...STORY_EVENT_FORM_DEFAULTS,
-      chapterId: undefined,
-      description: "",
-      storyTime: "",
-      title: "",
-    });
-  }, [eventForm, selectedEvent]);
+    await onCreateStoryEvent(storyEventFormValuesToCreateInput(normalized));
+    closePlotNodeModal();
+  };
 
-  useLayoutEffect(() => {
-    if (selectedForeshadowing) {
-      foreshadowingForm.setFieldsValue(foreshadowingToFormValues(selectedForeshadowing));
+  const handleSaveForeshadowing = async (values: ForeshadowingFormValues) => {
+    const normalized = normalizeForeshadowingFormValues(values);
+
+    if (plotNodeModal?.type === "foreshadowing" && plotNodeModal.foreshadowingId) {
+      await onUpdateForeshadowing({
+        foreshadowingId: plotNodeModal.foreshadowingId,
+        patch: foreshadowingFormValuesToPatch(normalized),
+      });
+      closePlotNodeModal();
       return;
     }
 
-    foreshadowingForm.setFieldsValue({
-      ...FORESHADOWING_FORM_DEFAULTS,
-      description: "",
-      payoffEventId: undefined,
-      payoffExpectation: "",
-      seedEventId: undefined,
-      title: "",
-    });
-  }, [foreshadowingForm, selectedForeshadowing]);
+    await onCreateForeshadowing(foreshadowingFormValuesToCreateInput(normalized));
+    closePlotNodeModal();
+  };
+
+  const handleSavePlotDebt = async (values: PlotDebtFormValues) => {
+    await onSavePlotDebt(plotDebtFormValuesToSaveInput(values, editingPlotDebt?.id));
+    closePlotDebtModal();
+  };
 
   return (
     <div className="module-stack plot-node-design-workspace">
@@ -3607,7 +4660,8 @@ function PlotNodesModule({
             <PlotNodeEventList
               events={storyEvents}
               selectedEventId={selectedEventId}
-              onSelectEvent={setSelectedEventId}
+              onEditEvent={(eventId) => setPlotNodeModal({ eventId, type: "event" })}
+              onSelectEvent={(eventId) => setSelectedTarget({ eventId, type: "event" })}
             />
           </div>
           <div className="plot-node-roster-group">
@@ -3618,344 +4672,232 @@ function PlotNodesModule({
             <PlotNodeForeshadowingList
               foreshadowings={foreshadowings}
               selectedForeshadowingId={selectedForeshadowingId}
-              onSelectForeshadowing={setSelectedForeshadowingId}
+              onEditForeshadowing={(foreshadowingId) =>
+                setPlotNodeModal({ foreshadowingId, type: "foreshadowing" })
+              }
+              onSelectForeshadowing={(foreshadowingId) =>
+                setSelectedTarget({ foreshadowingId, type: "foreshadowing" })
+              }
             />
           </div>
         </section>
 
-        <div className="plot-node-editor-stack">
-          <section
-            aria-label="剧情节点档案表单"
-            className="plot-node-design-pane plot-node-event-editor"
-          >
-            <header className="plot-node-design-pane__header">
-              <div>
-                <Title level={5}>剧情节点档案</Title>
-                <Text type="secondary">事件的冲突、信息增量和情绪转折。</Text>
-              </div>
+        <section
+          aria-label="剧情节点详情面板"
+          className="plot-node-design-pane plot-node-design-detail"
+        >
+          <header className="plot-node-design-pane__header">
+            <div>
+              <Title level={5}>{selectedForeshadowing ? "伏笔详情" : "剧情节点详情"}</Title>
+              <Text type="secondary">先浏览节点和伏笔，再进入弹窗处理创建或编辑。</Text>
+            </div>
+            <Space size={8} wrap>
               <Button
                 aria-label="新建剧情节点"
                 icon={<PlusOutlined />}
-                onClick={() => setSelectedEventId(undefined)}
+                onClick={() => setPlotNodeModal({ type: "event" })}
               >
-                新建
+                新建剧情节点
               </Button>
-            </header>
-            <Form
-              name="storyEventForm"
-              form={eventForm}
-              initialValues={STORY_EVENT_FORM_DEFAULTS}
-              layout="vertical"
-              onFinish={async (values) => {
-                const normalized = normalizeStoryEventFormValues(values);
-
-                if (selectedEvent) {
-                  await onUpdateStoryEvent({
-                    patch: storyEventFormValuesToPatch(normalized),
-                    storyEventId: selectedEvent.id,
-                  });
-                  return;
-                }
-
-                await onCreateStoryEvent(storyEventFormValuesToCreateInput(normalized));
-                eventForm.resetFields();
-                eventForm.setFieldsValue({
-                  ...STORY_EVENT_FORM_DEFAULTS,
-                  chapterId: undefined,
-                  description: "",
-                  storyTime: "",
-                  title: "",
-                });
-              }}
-            >
-              <div className="plot-node-form-grid">
-                <Form.Item
-                  label={characterFieldLabel("节点标题", "用一句话写清读者会如何记住这个事件。")}
-                  name="title"
-                  rules={[{ required: true, message: "请输入节点标题" }]}
-                >
-                  <Input aria-label="节点标题" placeholder="如：旧信出现" />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "节点类型",
-                    "选择事件在故事里的功能：发现、冲突、揭示、决定、失败、胜利等。",
-                  )}
-                  name="eventType"
-                >
-                  <Select aria-label="节点类型" options={[...EVENT_TYPE_OPTIONS]} />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel("事件状态", "区分草稿、已规划、已写入正史或归档。")}
-                  name="status"
-                >
-                  <Select aria-label="事件状态" options={[...STORY_EVENT_STATUS_OPTIONS]} />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "所在章节",
-                    "可选。用于把节点落到具体章节，方便后续章纲引用。",
-                  )}
-                  name="chapterId"
-                >
-                  <Select
-                    allowClear
-                    aria-label="所在章节"
-                    options={chapterOptions}
-                    placeholder="未指定"
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "故事时间",
-                    "写故事内时间，例如“第 3 章夜雨”或“十年前”。",
-                  )}
-                  name="storyTime"
-                >
-                  <Input aria-label="故事时间" placeholder="如：第 3 章夜雨" />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel("涉及角色", "选择实际参与或被这个事件影响的角色。")}
-                  name="participants"
-                >
-                  <Select
-                    allowClear
-                    aria-label="涉及角色"
-                    mode="multiple"
-                    options={characterOptions}
-                    placeholder="未指定"
-                  />
-                </Form.Item>
-                <Form.Item
-                  className="plot-node-form-grid__wide"
-                  label={characterFieldLabel(
-                    "节点描述",
-                    "写清事件事实、冲突变化、读者新获得的信息和人物状态变化。",
-                  )}
-                  name="description"
-                  rules={[{ required: true, message: "请输入节点描述" }]}
-                >
-                  <Input.TextArea
-                    aria-label="节点描述"
-                    autoSize={{ maxRows: 6, minRows: 4 }}
-                    maxLength={500}
-                    showCount
-                  />
-                </Form.Item>
-              </div>
-              <Space className="plot-node-form-actions" wrap>
-                <Button
-                  aria-label={selectedEvent ? "保存剧情节点" : "创建剧情节点"}
-                  htmlType="submit"
-                  icon={selectedEvent ? <SaveOutlined /> : <PlusOutlined />}
-                  type="primary"
-                >
-                  {selectedEvent ? "保存剧情节点" : "创建剧情节点"}
-                </Button>
-              </Space>
-            </Form>
-          </section>
-
-          <section
-            aria-label="伏笔回收表单"
-            className="plot-node-design-pane plot-node-foreshadowing-editor"
-          >
-            <header className="plot-node-design-pane__header">
-              <div>
-                <Title level={5}>伏笔 / 回收档案</Title>
-                <Text type="secondary">埋什么、在哪里埋、用什么代价回收。</Text>
-              </div>
               <Button
                 aria-label="新建伏笔"
                 icon={<PlusOutlined />}
-                onClick={() => setSelectedForeshadowingId(undefined)}
+                onClick={() => setPlotNodeModal({ type: "foreshadowing" })}
               >
-                新建
+                新建伏笔
               </Button>
-            </header>
-            <Form
-              name="foreshadowingForm"
-              form={foreshadowingForm}
-              initialValues={FORESHADOWING_FORM_DEFAULTS}
-              layout="vertical"
-              onFinish={async (values) => {
-                const normalized = normalizeForeshadowingFormValues(values);
-
-                if (selectedForeshadowing) {
-                  await onUpdateForeshadowing({
-                    foreshadowingId: selectedForeshadowing.id,
-                    patch: foreshadowingFormValuesToPatch(normalized),
-                  });
-                  return;
-                }
-
-                await onCreateForeshadowing(foreshadowingFormValuesToCreateInput(normalized));
-                foreshadowingForm.resetFields();
-                foreshadowingForm.setFieldsValue({
-                  ...FORESHADOWING_FORM_DEFAULTS,
-                  description: "",
-                  payoffEventId: undefined,
-                  payoffExpectation: "",
-                  seedEventId: undefined,
-                  title: "",
-                });
-              }}
-            >
-              <div className="plot-node-form-grid">
-                <Form.Item
-                  label={characterFieldLabel("伏笔标题", "给这个伏笔一个便于长期追踪的名称。")}
-                  name="title"
-                  rules={[{ required: true, message: "请输入伏笔标题" }]}
-                >
-                  <Input aria-label="伏笔标题" placeholder="如：信纸水印" />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "重要性",
-                    "1 到 5 级，数值越高越需要在主线中明确回收。",
-                  )}
-                  name="importance"
-                >
-                  <InputNumber aria-label="伏笔重要性" max={5} min={1} />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel("伏笔状态", "已埋设、待回收、已回收或归档。")}
-                  name="status"
-                >
-                  <Select aria-label="伏笔状态" options={[...FORESHADOWING_STATUS_OPTIONS]} />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "埋设事件",
-                    "这个伏笔第一次出现或被读者感知的剧情节点。",
-                  )}
-                  name="seedEventId"
-                >
-                  <Select
-                    allowClear
-                    aria-label="埋设事件"
-                    options={storyEventOptions}
-                    placeholder="未指定"
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={characterFieldLabel(
-                    "回收事件",
-                    "这个伏笔最终解释、兑现或反转的剧情节点。",
-                  )}
-                  name="payoffEventId"
-                >
-                  <Select
-                    allowClear
-                    aria-label="回收事件"
-                    options={storyEventOptions}
-                    placeholder="未指定"
-                  />
-                </Form.Item>
-                <Form.Item
-                  className="plot-node-form-grid__wide"
-                  label={characterFieldLabel(
-                    "伏笔内容",
-                    "写读者当下能看到的表层信息，避免提前解释谜底。",
-                  )}
-                  name="description"
-                  rules={[{ required: true, message: "请输入伏笔内容" }]}
-                >
-                  <Input.TextArea
-                    aria-label="伏笔内容"
-                    autoSize={{ maxRows: 5, minRows: 3 }}
-                    maxLength={500}
-                    showCount
-                  />
-                </Form.Item>
-                <Form.Item
-                  className="plot-node-form-grid__wide"
-                  label={characterFieldLabel(
-                    "回收方案",
-                    "写清什么时候回收、回收后改变什么信息或人物处境。",
-                  )}
-                  name="payoffExpectation"
-                >
-                  <Input.TextArea
-                    aria-label="回收方案"
-                    autoSize={{ maxRows: 5, minRows: 3 }}
-                    maxLength={500}
-                    showCount
-                  />
-                </Form.Item>
-              </div>
-              <Space className="plot-node-form-actions" wrap>
-                <Button
-                  aria-label={selectedForeshadowing ? "保存伏笔" : "创建伏笔"}
-                  htmlType="submit"
-                  icon={selectedForeshadowing ? <SaveOutlined /> : <PlusOutlined />}
-                  type="primary"
-                >
-                  {selectedForeshadowing ? "保存伏笔" : "创建伏笔"}
-                </Button>
-              </Space>
-            </Form>
-          </section>
-        </div>
-      </div>
-
-      <section
-        aria-label="AI 回收辅助"
-        className="plot-node-design-pane plot-node-design-assistant"
-      >
-        <header className="plot-node-design-pane__header">
-          <div>
-            <Title level={5}>AI 回收辅助</Title>
-            <Text type="secondary">基于当前节点、伏笔和上下文生成回收建议。</Text>
-          </div>
-        </header>
-        <Form
-          form={assistantForm}
-          layout="vertical"
-          onFinish={async (values) => {
-            const chapterId = trimOptionalText(values.chapterId);
-            await onPlanForeshadowing(chapterId === undefined ? {} : { chapterId });
-          }}
-        >
-          <div className="plot-node-ai-grid">
-            <Form.Item
-              label={characterFieldLabel(
-                "章节范围",
-                "可选。指定章节后，AI 会优先为这一段设计埋设与回收。",
-              )}
-              name="chapterId"
-            >
-              <Select
-                allowClear
-                aria-label="章节范围"
-                options={chapterOptions}
-                placeholder="全书范围"
-              />
-            </Form.Item>
-            <Form.Item className="plot-node-ai-grid__actions" label=" ">
               <Button
-                aria-label="生成伏笔回收方案"
-                htmlType="submit"
+                aria-label="AI 规划回收"
                 icon={<ThunderboltOutlined />}
+                onClick={() => setPlotNodeModal({ type: "assistant" })}
                 type="primary"
               >
-                生成伏笔回收方案
+                AI 规划回收
               </Button>
-            </Form.Item>
-          </div>
-        </Form>
-      </section>
+              <Button
+                aria-label="编辑当前节点或伏笔"
+                disabled={!selectedEvent && !selectedForeshadowing}
+                icon={<EditOutlined />}
+                onClick={() => {
+                  if (selectedEvent) {
+                    setPlotNodeModal({ eventId: selectedEvent.id, type: "event" });
+                    return;
+                  }
+                  if (selectedForeshadowing) {
+                    setPlotNodeModal({
+                      foreshadowingId: selectedForeshadowing.id,
+                      type: "foreshadowing",
+                    });
+                  }
+                }}
+              >
+                编辑
+              </Button>
+            </Space>
+          </header>
+          <PlotNodeDetailBody
+            chapters={chapters}
+            characters={characters}
+            foreshadowings={foreshadowings}
+            selectedEvent={selectedEvent}
+            selectedForeshadowing={selectedForeshadowing}
+            storyEvents={storyEvents}
+          />
+        </section>
+      </div>
+
+      <PlotDebtLedger
+        plotDebts={plotDebts}
+        onCreatePlotDebt={openCreatePlotDebtModal}
+        onEditPlotDebt={openEditPlotDebtModal}
+      />
+
+      {plotNodeModal?.type === "event" ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closePlotNodeModal}
+          open
+          title={
+            plotNodeModal.eventId && editingEvent
+              ? `编辑剧情节点：${editingEvent.title}`
+              : "新建剧情节点"
+          }
+          width={760}
+        >
+          <Form
+            form={eventForm}
+            initialValues={STORY_EVENT_FORM_DEFAULTS}
+            layout="vertical"
+            onFinish={handleSaveStoryEvent}
+          >
+            <PlotNodeEventFields
+              chapterOptions={chapterOptions}
+              characterOptions={characterOptions}
+            />
+            <PlotNodeModalActions
+              icon={plotNodeModal.eventId ? <SaveOutlined /> : <PlusOutlined />}
+              submitLabel={plotNodeModal.eventId ? "保存剧情节点" : "创建剧情节点"}
+              onCancel={closePlotNodeModal}
+            />
+          </Form>
+        </Modal>
+      ) : null}
+
+      {plotNodeModal?.type === "foreshadowing" ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closePlotNodeModal}
+          open
+          title={
+            plotNodeModal.foreshadowingId && editingForeshadowing
+              ? `编辑伏笔：${editingForeshadowing.title}`
+              : "新建伏笔"
+          }
+          width={760}
+        >
+          <Form
+            form={foreshadowingForm}
+            initialValues={FORESHADOWING_FORM_DEFAULTS}
+            layout="vertical"
+            onFinish={handleSaveForeshadowing}
+          >
+            <PlotNodeForeshadowingFields storyEventOptions={storyEventOptions} />
+            <PlotNodeModalActions
+              icon={plotNodeModal.foreshadowingId ? <SaveOutlined /> : <PlusOutlined />}
+              submitLabel={plotNodeModal.foreshadowingId ? "保存伏笔" : "创建伏笔"}
+              onCancel={closePlotNodeModal}
+            />
+          </Form>
+        </Modal>
+      ) : null}
+
+      {plotNodeModal?.type === "assistant" ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closePlotNodeModal}
+          open
+          title="AI 规划回收"
+          width={640}
+        >
+          <Form
+            form={assistantForm}
+            layout="vertical"
+            onFinish={async (values) => {
+              const chapterId = trimOptionalText(values.chapterId);
+              await onPlanForeshadowing(chapterId === undefined ? {} : { chapterId });
+              closePlotNodeModal();
+            }}
+          >
+            <div className="plot-node-form-grid plot-node-form-grid--single">
+              <Form.Item
+                label={characterFieldLabel(
+                  "章节范围",
+                  "可选。指定章节后，AI 会优先为这一段设计埋设与回收。",
+                )}
+                name="chapterId"
+              >
+                <Select
+                  allowClear
+                  aria-label="章节范围"
+                  options={chapterOptions}
+                  placeholder="全书范围"
+                />
+              </Form.Item>
+            </div>
+            <PlotNodeModalActions
+              icon={<ThunderboltOutlined />}
+              submitLabel="生成伏笔回收方案"
+              onCancel={closePlotNodeModal}
+            />
+          </Form>
+        </Modal>
+      ) : null}
+
+      {editingPlotDebtId !== null ? (
+        <Modal
+          className="creative-form-modal"
+          footer={null}
+          onCancel={closePlotDebtModal}
+          open
+          title={editingPlotDebt ? `编辑剧情债：${editingPlotDebt.title}` : "新增剧情债"}
+          width={820}
+        >
+          <Form
+            form={plotDebtForm}
+            initialValues={PLOT_DEBT_FORM_DEFAULTS}
+            layout="vertical"
+            onFinish={handleSavePlotDebt}
+          >
+            <PlotDebtFields
+              characterOptions={characterOptions}
+              foreshadowingOptions={foreshadowingOptions}
+              plotlineOptions={plotlineOptions}
+              worldRuleOptions={worldRuleOptions}
+            />
+            <PlotNodeModalActions
+              icon={editingPlotDebt ? <SaveOutlined /> : <PlusOutlined />}
+              submitLabel={editingPlotDebt ? "保存剧情债" : "创建剧情债"}
+              onCancel={closePlotDebtModal}
+            />
+          </Form>
+        </Modal>
+      ) : null}
     </div>
   );
 }
 
 function PlotNodeEventList({
   events,
+  onEditEvent,
   onSelectEvent,
   selectedEventId,
 }: {
   readonly events: readonly StoryEventElement[];
   readonly selectedEventId: string | undefined;
+  onEditEvent(eventId: string): void;
   onSelectEvent(eventId: string): void;
 }) {
   if (events.length === 0) {
@@ -3966,27 +4908,38 @@ function PlotNodeEventList({
     <ul className="plot-node-roster">
       {events.map((event) => (
         <li key={event.id}>
-          <button
-            aria-label={`编辑剧情节点 ${event.title}`}
+          <article
             className={[
               "plot-node-roster__item",
               selectedEventId === event.id ? "plot-node-roster__item--selected" : "",
             ]
               .filter(Boolean)
               .join(" ")}
-            type="button"
-            onClick={() => onSelectEvent(event.id)}
           >
-            <span className="plot-node-roster__title-row">
-              <Text strong>{event.title}</Text>
-              <Text type="secondary">{getStoryEventStatusLabel(event.status)}</Text>
-            </span>
-            {event.summary ? <Text type="secondary">{event.summary}</Text> : null}
-            <Space size={6} wrap>
-              <Tag>{getStoryEventTypeLabel(event.eventType)}</Tag>
-              {event.storyTime ? <Tag>{event.storyTime}</Tag> : null}
-            </Space>
-          </button>
+            <button
+              aria-label={`查看剧情节点 ${event.title}`}
+              className="plot-node-roster__select"
+              type="button"
+              onClick={() => onSelectEvent(event.id)}
+            >
+              <span className="plot-node-roster__title-row">
+                <Text strong>{event.title}</Text>
+                <Text type="secondary">{getStoryEventStatusLabel(event.status)}</Text>
+              </span>
+              {event.summary ? <Text type="secondary">{event.summary}</Text> : null}
+              <Space size={6} wrap>
+                <Tag>{getStoryEventTypeLabel(event.eventType)}</Tag>
+                {event.storyTime ? <Tag>{event.storyTime}</Tag> : null}
+              </Space>
+            </button>
+            <Button
+              aria-label={`编辑剧情节点 ${event.title}`}
+              icon={<EditOutlined />}
+              size="small"
+              type="text"
+              onClick={() => onEditEvent(event.id)}
+            />
+          </article>
         </li>
       ))}
     </ul>
@@ -3995,11 +4948,13 @@ function PlotNodeEventList({
 
 function PlotNodeForeshadowingList({
   foreshadowings,
+  onEditForeshadowing,
   onSelectForeshadowing,
   selectedForeshadowingId,
 }: {
   readonly foreshadowings: readonly ForeshadowingElement[];
   readonly selectedForeshadowingId: string | undefined;
+  onEditForeshadowing(foreshadowingId: string): void;
   onSelectForeshadowing(foreshadowingId: string): void;
 }) {
   if (foreshadowings.length === 0) {
@@ -4010,8 +4965,7 @@ function PlotNodeForeshadowingList({
     <ul className="plot-node-roster">
       {foreshadowings.map((foreshadowing) => (
         <li key={foreshadowing.id}>
-          <button
-            aria-label={`编辑伏笔 ${foreshadowing.title}`}
+          <article
             className={[
               "plot-node-roster__item",
               selectedForeshadowingId === foreshadowing.id
@@ -4020,23 +4974,553 @@ function PlotNodeForeshadowingList({
             ]
               .filter(Boolean)
               .join(" ")}
-            type="button"
-            onClick={() => onSelectForeshadowing(foreshadowing.id)}
           >
-            <span className="plot-node-roster__title-row">
-              <Text strong>{foreshadowing.title}</Text>
-              <Text type="secondary">{getForeshadowingStatusLabel(foreshadowing.status)}</Text>
-            </span>
-            {foreshadowing.seedText ? <Text type="secondary">{foreshadowing.seedText}</Text> : null}
-            <Space size={6} wrap>
-              <Tag>重要性 {normalizeForeshadowingImportance(foreshadowing.importance)}</Tag>
-              {getForeshadowingEventId(foreshadowing, "payoff") ? <Tag>已有回收点</Tag> : null}
-            </Space>
-          </button>
+            <button
+              aria-label={`查看伏笔 ${foreshadowing.title}`}
+              className="plot-node-roster__select"
+              type="button"
+              onClick={() => onSelectForeshadowing(foreshadowing.id)}
+            >
+              <span className="plot-node-roster__title-row">
+                <Text strong>{foreshadowing.title}</Text>
+                <Text type="secondary">{getForeshadowingStatusLabel(foreshadowing.status)}</Text>
+              </span>
+              {foreshadowing.seedText ? (
+                <Text type="secondary">{foreshadowing.seedText}</Text>
+              ) : null}
+              <Space size={6} wrap>
+                <Tag>重要性 {normalizeForeshadowingImportance(foreshadowing.importance)}</Tag>
+                {getForeshadowingEventId(foreshadowing, "payoff") ? <Tag>已有回收点</Tag> : null}
+              </Space>
+            </button>
+            <Button
+              aria-label={`编辑伏笔 ${foreshadowing.title}`}
+              icon={<EditOutlined />}
+              size="small"
+              type="text"
+              onClick={() => onEditForeshadowing(foreshadowing.id)}
+            />
+          </article>
         </li>
       ))}
     </ul>
   );
+}
+
+function PlotNodeDetailBody({
+  chapters,
+  characters,
+  foreshadowings,
+  selectedEvent,
+  selectedForeshadowing,
+  storyEvents,
+}: {
+  readonly chapters: readonly WorkbenchChapter[];
+  readonly characters: readonly CharacterElement[];
+  readonly foreshadowings: readonly ForeshadowingElement[];
+  readonly selectedEvent: StoryEventElement | undefined;
+  readonly selectedForeshadowing: ForeshadowingElement | undefined;
+  readonly storyEvents: readonly StoryEventElement[];
+}) {
+  if (selectedEvent) {
+    const chapterTitle =
+      chapters.find((chapter) => chapter.id === selectedEvent.chapterId)?.title ?? "未指定";
+    const participantNames = (selectedEvent.participants ?? [])
+      .filter((participant) => participant.entityType === "character")
+      .map(
+        (participant) =>
+          characters.find((character) => character.id === participant.entityId)?.name ??
+          participant.entityId,
+      )
+      .join("、");
+    const relatedForeshadowings = foreshadowings.filter((foreshadowing) =>
+      foreshadowing.links?.some((link) => link.eventId === selectedEvent.id),
+    );
+
+    return (
+      <div className="plot-node-detail">
+        <div className="plot-node-detail__title-row">
+          <div>
+            <Title level={4}>{selectedEvent.title}</Title>
+            <Space size={6} wrap>
+              <Tag>{getStoryEventTypeLabel(selectedEvent.eventType)}</Tag>
+              <Tag>{getStoryEventStatusLabel(selectedEvent.status)}</Tag>
+            </Space>
+          </div>
+        </div>
+        <dl className="plot-node-detail-list">
+          <PlotNodeDetailItem label="节点描述" value={selectedEvent.summary} wide />
+          <PlotNodeDetailItem label="故事时间" value={selectedEvent.storyTime ?? ""} />
+          <PlotNodeDetailItem label="所在章节" value={chapterTitle} />
+          <PlotNodeDetailItem label="涉及角色" value={participantNames} />
+          <PlotNodeDetailItem
+            label="关联伏笔"
+            value={
+              relatedForeshadowings.length > 0 ? (
+                <Space size={[6, 6]} wrap>
+                  {relatedForeshadowings.map((foreshadowing) => (
+                    <Tag key={foreshadowing.id}>{foreshadowing.title}</Tag>
+                  ))}
+                </Space>
+              ) : (
+                ""
+              )
+            }
+            wide
+          />
+        </dl>
+      </div>
+    );
+  }
+
+  if (selectedForeshadowing) {
+    return (
+      <div className="plot-node-detail">
+        <div className="plot-node-detail__title-row">
+          <div>
+            <Title level={4}>{selectedForeshadowing.title}</Title>
+            <Space size={6} wrap>
+              <Tag>{getForeshadowingStatusLabel(selectedForeshadowing.status)}</Tag>
+              <Tag>重要性 {normalizeForeshadowingImportance(selectedForeshadowing.importance)}</Tag>
+            </Space>
+          </div>
+        </div>
+        <dl className="plot-node-detail-list">
+          <PlotNodeDetailItem label="伏笔内容" value={selectedForeshadowing.seedText ?? ""} wide />
+          <PlotNodeDetailItem
+            label="埋设事件"
+            value={getLinkedStoryEventTitle(selectedForeshadowing, storyEvents, "seed")}
+          />
+          <PlotNodeDetailItem
+            label="回收事件"
+            value={getLinkedStoryEventTitle(selectedForeshadowing, storyEvents, "payoff")}
+          />
+          <PlotNodeDetailItem
+            label="回收方案"
+            value={selectedForeshadowing.payoffText ?? ""}
+            wide
+          />
+        </dl>
+      </div>
+    );
+  }
+
+  return (
+    <div className="plot-node-detail__empty">
+      <Empty description="暂无剧情节点或伏笔" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+    </div>
+  );
+}
+
+function PlotDebtLedger({
+  onCreatePlotDebt,
+  onEditPlotDebt,
+  plotDebts,
+}: {
+  readonly plotDebts: readonly PlotDebtItem[];
+  onCreatePlotDebt(): void;
+  onEditPlotDebt(plotDebt: PlotDebtItem): void;
+}) {
+  return (
+    <section aria-label="剧情债账本" className="plot-debt-ledger">
+      <header className="plot-debt-ledger__header">
+        <div>
+          <Title level={5}>剧情债账本</Title>
+          <Text type="secondary">记录读者承诺、谜题和关系冲突，防止长篇连载中遗忘埋设与回收。</Text>
+        </div>
+        <Space size={8} wrap>
+          <Text type="secondary">{plotDebts.length} 条</Text>
+          <Button
+            aria-label="新增剧情债"
+            icon={<PlusOutlined />}
+            onClick={onCreatePlotDebt}
+            type="primary"
+          >
+            新增剧情债
+          </Button>
+        </Space>
+      </header>
+      {plotDebts.length === 0 ? (
+        <Empty description="暂无剧情债" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <ul className="plot-debt-list">
+          {plotDebts.map((plotDebt) => (
+            <li key={plotDebt.id}>
+              <article className="plot-debt-list__item">
+                <div className="plot-debt-list__main">
+                  <span className="plot-debt-list__title-row">
+                    <Text strong>{plotDebt.title}</Text>
+                    <Text type="secondary">{getPlotDebtStatusLabel(plotDebt.status)}</Text>
+                  </span>
+                  <Text type="secondary">{plotDebt.promise}</Text>
+                  <Space size={6} wrap>
+                    <Tag>{getPlotDebtTypeLabel(plotDebt.debtType)}</Tag>
+                    <Tag color={getPlotDebtRiskColor(plotDebt.riskLevel)}>
+                      风险 {getPlotDebtRiskLevelLabel(plotDebt.riskLevel)}
+                    </Tag>
+                    {plotDebt.seedChapterIndex ? <Tag>埋设 {plotDebt.seedChapterIndex}</Tag> : null}
+                    {plotDebt.expectedPayoffChapterIndex ? (
+                      <Tag>预期回收 {plotDebt.expectedPayoffChapterIndex}</Tag>
+                    ) : null}
+                  </Space>
+                </div>
+                <Button
+                  aria-label={`编辑剧情债 ${plotDebt.title}`}
+                  icon={<EditOutlined />}
+                  onClick={() => onEditPlotDebt(plotDebt)}
+                >
+                  编辑
+                </Button>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function PlotNodeDetailItem({
+  label,
+  value,
+  wide = false,
+}: {
+  readonly label: string;
+  readonly value: ReactNode;
+  readonly wide?: boolean;
+}) {
+  return (
+    <div
+      className={
+        wide
+          ? "plot-node-detail-list__item plot-node-detail-list__item--wide"
+          : "plot-node-detail-list__item"
+      }
+    >
+      <dt>{label}</dt>
+      <dd>{isEmptyDetailValue(value) ? <Text type="secondary">未填写</Text> : value}</dd>
+    </div>
+  );
+}
+
+function PlotDebtFields({
+  characterOptions,
+  foreshadowingOptions,
+  plotlineOptions,
+  worldRuleOptions,
+}: {
+  readonly characterOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+  readonly foreshadowingOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+  readonly plotlineOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+  readonly worldRuleOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+}) {
+  return (
+    <div className="plot-node-form-grid">
+      <Form.Item
+        label={characterFieldLabel("剧情债标题", "用短名称记录这个待兑现事项，便于长期追踪。")}
+        name="title"
+        rules={[
+          { message: "请输入剧情债标题", required: true },
+          { max: 120, message: "剧情债标题最多 120 字" },
+        ]}
+      >
+        <Input aria-label="剧情债标题" placeholder="如：炉芯热信号追踪者" />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel(
+          "剧情债类型",
+          "选择这条债的本质：伏笔、谜题、读者承诺、关系冲突或规则代价。",
+        )}
+        name="debtType"
+      >
+        <Select aria-label="剧情债类型" options={[...PLOT_DEBT_TYPE_OPTIONS]} />
+      </Form.Item>
+      <Form.Item label="状态" name="status">
+        <Select aria-label="剧情债状态" options={[...PLOT_DEBT_STATUS_OPTIONS]} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("风险等级", "越高代表越容易造成断线、遗忘、重复或回收不充分。")}
+        name="riskLevel"
+      >
+        <Select aria-label="风险等级" options={[...PLOT_DEBT_RISK_LEVEL_OPTIONS]} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("埋设章节", "第一次让读者感知这个承诺或问题的章节序号。")}
+        name="seedChapterIndex"
+      >
+        <InputNumber aria-label="埋设章节" min={1} precision={0} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("预期回收章节", "预计解释、兑现或反转这条债的章节序号。")}
+        name="expectedPayoffChapterIndex"
+      >
+        <InputNumber aria-label="预期回收章节" min={1} precision={0} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("实际回收章节", "已经完成回收后记录章节序号，未回收可留空。")}
+        name="actualPayoffChapterIndex"
+      >
+        <InputNumber aria-label="实际回收章节" min={1} precision={0} />
+      </Form.Item>
+      <Form.Item label="关联故事线" name="relatedPlotlineId">
+        <Select
+          allowClear
+          aria-label="关联故事线"
+          options={[...plotlineOptions]}
+          placeholder="未关联"
+        />
+      </Form.Item>
+      <Form.Item label="关联角色" name="relatedCharacterIds">
+        <Select
+          allowClear
+          aria-label="关联角色"
+          mode="multiple"
+          options={[...characterOptions]}
+          placeholder="选择被这条债影响的角色"
+        />
+      </Form.Item>
+      <Form.Item label="关联伏笔" name="relatedForeshadowingId">
+        <Select
+          allowClear
+          aria-label="关联伏笔"
+          options={[...foreshadowingOptions]}
+          placeholder="未关联"
+        />
+      </Form.Item>
+      <Form.Item label="关联世界规则" name="relatedWorldRuleIds">
+        <Select
+          allowClear
+          aria-label="关联世界规则"
+          mode="multiple"
+          options={[...worldRuleOptions]}
+          placeholder="选择支撑这条债的规则"
+        />
+      </Form.Item>
+      <Form.Item
+        className="plot-node-form-grid__wide"
+        label={characterFieldLabel(
+          "承诺内容",
+          "写清读者已经被告知或期待得到回答的内容，以及不回收会造成什么落差。",
+        )}
+        name="promise"
+        rules={[
+          { message: "请输入承诺内容", required: true },
+          { max: 800, message: "承诺内容最多 800 字" },
+        ]}
+      >
+        <Input.TextArea
+          aria-label="承诺内容"
+          autoSize={{ maxRows: 5, minRows: 3 }}
+          maxLength={800}
+          placeholder="如：首次炉芯启动兑现升级爽点，但热信号来源和追踪者身份必须后续回收。"
+          showCount
+        />
+      </Form.Item>
+      <Form.Item
+        className="plot-node-form-grid__wide"
+        label={characterFieldLabel(
+          "生命周期记录",
+          "记录强化、误导、风险升高或回收过程。每条记录最好对应一个章节动作。",
+        )}
+        name="lifecycleNotes"
+      >
+        <Select
+          aria-label="生命周期记录"
+          mode="tags"
+          open={false}
+          placeholder="输入后回车，例如：第 6 章热信号再次出现"
+        />
+      </Form.Item>
+    </div>
+  );
+}
+
+function PlotNodeEventFields({
+  chapterOptions,
+  characterOptions,
+}: {
+  readonly chapterOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+  readonly characterOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+}) {
+  return (
+    <div className="plot-node-form-grid">
+      <Form.Item
+        label={characterFieldLabel("节点标题", "用一句话写清读者会如何记住这个事件。")}
+        name="title"
+        rules={[{ message: "请输入节点标题", required: true }]}
+      >
+        <Input aria-label="节点标题" placeholder="如：旧信出现" />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel(
+          "节点类型",
+          "选择事件在故事里的功能：发现、冲突、揭示、决定、失败、胜利等。",
+        )}
+        name="eventType"
+      >
+        <Select aria-label="节点类型" options={[...EVENT_TYPE_OPTIONS]} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("事件状态", "区分草稿、已规划、已写入正史或归档。")}
+        name="status"
+      >
+        <Select aria-label="事件状态" options={[...STORY_EVENT_STATUS_OPTIONS]} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("所在章节", "可选。用于把节点落到具体章节，方便后续章纲引用。")}
+        name="chapterId"
+      >
+        <Select
+          allowClear
+          aria-label="所在章节"
+          options={[...chapterOptions]}
+          placeholder="未指定"
+        />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("故事时间", "写故事内时间，例如“第 3 章夜雨”或“十年前”。")}
+        name="storyTime"
+      >
+        <Input aria-label="故事时间" placeholder="如：第 3 章夜雨" />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("涉及角色", "选择实际参与或被这个事件影响的角色。")}
+        name="participants"
+      >
+        <Select
+          allowClear
+          aria-label="涉及角色"
+          mode="multiple"
+          options={[...characterOptions]}
+          placeholder="未指定"
+        />
+      </Form.Item>
+      <Form.Item
+        className="plot-node-form-grid__wide"
+        label={characterFieldLabel(
+          "节点描述",
+          "写清事件事实、冲突变化、读者新获得的信息和人物状态变化。",
+        )}
+        name="description"
+        rules={[{ message: "请输入节点描述", required: true }]}
+      >
+        <Input.TextArea
+          aria-label="节点描述"
+          autoSize={{ maxRows: 6, minRows: 4 }}
+          maxLength={500}
+          showCount
+        />
+      </Form.Item>
+    </div>
+  );
+}
+
+function PlotNodeForeshadowingFields({
+  storyEventOptions,
+}: {
+  readonly storyEventOptions: ReadonlyArray<{ readonly label: string; readonly value: string }>;
+}) {
+  return (
+    <div className="plot-node-form-grid">
+      <Form.Item
+        label={characterFieldLabel("伏笔标题", "给这个伏笔一个便于长期追踪的名称。")}
+        name="title"
+        rules={[{ message: "请输入伏笔标题", required: true }]}
+      >
+        <Input aria-label="伏笔标题" placeholder="如：信纸水印" />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("重要性", "1 到 5 级，数值越高越需要在主线中明确回收。")}
+        name="importance"
+      >
+        <InputNumber aria-label="伏笔重要性" max={5} min={1} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("伏笔状态", "已埋设、待回收、已回收或归档。")}
+        name="status"
+      >
+        <Select aria-label="伏笔状态" options={[...FORESHADOWING_STATUS_OPTIONS]} />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("埋设事件", "这个伏笔第一次出现或被读者感知的剧情节点。")}
+        name="seedEventId"
+      >
+        <Select
+          allowClear
+          aria-label="埋设事件"
+          options={[...storyEventOptions]}
+          placeholder="未指定"
+        />
+      </Form.Item>
+      <Form.Item
+        label={characterFieldLabel("回收事件", "这个伏笔最终解释、兑现或反转的剧情节点。")}
+        name="payoffEventId"
+      >
+        <Select
+          allowClear
+          aria-label="回收事件"
+          options={[...storyEventOptions]}
+          placeholder="未指定"
+        />
+      </Form.Item>
+      <Form.Item
+        className="plot-node-form-grid__wide"
+        label={characterFieldLabel("伏笔内容", "写读者当下能看到的表层信息，避免提前解释谜底。")}
+        name="description"
+        rules={[{ message: "请输入伏笔内容", required: true }]}
+      >
+        <Input.TextArea
+          aria-label="伏笔内容"
+          autoSize={{ maxRows: 5, minRows: 3 }}
+          maxLength={500}
+          showCount
+        />
+      </Form.Item>
+      <Form.Item
+        className="plot-node-form-grid__wide"
+        label={characterFieldLabel("回收方案", "写清什么时候回收、回收后改变什么信息或人物处境。")}
+        name="payoffExpectation"
+      >
+        <Input.TextArea
+          aria-label="回收方案"
+          autoSize={{ maxRows: 5, minRows: 3 }}
+          maxLength={500}
+          showCount
+        />
+      </Form.Item>
+    </div>
+  );
+}
+
+function PlotNodeModalActions({
+  icon,
+  onCancel,
+  submitLabel,
+}: {
+  readonly icon: ReactNode;
+  readonly submitLabel: string;
+  onCancel(): void;
+}) {
+  return (
+    <Space className="plot-node-form-actions" wrap>
+      <Button onClick={onCancel}>取消</Button>
+      <Button aria-label={submitLabel} htmlType="submit" icon={icon} type="primary">
+        {submitLabel}
+      </Button>
+    </Space>
+  );
+}
+
+function getLinkedStoryEventTitle(
+  foreshadowing: ForeshadowingElement,
+  storyEvents: readonly StoryEventElement[],
+  role: "payoff" | "seed",
+): string {
+  const eventId = getForeshadowingEventId(foreshadowing, role);
+  if (!eventId) {
+    return "";
+  }
+  return storyEvents.find((event) => event.id === eventId)?.title ?? eventId;
 }
 
 function storyEventToFormValues(event: StoryEventElement): StoryEventFormValues {
@@ -4201,18 +5685,113 @@ function normalizeForeshadowingImportance(value: number | null | undefined): num
   return Math.min(5, Math.max(1, Math.round(value)));
 }
 
+function plotDebtToFormValues(plotDebt: PlotDebtItem): PlotDebtFormValues {
+  return {
+    actualPayoffChapterIndex: plotDebt.actualPayoffChapterIndex ?? null,
+    debtType: getPlotDebtTypeValue(plotDebt.debtType),
+    expectedPayoffChapterIndex: plotDebt.expectedPayoffChapterIndex ?? null,
+    lifecycleNotes: normalizeStringList(plotDebt.lifecycleNotes),
+    promise: plotDebt.promise,
+    relatedCharacterIds: normalizeStringList(plotDebt.relatedCharacterIds),
+    relatedForeshadowingId: plotDebt.relatedForeshadowingId ?? null,
+    relatedPlotlineId: plotDebt.relatedPlotlineId ?? null,
+    relatedWorldRuleIds: normalizeStringList(plotDebt.relatedWorldRuleIds),
+    riskLevel: getPlotDebtRiskLevelValue(plotDebt.riskLevel),
+    seedChapterIndex: plotDebt.seedChapterIndex ?? null,
+    status: getPlotDebtStatusValue(plotDebt.status),
+    title: plotDebt.title,
+  };
+}
+
+function plotDebtFormValuesToSaveInput(
+  values: PlotDebtFormValues,
+  debtId: string | undefined,
+): SavePlotDebtValues {
+  const normalized = normalizePlotDebtFormValues(values);
+  return {
+    ...(debtId ? { debtId } : {}),
+    values: normalized,
+  };
+}
+
+function normalizePlotDebtFormValues(values: PlotDebtFormValues): PlotDebtValues {
+  return {
+    actualPayoffChapterIndex: normalizedNullableNumber(values.actualPayoffChapterIndex),
+    debtType: getPlotDebtTypeValue(values.debtType),
+    expectedPayoffChapterIndex: normalizedNullableNumber(values.expectedPayoffChapterIndex),
+    lifecycleNotes: normalizeStringList(values.lifecycleNotes),
+    promise: values.promise.trim(),
+    relatedCharacterIds: normalizeStringList(values.relatedCharacterIds),
+    relatedForeshadowingId: normalizedNullableFormText(values.relatedForeshadowingId),
+    relatedPlotlineId: normalizedNullableFormText(values.relatedPlotlineId),
+    relatedWorldRuleIds: normalizeStringList(values.relatedWorldRuleIds),
+    riskLevel: getPlotDebtRiskLevelValue(values.riskLevel),
+    seedChapterIndex: normalizedNullableNumber(values.seedChapterIndex),
+    status: getPlotDebtStatusValue(values.status),
+    title: values.title.trim(),
+  };
+}
+
+function normalizedNullableNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : null;
+}
+
+function getPlotDebtTypeLabel(value: string | null | undefined): string {
+  return PLOT_DEBT_TYPE_LABELS[getPlotDebtTypeValue(value)];
+}
+
+function getPlotDebtStatusLabel(value: string | null | undefined): string {
+  return PLOT_DEBT_STATUS_LABELS[getPlotDebtStatusValue(value)];
+}
+
+function getPlotDebtRiskLevelLabel(value: string | null | undefined): string {
+  return PLOT_DEBT_RISK_LEVEL_LABELS[getPlotDebtRiskLevelValue(value)];
+}
+
+function getPlotDebtTypeValue(value: string | null | undefined): PlotDebtTypeValue {
+  return isKeyOf(PLOT_DEBT_TYPE_LABELS, value) ? value : PLOT_DEBT_FORM_DEFAULTS.debtType;
+}
+
+function getPlotDebtStatusValue(value: string | null | undefined): PlotDebtStatusValue {
+  return isKeyOf(PLOT_DEBT_STATUS_LABELS, value) ? value : PLOT_DEBT_FORM_DEFAULTS.status;
+}
+
+function getPlotDebtRiskLevelValue(value: string | null | undefined): PlotDebtRiskLevelValue {
+  return isKeyOf(PLOT_DEBT_RISK_LEVEL_LABELS, value) ? value : PLOT_DEBT_FORM_DEFAULTS.riskLevel;
+}
+
+function getPlotDebtRiskColor(value: string | null | undefined): string {
+  const riskLevel = getPlotDebtRiskLevelValue(value);
+  if (riskLevel === "critical") {
+    return "red";
+  }
+  if (riskLevel === "high") {
+    return "orange";
+  }
+  if (riskLevel === "medium") {
+    return "gold";
+  }
+  return "green";
+}
+
 function ChapterPlanningModule({
   creativePath,
   onApplyChapterOutline,
   onApproveChapterOutline,
+  onGenerateChapterExecutionCard,
   onGenerateDraftFromOutline,
   onGenerateDraftFromPlan,
   onGenerateOutline,
   onGenerateRollingOutline,
+  onGenerateSerialReview,
 }: {
   readonly creativePath: CreativePathBoard;
   onApplyChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onApproveChapterOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
+  onGenerateChapterExecutionCard(input: {
+    readonly chapterPlanId: string;
+    readonly instruction?: string;
+  }): Promise<void> | void;
   onGenerateDraftFromOutline(input: { readonly chapterOutlineId: string }): Promise<void> | void;
   onGenerateDraftFromPlan(input: { readonly chapterPlanId: string }): Promise<void> | void;
   onGenerateOutline(input: {
@@ -4225,10 +5804,32 @@ function ChapterPlanningModule({
     readonly startChapterIndex: number;
     readonly chapterCount: 10 | 20;
   }): Promise<void> | void;
+  onGenerateSerialReview(input: {
+    readonly scope: "chapter_batch" | "arc" | "volume";
+    readonly startChapterIndex: number;
+    readonly endChapterIndex: number;
+  }): Promise<void> | void;
 }) {
+  const [serialReviewOpen, setSerialReviewOpen] = useState(false);
+  const [serialReviewForm] = Form.useForm<{
+    readonly endChapterIndex: number;
+    readonly scope: "chapter_batch" | "arc" | "volume";
+    readonly startChapterIndex: number;
+  }>();
   const firstVolumePlanId = creativePath.volumePlans[0]?.id;
   const firstArcPlanId = creativePath.arcPlans[0]?.id;
   const nextChapterIndex = getNextChapterPlanIndex(creativePath.chapterPlans);
+  const lastPlannedChapterIndex = Math.max(1, nextChapterIndex - 1);
+  const defaultReviewStartChapterIndex = Math.max(1, lastPlannedChapterIndex - 9);
+
+  const openSerialReviewDialog = () => {
+    serialReviewForm.setFieldsValue({
+      endChapterIndex: lastPlannedChapterIndex,
+      scope: "chapter_batch",
+      startChapterIndex: defaultReviewStartChapterIndex,
+    });
+    setSerialReviewOpen(true);
+  };
 
   return (
     <div className="module-stack">
@@ -4257,12 +5858,21 @@ function ChapterPlanningModule({
           >
             生成前 10 章章纲
           </Button>
+          <Button
+            aria-label="生成阶段复盘"
+            icon={<CheckCircleOutlined />}
+            onClick={openSerialReviewDialog}
+          >
+            生成阶段复盘
+          </Button>
         </Space>
       </ModuleSection>
 
       <ModuleSection title="结构化章节规划">
         <StructuredPlanList
+          executionCards={creativePath.chapterExecutionCards ?? []}
           chapterPlans={creativePath.chapterPlans}
+          onGenerateChapterExecutionCard={onGenerateChapterExecutionCard}
           onGenerateDraftFromPlan={onGenerateDraftFromPlan}
         />
       </ModuleSection>
@@ -4275,6 +5885,83 @@ function ChapterPlanningModule({
           onGenerateDraftFromOutline={onGenerateDraftFromOutline}
         />
       </ModuleSection>
+
+      <Modal
+        footer={null}
+        forceRender
+        onCancel={() => setSerialReviewOpen(false)}
+        open={serialReviewOpen}
+        title="生成阶段复盘"
+      >
+        <Form
+          form={serialReviewForm}
+          initialValues={{
+            endChapterIndex: lastPlannedChapterIndex,
+            scope: "chapter_batch",
+            startChapterIndex: defaultReviewStartChapterIndex,
+          }}
+          layout="vertical"
+          onFinish={async (values) => {
+            await onGenerateSerialReview(values);
+            setSerialReviewOpen(false);
+          }}
+        >
+          <Form.Item label="复盘范围" name="scope">
+            <Select
+              aria-label="复盘范围"
+              options={[
+                { label: "章节批次", value: "chapter_batch" },
+                { label: "阶段弧线", value: "arc" },
+                { label: "整卷", value: "volume" },
+              ]}
+            />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="起始章节"
+                name="startChapterIndex"
+                rules={[{ required: true, message: "请输入起始章节" }]}
+              >
+                <InputNumber aria-label="起始章节" min={1} precision={0} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                dependencies={["startChapterIndex"]}
+                label="结束章节"
+                name="endChapterIndex"
+                rules={[
+                  { required: true, message: "请输入结束章节" },
+                  ({ getFieldValue }) => ({
+                    validator(_, value: number | undefined) {
+                      const startChapterIndex = getFieldValue("startChapterIndex") as
+                        number | undefined;
+                      if (
+                        value === undefined ||
+                        startChapterIndex === undefined ||
+                        value >= startChapterIndex
+                      ) {
+                        return Promise.resolve();
+                      }
+
+                      return Promise.reject(new Error("结束章节不能小于起始章节"));
+                    },
+                  }),
+                ]}
+              >
+                <InputNumber aria-label="结束章节" min={1} precision={0} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Space>
+            <Button onClick={() => setSerialReviewOpen(false)}>取消</Button>
+            <Button htmlType="submit" icon={<CheckCircleOutlined />} type="primary">
+              生成复盘报告
+            </Button>
+          </Space>
+        </Form>
+      </Modal>
     </div>
   );
 }
@@ -4499,39 +6186,150 @@ function ModuleSection({
 
 function StructuredPlanList({
   chapterPlans,
+  executionCards,
+  onGenerateChapterExecutionCard,
   onGenerateDraftFromPlan,
 }: {
   readonly chapterPlans: readonly ChapterPlanItem[];
+  readonly executionCards: NonNullable<CreativePathBoard["chapterExecutionCards"]>;
+  onGenerateChapterExecutionCard(input: {
+    readonly chapterPlanId: string;
+    readonly instruction?: string;
+  }): Promise<void> | void;
   onGenerateDraftFromPlan(input: { readonly chapterPlanId: string }): Promise<void> | void;
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rangeStart, setRangeStart] = useState<number | null>(null);
+  const [rangeEnd, setRangeEnd] = useState<number | null>(null);
+  const pageSize = 30;
+  const filteredChapterPlans = useMemo(
+    () =>
+      chapterPlans.filter((plan) => {
+        if (rangeStart !== null && plan.chapterIndex < rangeStart) {
+          return false;
+        }
+
+        if (rangeEnd !== null && plan.chapterIndex > rangeEnd) {
+          return false;
+        }
+
+        return true;
+      }),
+    [chapterPlans, rangeEnd, rangeStart],
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredChapterPlans.length / pageSize));
+  const effectiveCurrentPage = Math.min(currentPage, pageCount);
+  const visibleChapterPlans = useMemo(
+    () =>
+      filteredChapterPlans.slice(
+        (effectiveCurrentPage - 1) * pageSize,
+        effectiveCurrentPage * pageSize,
+      ),
+    [effectiveCurrentPage, filteredChapterPlans],
+  );
+  const executionCardByChapterPlanId = useMemo(
+    () => new Map(executionCards.map((card) => [card.chapterPlanId, card])),
+    [executionCards],
+  );
+
   if (chapterPlans.length === 0) {
     return <Empty description="暂无结构化章节规划" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
 
   return (
-    <ul className="chapter-outline-list">
-      {chapterPlans.map((plan) => {
-        const title = formatChapterPlanTitle(plan);
+    <div className="structured-plan">
+      <div className="structured-plan__toolbar" aria-label="章节规划筛选">
+        <Space size={10} wrap>
+          <InputNumber
+            aria-label="筛选起始章节"
+            min={1}
+            onChange={(value) => {
+              setCurrentPage(1);
+              setRangeStart(typeof value === "number" ? value : null);
+            }}
+            placeholder="起始章"
+            precision={0}
+            value={rangeStart}
+          />
+          <InputNumber
+            aria-label="筛选结束章节"
+            min={1}
+            onChange={(value) => {
+              setCurrentPage(1);
+              setRangeEnd(typeof value === "number" ? value : null);
+            }}
+            placeholder="结束章"
+            precision={0}
+            value={rangeEnd}
+          />
+          <Button
+            aria-label="清除章节筛选"
+            disabled={rangeStart === null && rangeEnd === null}
+            onClick={() => {
+              setCurrentPage(1);
+              setRangeStart(null);
+              setRangeEnd(null);
+            }}
+          >
+            清除筛选
+          </Button>
+        </Space>
+        <Text type="secondary">
+          显示 {visibleChapterPlans.length} / {filteredChapterPlans.length} 章，共{" "}
+          {chapterPlans.length} 章
+        </Text>
+      </div>
+      {filteredChapterPlans.length === 0 ? (
+        <Empty description="当前筛选下暂无章节规划" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <ul className="chapter-outline-list">
+          {visibleChapterPlans.map((plan) => {
+            const title = formatChapterPlanTitle(plan);
+            const executionCard = executionCardByChapterPlanId.get(plan.id);
 
-        return (
-          <li className="chapter-outline-list__item" key={plan.id}>
-            <div className="chapter-outline-list__body">
-              <Text strong>{title}</Text>
-              <Text type="secondary">{plan.chapterGoal}</Text>
-              <Space size={6} wrap>
-                <Tag>{plan.status}</Tag>
-              </Space>
-            </div>
-            <Button
-              aria-label={`基于结构章纲生成草稿 ${title}`}
-              onClick={() => onGenerateDraftFromPlan({ chapterPlanId: plan.id })}
-            >
-              基于结构章纲生成草稿
-            </Button>
-          </li>
-        );
-      })}
-    </ul>
+            return (
+              <li className="chapter-outline-list__item" key={plan.id}>
+                <div className="chapter-outline-list__body">
+                  <Text strong>{title}</Text>
+                  <Text type="secondary">{plan.chapterGoal}</Text>
+                  <Space size={6} wrap>
+                    <Tag>{plan.status}</Tag>
+                    <Tag color={executionCard ? "green" : "default"}>
+                      {executionCard ? "执行卡已确认" : "待生成执行卡"}
+                    </Tag>
+                  </Space>
+                </div>
+                <Space wrap>
+                  <Button
+                    aria-label={`生成执行卡 ${title}`}
+                    icon={<FileProtectOutlined />}
+                    onClick={() => onGenerateChapterExecutionCard({ chapterPlanId: plan.id })}
+                  >
+                    生成执行卡
+                  </Button>
+                  <Button
+                    aria-label={`基于结构章纲生成草稿 ${title}`}
+                    onClick={() => onGenerateDraftFromPlan({ chapterPlanId: plan.id })}
+                  >
+                    基于结构章纲生成草稿
+                  </Button>
+                </Space>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {filteredChapterPlans.length > pageSize ? (
+        <Pagination
+          aria-label="章节规划分页"
+          current={effectiveCurrentPage}
+          onChange={setCurrentPage}
+          pageSize={pageSize}
+          showSizeChanger={false}
+          total={filteredChapterPlans.length}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -4633,12 +6431,14 @@ function CandidateList({
 
 function CharacterRoster({
   characters,
-  onSelectCharacter,
-  selectedCharacterId,
+  onDeleteCharacter,
+  onEditCharacter,
+  onShowState,
 }: {
   readonly characters: readonly CharacterElement[];
-  readonly selectedCharacterId: string | null;
-  onSelectCharacter(characterId: string): void;
+  onDeleteCharacter(character: CharacterElement): void;
+  onEditCharacter(character: CharacterElement): void;
+  onShowState(character: CharacterElement): void;
 }) {
   if (characters.length === 0) {
     return <Empty description="暂无人物" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
@@ -4666,17 +6466,7 @@ function CharacterRoster({
 
         return (
           <li key={character.id}>
-            <button
-              aria-label={`编辑角色 ${character.name}`}
-              className={[
-                "character-roster__item",
-                selectedCharacterId === character.id ? "character-roster__item--selected" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              type="button"
-              onClick={() => onSelectCharacter(character.id)}
-            >
+            <article className="character-roster__item">
               <span className="character-roster__summary">
                 <span className="character-roster__title-row">
                   <Text strong>{character.name}</Text>
@@ -4695,11 +6485,95 @@ function CharacterRoster({
               >
                 <span style={{ width: `${completionScore}%` }} />
               </span>
-            </button>
+              <Space className="character-roster__actions" size={8} wrap>
+                <Button
+                  aria-label={`查看角色状态 ${character.name}`}
+                  icon={<DatabaseOutlined />}
+                  onClick={() => onShowState(character)}
+                >
+                  状态
+                </Button>
+                <Button
+                  aria-label={`编辑角色 ${character.name}`}
+                  icon={<EditOutlined />}
+                  onClick={() => onEditCharacter(character)}
+                >
+                  编辑
+                </Button>
+                <Button
+                  aria-label={`删除角色 ${character.name}`}
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => onDeleteCharacter(character)}
+                >
+                  删除
+                </Button>
+              </Space>
+            </article>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+function CharacterStateTimelineModal({
+  character,
+  onClose,
+  snapshots,
+}: {
+  readonly character: CharacterElement;
+  readonly snapshots: readonly CharacterStateSnapshotItem[];
+  onClose(): void;
+}) {
+  const orderedSnapshots = [...snapshots].sort((left, right) => {
+    if (left.chapterIndex !== right.chapterIndex) {
+      return left.chapterIndex - right.chapterIndex;
+    }
+    return left.createdAt - right.createdAt;
+  });
+
+  return (
+    <Modal
+      className="creative-form-modal"
+      footer={null}
+      onCancel={onClose}
+      open
+      title={`状态时间线：${character.name}`}
+      width={760}
+    >
+      <section aria-label="角色状态时间线" className="character-state-timeline">
+        {orderedSnapshots.length === 0 ? (
+          <Empty description="暂无角色状态快照" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <ul className="character-state-timeline__list">
+            {orderedSnapshots.map((snapshot) => (
+              <li key={snapshot.id}>
+                <article className="character-state-timeline__item">
+                  <header>
+                    <Text strong>第 {snapshot.chapterIndex} 章</Text>
+                  </header>
+                  <dl className="character-state-timeline__fields">
+                    <PlotNodeDetailItem label="位置" value={snapshot.position} />
+                    <PlotNodeDetailItem label="外在目标" value={snapshot.externalGoal} />
+                    <PlotNodeDetailItem label="内在需求" value={snapshot.internalNeed} />
+                    <PlotNodeDetailItem label="情绪状态" value={snapshot.emotionalState} />
+                    <PlotNodeDetailItem label="身体状态" value={snapshot.physicalState} />
+                    <PlotNodeDetailItem label="已知信息" value={snapshot.knowledgeState} />
+                    <PlotNodeDetailItem
+                      label="风险标记"
+                      value={snapshot.riskFlags.join("、")}
+                      wide
+                    />
+                    <PlotNodeDetailItem label="隐藏秘密" value={snapshot.secrets.join("、")} wide />
+                  </dl>
+                </article>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </Modal>
   );
 }
 

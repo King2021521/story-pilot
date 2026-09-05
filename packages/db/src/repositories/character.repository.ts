@@ -134,6 +134,11 @@ export interface UpdateCharacterRecordInput {
   readonly now?: number;
 }
 
+export interface DeleteCharacterRecordInput {
+  readonly projectId: string;
+  readonly characterId: string;
+}
+
 interface CharacterRow {
   readonly id: string;
   readonly project_id: string;
@@ -489,6 +494,45 @@ export class CharacterRepository {
     }
 
     return character;
+  }
+
+  deleteCharacter(input: DeleteCharacterRecordInput): void {
+    const character = this.getCharacter(input.projectId, input.characterId);
+    if (!character) {
+      throw new Error(`CHARACTER_NOT_FOUND: ${input.characterId}`);
+    }
+
+    const remove = this.projectDatabase.client.transaction(() => {
+      this.projectDatabase.client
+        .prepare(
+          `
+          delete from entity_relations
+          where project_id = @projectId
+            and (
+              (source_entity_type = 'character' and source_entity_id = @characterId)
+              or (target_entity_type = 'character' and target_entity_id = @characterId)
+            )
+          `,
+        )
+        .run({
+          characterId: input.characterId,
+          projectId: input.projectId,
+        });
+
+      this.projectDatabase.client
+        .prepare("delete from character_traits where project_id = ? and character_id = ?")
+        .run(input.projectId, input.characterId);
+
+      const result = this.projectDatabase.client
+        .prepare("delete from characters where project_id = ? and id = ?")
+        .run(input.projectId, input.characterId);
+
+      if (result.changes === 0) {
+        throw new Error(`CHARACTER_NOT_FOUND: ${input.characterId}`);
+      }
+    });
+
+    remove();
   }
 
   private listTraits(projectId: string, characterId: string): CharacterTraitRecord[] {

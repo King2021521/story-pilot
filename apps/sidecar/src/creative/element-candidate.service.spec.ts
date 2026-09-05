@@ -102,6 +102,7 @@ describe("ElementCandidateService", () => {
       const [firstCall] = provider.calls;
       expect(firstCall).toMatchObject({
         maxOutputTokens: 5000,
+        promptVersion: "element-candidate.generate@v1",
         purpose: "element_generate",
         schemaName: "ElementCandidateOutput",
         temperature: 0.8,
@@ -110,10 +111,14 @@ describe("ElementCandidateService", () => {
         throw new Error("expected model provider to receive an element generation call");
       }
       const promptText = firstCall.messages.map((message) => message.content).join("\n");
-      expect(promptText).toContain("模板：element.generate@v1");
+      expect(promptText).toContain("模板：element-candidate.generate@v1");
+      expect(promptText).toContain("<generationRequest>");
+      expect(promptText).toContain('"count": 5');
       expect(promptText).toContain("雪境堡垒");
-      expect(promptText).toContain("候选类型：faction");
-      expect(promptText).toContain("用户描述：围绕安全屋外部补给线生成可长期博弈的地下势力名称。");
+      expect(promptText).toContain('"elementType": "faction"');
+      expect(promptText).toContain(
+        '"description": "围绕安全屋外部补给线生成可长期博弈的地下势力名称。"',
+      );
       expect(promptText).toContain("资源秩序");
       expect(promptText).toContain("每个候选的 description 40 到 90 字");
     } finally {

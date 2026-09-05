@@ -161,6 +161,18 @@ export class StoryPilotApiClient {
     return this.send("plot.saveArcPlan", input);
   }
 
+  deleteBookPlan(input: CommandPayload<"plot.deleteBookPlan">) {
+    return this.send("plot.deleteBookPlan", input);
+  }
+
+  deleteVolumePlan(input: CommandPayload<"plot.deleteVolumePlan">) {
+    return this.send("plot.deleteVolumePlan", input);
+  }
+
+  deleteArcPlan(input: CommandPayload<"plot.deleteArcPlan">) {
+    return this.send("plot.deleteArcPlan", input);
+  }
+
   saveChapterPlan(input: CommandPayload<"plot.saveChapterPlan">) {
     return this.send("plot.saveChapterPlan", input);
   }
@@ -229,8 +241,48 @@ export class StoryPilotApiClient {
     return this.send("chapter.generateDraftFromPlan", input);
   }
 
+  generateChapterExecutionCard(input: CommandPayload<"chapterExecutionCard.generate">) {
+    return this.send("chapterExecutionCard.generate", input);
+  }
+
+  applyChapterExecutionCard(input: CommandPayload<"chapterExecutionCard.apply">) {
+    return this.send("chapterExecutionCard.apply", input);
+  }
+
+  saveChapterExecutionCard(input: CommandPayload<"chapterExecutionCard.save">) {
+    return this.send("chapterExecutionCard.save", input);
+  }
+
+  listPlotDebts(input: CommandPayload<"plotDebt.list">) {
+    return this.sendItems("plotDebt.list", input);
+  }
+
+  savePlotDebt(input: CommandPayload<"plotDebt.save">) {
+    return this.send("plotDebt.save", input);
+  }
+
+  extractStoryStateDelta(input: CommandPayload<"storyState.extractDelta">) {
+    return this.send("storyState.extractDelta", input);
+  }
+
+  applyStoryStateDelta(input: CommandPayload<"storyState.applyDelta">) {
+    return this.send("storyState.applyDelta", input);
+  }
+
   reviewChapterContinuity(input: CommandPayload<"chapter.reviewContinuity">) {
     return this.send("chapter.reviewContinuity", input);
+  }
+
+  reviewChapterDraft(input: CommandPayload<"chapter.reviewDraft">) {
+    return this.send("chapter.reviewDraft", input);
+  }
+
+  generateSerialReview(input: CommandPayload<"serialReview.generate">) {
+    return this.send("serialReview.generate", input);
+  }
+
+  applySerialReview(input: CommandPayload<"serialReview.apply">) {
+    return this.send("serialReview.apply", input);
   }
 
   getArtifact(input: CommandPayload<"artifact.get">) {
@@ -318,6 +370,10 @@ export class StoryPilotApiClient {
     return this.send("character.update", input);
   }
 
+  deleteCharacter(input: CommandPayload<"character.delete">) {
+    return this.send("character.delete", input);
+  }
+
   listEntityRelations(input: CommandPayload<"entityRelation.list">) {
     return this.sendItems("entityRelation.list", input);
   }
@@ -372,6 +428,10 @@ export class StoryPilotApiClient {
 
   updatePlotline(input: CommandPayload<"plotline.update">) {
     return this.send("plotline.update", input);
+  }
+
+  deletePlotline(input: CommandPayload<"plotline.delete">) {
+    return this.send("plotline.delete", input);
   }
 
   createPlotlineNode(input: CommandPayload<"plotline.createNode">) {

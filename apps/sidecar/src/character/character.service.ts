@@ -76,6 +76,8 @@ export interface UpdateCharacterInput {
   readonly patch: Record<string, unknown>;
 }
 
+export type DeleteCharacterInput = CommandPayload<"character.delete">;
+
 export interface GeneratedCharacterNames {
   readonly items: readonly {
     readonly name: string;
@@ -293,6 +295,34 @@ export class CharacterService {
       });
 
       return character;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async deleteCharacter(input: DeleteCharacterInput): Promise<{ readonly characterId: string }> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const repository = new CharacterRepository(projectDatabase);
+      const character = repository.getCharacter(input.projectId, input.characterId);
+      repository.deleteCharacter({
+        characterId: input.characterId,
+        projectId: input.projectId,
+      });
+
+      new DomainEventRepository(projectDatabase).append({
+        aggregateId: input.characterId,
+        aggregateType: "character",
+        eventId: randomUUID(),
+        eventType: "character.deleted",
+        payload: {
+          name: character?.name ?? null,
+          role: character?.role ?? null,
+        },
+        projectId: input.projectId,
+      });
+
+      return { characterId: input.characterId };
     } finally {
       projectDatabase.close();
     }

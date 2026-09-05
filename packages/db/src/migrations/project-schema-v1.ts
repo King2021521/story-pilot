@@ -274,6 +274,115 @@ create table if not exists chapter_plans (
   updated_at integer not null
 );
 
+create table if not exists chapter_execution_cards (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  chapter_plan_id text not null references chapter_plans(id) on delete cascade,
+  chapter_id text references chapters(id) on delete set null,
+  chapter_index integer not null,
+  title text not null,
+  narrative_goal text not null,
+  core_conflict text not null,
+  information_gain text not null,
+  emotional_turn text not null,
+  reader_reward text not null,
+  hook text not null,
+  pov_character_id text,
+  required_character_ids_json text not null default '[]',
+  required_location_ids_json text not null default '[]',
+  related_plotline_ids_json text not null default '[]',
+  related_foreshadowing_ids_json text not null default '[]',
+  related_plot_debt_ids_json text not null default '[]',
+  scene_brief_json text not null default '[]',
+  forbidden_moves_json text not null default '[]',
+  target_word_count integer not null,
+  status text not null default 'draft',
+  version integer not null default 1,
+  source_artifact_id text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists story_state_snapshots (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  chapter_id text references chapters(id) on delete set null,
+  chapter_index integer not null,
+  story_time text,
+  current_volume_id text,
+  current_arc_plan_id text,
+  global_situation text not null,
+  active_conflicts_json text not null default '[]',
+  open_questions_json text not null default '[]',
+  revealed_information_json text not null default '[]',
+  hidden_information_json text not null default '[]',
+  resource_state_json text not null default '{}',
+  location_state_json text not null default '{}',
+  organization_state_json text not null default '{}',
+  source_chapter_version integer,
+  created_at integer not null
+);
+
+create table if not exists character_state_snapshots (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  character_id text not null references characters(id) on delete cascade,
+  chapter_id text references chapters(id) on delete set null,
+  chapter_index integer not null,
+  external_goal text not null default '',
+  internal_need text not null default '',
+  physical_state text not null default '',
+  emotional_state text not null default '',
+  knowledge_state text not null default '',
+  relationship_state_json text not null default '{}',
+  resource_state_json text not null default '{}',
+  secrets_json text not null default '[]',
+  position text not null default '',
+  risk_flags_json text not null default '[]',
+  source_type text not null,
+  source_id text not null,
+  created_at integer not null
+);
+
+create table if not exists plot_debts (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  title text not null,
+  debt_type text not null,
+  promise text not null,
+  seed_chapter_index integer,
+  expected_payoff_chapter_index integer,
+  actual_payoff_chapter_index integer,
+  status text not null default 'open',
+  risk_level text not null default 'medium',
+  related_plotline_id text,
+  related_character_ids_json text not null default '[]',
+  related_foreshadowing_id text,
+  related_world_rule_ids_json text not null default '[]',
+  lifecycle_notes_json text not null default '[]',
+  created_at integer not null,
+  updated_at integer not null
+);
+
+create table if not exists serial_reviews (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  scope text not null,
+  start_chapter_index integer not null,
+  end_chapter_index integer not null,
+  progress_summary text not null,
+  promise_delivery_json text not null default '[]',
+  rhythm_report_json text not null default '{}',
+  repetition_risks_json text not null default '[]',
+  character_stagnation_json text not null default '[]',
+  plot_debt_risks_json text not null default '[]',
+  next_actions_json text not null default '[]',
+  status text not null default 'applied',
+  source_artifact_id text,
+  created_at integer not null,
+  updated_at integer not null
+);
+
 create table if not exists scene_plans (
   id text primary key,
   project_id text not null references projects(id) on delete cascade,
@@ -355,6 +464,21 @@ create index if not exists chapter_plans_project_id_idx on chapter_plans(project
 create index if not exists chapter_plans_arc_plan_idx on chapter_plans(arc_plan_id, chapter_index);
 create index if not exists chapter_plans_chapter_idx on chapter_plans(chapter_id);
 create index if not exists chapter_plans_status_idx on chapter_plans(project_id, status);
+create index if not exists chapter_execution_cards_project_id_idx on chapter_execution_cards(project_id);
+create index if not exists chapter_execution_cards_chapter_plan_idx on chapter_execution_cards(chapter_plan_id);
+create index if not exists chapter_execution_cards_chapter_idx on chapter_execution_cards(chapter_id);
+create index if not exists chapter_execution_cards_status_idx on chapter_execution_cards(project_id, status);
+create index if not exists story_state_snapshots_project_id_idx on story_state_snapshots(project_id);
+create index if not exists story_state_snapshots_chapter_idx on story_state_snapshots(project_id, chapter_index);
+create index if not exists character_state_snapshots_project_id_idx on character_state_snapshots(project_id);
+create index if not exists character_state_snapshots_character_idx on character_state_snapshots(project_id, character_id, chapter_index);
+create index if not exists plot_debts_project_id_idx on plot_debts(project_id);
+create index if not exists plot_debts_status_idx on plot_debts(project_id, status);
+create index if not exists plot_debts_risk_idx on plot_debts(project_id, risk_level);
+create index if not exists serial_reviews_project_id_idx on serial_reviews(project_id);
+create index if not exists serial_reviews_scope_idx on serial_reviews(project_id, scope);
+create index if not exists serial_reviews_chapter_range_idx on serial_reviews(project_id, start_chapter_index, end_chapter_index);
+create index if not exists serial_reviews_status_idx on serial_reviews(project_id, status);
 create index if not exists scene_plans_project_id_idx on scene_plans(project_id);
 create index if not exists scene_plans_chapter_plan_idx on scene_plans(chapter_plan_id, scene_index);
 create index if not exists review_issues_project_id_idx on review_issues(project_id);
@@ -824,6 +948,20 @@ create table if not exists context_package_items (
   metadata text
 );
 
+create table if not exists generation_context_packages (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  target_type text not null,
+  target_id text not null,
+  purpose text not null,
+  token_budget integer not null,
+  estimated_tokens integer not null,
+  strategy text not null,
+  items_json text not null,
+  omitted_items_json text not null default '[]',
+  created_at integer not null
+);
+
 create table if not exists files (
   id text primary key,
   project_id text not null references projects(id) on delete cascade,
@@ -897,6 +1035,9 @@ create index if not exists memories_entity_idx on memories(entity_type, entity_i
 create index if not exists memories_kind_idx on memories(kind);
 create index if not exists context_packages_target_idx on context_packages(target_type, target_id);
 create index if not exists context_package_items_package_id_idx on context_package_items(context_package_id);
+create index if not exists generation_context_packages_project_id_idx on generation_context_packages(project_id);
+create index if not exists generation_context_packages_target_idx on generation_context_packages(target_type, target_id);
+create index if not exists generation_context_packages_purpose_idx on generation_context_packages(project_id, purpose);
 create index if not exists files_role_idx on files(role);
 create index if not exists domain_events_aggregate_idx on domain_events(aggregate_type, aggregate_id);
 create index if not exists domain_events_event_type_idx on domain_events(event_type);

@@ -39,7 +39,13 @@ describe("project database", () => {
           "story_blueprints",
           "outlines",
           "chapter_outlines",
+          "chapter_execution_cards",
+          "story_state_snapshots",
+          "character_state_snapshots",
+          "plot_debts",
+          "serial_reviews",
           "review_issues",
+          "generation_context_packages",
         ]),
       );
     } finally {

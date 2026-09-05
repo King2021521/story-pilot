@@ -276,6 +276,13 @@ export interface ScenePlanItem {
   readonly sceneIndex: number;
 }
 
+export interface ChapterExecutionCardItem {
+  readonly chapterPlanId: string;
+  readonly id: string;
+  readonly status: string;
+  readonly title: string;
+}
+
 export interface CreativePathBoard {
   readonly stages: readonly CreativeStageItem[];
   readonly brief: ProjectBriefItem | null;
@@ -288,6 +295,7 @@ export interface CreativePathBoard {
   readonly volumePlans: readonly VolumePlanItem[];
   readonly arcPlans: readonly ArcPlanItem[];
   readonly chapterPlans: readonly ChapterPlanItem[];
+  readonly chapterExecutionCards?: readonly ChapterExecutionCardItem[];
   readonly scenePlans: readonly ScenePlanItem[];
   readonly reviewIssues: readonly unknown[];
 }

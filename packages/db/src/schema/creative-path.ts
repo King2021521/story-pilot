@@ -410,6 +410,177 @@ export const chapterPlans = sqliteTable(
   ],
 );
 
+export const chapterExecutionCards = sqliteTable(
+  "chapter_execution_cards",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    chapterPlanId: text("chapter_plan_id")
+      .notNull()
+      .references(() => chapterPlans.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    chapterIndex: integer("chapter_index").notNull(),
+    title: text("title").notNull(),
+    narrativeGoal: text("narrative_goal").notNull(),
+    coreConflict: text("core_conflict").notNull(),
+    informationGain: text("information_gain").notNull(),
+    emotionalTurn: text("emotional_turn").notNull(),
+    readerReward: text("reader_reward").notNull(),
+    hook: text("hook").notNull(),
+    povCharacterId: text("pov_character_id"),
+    requiredCharacterIdsJson: text("required_character_ids_json").notNull().default("[]"),
+    requiredLocationIdsJson: text("required_location_ids_json").notNull().default("[]"),
+    relatedPlotlineIdsJson: text("related_plotline_ids_json").notNull().default("[]"),
+    relatedForeshadowingIdsJson: text("related_foreshadowing_ids_json").notNull().default("[]"),
+    relatedPlotDebtIdsJson: text("related_plot_debt_ids_json").notNull().default("[]"),
+    sceneBriefJson: text("scene_brief_json").notNull().default("[]"),
+    forbiddenMovesJson: text("forbidden_moves_json").notNull().default("[]"),
+    targetWordCount: integer("target_word_count").notNull(),
+    status: text("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    sourceArtifactId: text("source_artifact_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("chapter_execution_cards_project_id_idx").on(table.projectId),
+    index("chapter_execution_cards_chapter_plan_idx").on(table.chapterPlanId),
+    index("chapter_execution_cards_chapter_idx").on(table.chapterId),
+    index("chapter_execution_cards_status_idx").on(table.projectId, table.status),
+  ],
+);
+
+export const storyStateSnapshots = sqliteTable(
+  "story_state_snapshots",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    chapterIndex: integer("chapter_index").notNull(),
+    storyTime: text("story_time"),
+    currentVolumeId: text("current_volume_id"),
+    currentArcPlanId: text("current_arc_plan_id"),
+    globalSituation: text("global_situation").notNull(),
+    activeConflictsJson: text("active_conflicts_json").notNull().default("[]"),
+    openQuestionsJson: text("open_questions_json").notNull().default("[]"),
+    revealedInformationJson: text("revealed_information_json").notNull().default("[]"),
+    hiddenInformationJson: text("hidden_information_json").notNull().default("[]"),
+    resourceStateJson: text("resource_state_json").notNull().default("{}"),
+    locationStateJson: text("location_state_json").notNull().default("{}"),
+    organizationStateJson: text("organization_state_json").notNull().default("{}"),
+    sourceChapterVersion: integer("source_chapter_version"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("story_state_snapshots_project_id_idx").on(table.projectId),
+    index("story_state_snapshots_chapter_idx").on(table.projectId, table.chapterIndex),
+  ],
+);
+
+export const characterStateSnapshots = sqliteTable(
+  "character_state_snapshots",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    chapterIndex: integer("chapter_index").notNull(),
+    externalGoal: text("external_goal").notNull().default(""),
+    internalNeed: text("internal_need").notNull().default(""),
+    physicalState: text("physical_state").notNull().default(""),
+    emotionalState: text("emotional_state").notNull().default(""),
+    knowledgeState: text("knowledge_state").notNull().default(""),
+    relationshipStateJson: text("relationship_state_json").notNull().default("{}"),
+    resourceStateJson: text("resource_state_json").notNull().default("{}"),
+    secretsJson: text("secrets_json").notNull().default("[]"),
+    position: text("position").notNull().default(""),
+    riskFlagsJson: text("risk_flags_json").notNull().default("[]"),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("character_state_snapshots_project_id_idx").on(table.projectId),
+    index("character_state_snapshots_character_idx").on(
+      table.projectId,
+      table.characterId,
+      table.chapterIndex,
+    ),
+  ],
+);
+
+export const plotDebts = sqliteTable(
+  "plot_debts",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    debtType: text("debt_type").notNull(),
+    promise: text("promise").notNull(),
+    seedChapterIndex: integer("seed_chapter_index"),
+    expectedPayoffChapterIndex: integer("expected_payoff_chapter_index"),
+    actualPayoffChapterIndex: integer("actual_payoff_chapter_index"),
+    status: text("status").notNull().default("open"),
+    riskLevel: text("risk_level").notNull().default("medium"),
+    relatedPlotlineId: text("related_plotline_id"),
+    relatedCharacterIdsJson: text("related_character_ids_json").notNull().default("[]"),
+    relatedForeshadowingId: text("related_foreshadowing_id"),
+    relatedWorldRuleIdsJson: text("related_world_rule_ids_json").notNull().default("[]"),
+    lifecycleNotesJson: text("lifecycle_notes_json").notNull().default("[]"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("plot_debts_project_id_idx").on(table.projectId),
+    index("plot_debts_status_idx").on(table.projectId, table.status),
+    index("plot_debts_risk_idx").on(table.projectId, table.riskLevel),
+  ],
+);
+
+export const serialReviews = sqliteTable(
+  "serial_reviews",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    startChapterIndex: integer("start_chapter_index").notNull(),
+    endChapterIndex: integer("end_chapter_index").notNull(),
+    progressSummary: text("progress_summary").notNull(),
+    promiseDeliveryJson: text("promise_delivery_json").notNull().default("[]"),
+    rhythmReportJson: text("rhythm_report_json").notNull().default("{}"),
+    repetitionRisksJson: text("repetition_risks_json").notNull().default("[]"),
+    characterStagnationJson: text("character_stagnation_json").notNull().default("[]"),
+    plotDebtRisksJson: text("plot_debt_risks_json").notNull().default("[]"),
+    nextActionsJson: text("next_actions_json").notNull().default("[]"),
+    status: text("status").notNull().default("applied"),
+    sourceArtifactId: text("source_artifact_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("serial_reviews_project_id_idx").on(table.projectId),
+    index("serial_reviews_scope_idx").on(table.projectId, table.scope),
+    index("serial_reviews_chapter_range_idx").on(
+      table.projectId,
+      table.startChapterIndex,
+      table.endChapterIndex,
+    ),
+    index("serial_reviews_status_idx").on(table.projectId, table.status),
+  ],
+);
+
 export const scenePlans = sqliteTable(
   "scene_plans",
   {

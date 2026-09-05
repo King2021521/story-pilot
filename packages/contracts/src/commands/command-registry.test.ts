@@ -24,6 +24,7 @@ describe("command registry", () => {
       "ai.getRun",
       "ai.cancelRun",
       "ai.listArtifacts",
+      "context.buildPackage",
       "creativeStage.getPath",
       "creativeStage.evaluateGate",
       "creativeStage.advance",
@@ -48,6 +49,9 @@ describe("command registry", () => {
       "plot.saveBookPlanDraft",
       "plot.saveVolumePlan",
       "plot.saveArcPlan",
+      "plot.deleteBookPlan",
+      "plot.deleteVolumePlan",
+      "plot.deleteArcPlan",
       "plot.saveChapterPlan",
       "plot.saveScenePlan",
       "plot.generateRollingOutline",
@@ -63,9 +67,14 @@ describe("command registry", () => {
       "chapter.generateDraftFromOutline",
       "chapter.generateDraftFromPlan",
       "chapter.reviewContinuity",
+      "chapter.reviewDraft",
+      "chapterExecutionCard.generate",
+      "chapterExecutionCard.apply",
+      "chapterExecutionCard.save",
       "character.list",
       "character.create",
       "character.update",
+      "character.delete",
       "entityRelation.list",
       "entityRelation.create",
       "entityRelation.update",
@@ -80,6 +89,7 @@ describe("command registry", () => {
       "plotline.list",
       "plotline.create",
       "plotline.update",
+      "plotline.delete",
       "plotline.createNode",
       "plotline.updateNode",
       "storyEvent.list",
@@ -95,6 +105,12 @@ describe("command registry", () => {
       "foreshadowing.create",
       "foreshadowing.update",
       "foreshadowing.plan",
+      "plotDebt.list",
+      "plotDebt.save",
+      "storyState.extractDelta",
+      "storyState.applyDelta",
+      "serialReview.generate",
+      "serialReview.apply",
       "workOrder.list",
       "workOrder.get",
       "workflow.run",
@@ -231,6 +247,13 @@ describe("command registry", () => {
         projectId: "proj_1",
       }),
     ).toThrow();
+
+    expect(
+      parseCommandPayload("character.delete", { characterId: "character_1", projectId: "proj_1" }),
+    ).toEqual({
+      characterId: "character_1",
+      projectId: "proj_1",
+    });
   });
 
   it("parses plotline profile and node payloads with narrative design fields", () => {
@@ -281,6 +304,13 @@ describe("command registry", () => {
         relatedCharacterIds: [],
         status: "active",
       },
+      plotlineId: "plotline_1",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("plotline.delete", { plotlineId: "plotline_1", projectId: "proj_1" }),
+    ).toEqual({
       plotlineId: "plotline_1",
       projectId: "proj_1",
     });
@@ -429,6 +459,33 @@ describe("command registry", () => {
       ],
       projectId: "proj_1",
     });
+  });
+
+  it("parses auditable generation context package payloads", () => {
+    expect(
+      parseCommandPayload("context.buildPackage", {
+        projectId: "proj_1",
+        purpose: "execution_card_generate",
+        targetId: "chapter_plan_1",
+        targetType: "chapter_plan",
+        tokenBudget: 6000,
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      purpose: "execution_card_generate",
+      targetId: "chapter_plan_1",
+      targetType: "chapter_plan",
+      tokenBudget: 6000,
+    });
+
+    expect(() =>
+      parseCommandPayload("context.buildPackage", {
+        projectId: "proj_1",
+        purpose: "freeform_dump_everything",
+        targetId: "chapter_plan_1",
+        targetType: "chapter_plan",
+      }),
+    ).toThrow();
   });
 
   it("parses fixed worldbuilding form fields with 500 character limits", () => {
@@ -613,6 +670,36 @@ describe("command registry", () => {
       status: "draft",
       title: "星潮初醒",
       volumePlanId: "volume_plan_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.deleteBookPlan", {
+        bookPlanId: "book_plan_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      bookPlanId: "book_plan_1",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.deleteVolumePlan", {
+        projectId: "proj_1",
+        volumePlanId: "volume_plan_1",
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      volumePlanId: "volume_plan_1",
+    });
+
+    expect(
+      parseCommandPayload("plot.deleteArcPlan", {
+        arcPlanId: "arc_plan_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      arcPlanId: "arc_plan_1",
+      projectId: "proj_1",
     });
 
     expect(
@@ -895,6 +982,179 @@ describe("command registry", () => {
     ).toEqual({
       chapterPlanId: "chapter_plan_1",
       instruction: "强化章末钩子",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("chapterExecutionCard.generate", {
+        chapterPlanId: "chapter_plan_1",
+        instruction: "强化安全屋升级回报",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      chapterPlanId: "chapter_plan_1",
+      instruction: "强化安全屋升级回报",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("chapterExecutionCard.apply", {
+        artifactId: "artifact_execution_card_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      artifactId: "artifact_execution_card_1",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("chapterExecutionCard.save", {
+        cardId: "card_1",
+        projectId: "proj_1",
+        values: {
+          chapterIndex: 1,
+          chapterPlanId: "chapter_plan_1",
+          coreConflict: "主角必须在保密安全屋和救下邻居之间做选择。",
+          emotionalTurn: "从只求自保转向承认秩序会吸引人心。",
+          forbiddenMoves: ["不要让热源永久稳定"],
+          hook: "炉芯日志出现三小时前的未知预警。",
+          informationGain: "旧堡垒地下有被封存的热源接口。",
+          narrativeGoal: "让安全屋第一次从囤货空间变成末世秩序核心。",
+          povCharacterId: "character_1",
+          readerReward: "完成首次供热闭环验证，同时留下热源来源谜题。",
+          relatedForeshadowingIds: ["foreshadowing_1"],
+          relatedPlotDebtIds: ["plot_debt_1"],
+          relatedPlotlineIds: ["plotline_1"],
+          requiredCharacterIds: ["character_1"],
+          requiredLocationIds: ["location_1"],
+          sceneBriefs: [
+            {
+              conflictTurn: "邻居敲门声迫使他关闭外部照明。",
+              memoryTargets: ["炉芯日志"],
+              outcome: "热源短时启动成功，但位置风险上升。",
+              sceneGoal: "验证供热闭环。",
+              sceneIndex: 1,
+            },
+          ],
+          status: "confirmed",
+          targetWordCount: 3500,
+          title: "第一章 炉芯预警",
+        },
+      }),
+    ).toMatchObject({
+      cardId: "card_1",
+      projectId: "proj_1",
+      values: {
+        chapterPlanId: "chapter_plan_1",
+        relatedPlotDebtIds: ["plot_debt_1"],
+        sceneBriefs: [
+          expect.objectContaining({
+            memoryTargets: ["炉芯日志"],
+            sceneIndex: 1,
+          }),
+        ],
+        status: "confirmed",
+      },
+    });
+
+    expect(
+      parseCommandPayload("plotDebt.list", {
+        projectId: "proj_1",
+        riskLevel: ["high", "critical"],
+        status: ["open", "reinforced"],
+      }),
+    ).toEqual({
+      projectId: "proj_1",
+      riskLevel: ["high", "critical"],
+      status: ["open", "reinforced"],
+    });
+
+    expect(
+      parseCommandPayload("plotDebt.save", {
+        debtId: "plot_debt_1",
+        projectId: "proj_1",
+        values: {
+          debtType: "reader_promise",
+          expectedPayoffChapterIndex: 18,
+          lifecycleNotes: ["第 1 章种下安全屋升级承诺"],
+          promise: "安全屋升级必须伴随更高代价。",
+          relatedCharacterIds: ["character_1"],
+          relatedForeshadowingId: "foreshadowing_1",
+          relatedPlotlineId: "plotline_1",
+          relatedWorldRuleIds: ["world_rule_1"],
+          riskLevel: "high",
+          seedChapterIndex: 1,
+          status: "open",
+          title: "安全屋升级承诺",
+        },
+      }),
+    ).toMatchObject({
+      debtId: "plot_debt_1",
+      projectId: "proj_1",
+      values: {
+        debtType: "reader_promise",
+        relatedCharacterIds: ["character_1"],
+        riskLevel: "high",
+      },
+    });
+
+    expect(
+      parseCommandPayload("storyState.extractDelta", {
+        chapterId: "chapter_1",
+        chapterVersion: 2,
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      chapterId: "chapter_1",
+      chapterVersion: 2,
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("storyState.applyDelta", {
+        artifactId: "artifact_delta_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      artifactId: "artifact_delta_1",
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("chapter.reviewDraft", {
+        artifactId: "artifact_draft_1",
+        chapterId: "chapter_1",
+        chapterVersion: 2,
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      artifactId: "artifact_draft_1",
+      chapterId: "chapter_1",
+      chapterVersion: 2,
+      projectId: "proj_1",
+    });
+
+    expect(
+      parseCommandPayload("serialReview.generate", {
+        endChapterIndex: 10,
+        projectId: "proj_1",
+        scope: "chapter_batch",
+        startChapterIndex: 1,
+      }),
+    ).toEqual({
+      endChapterIndex: 10,
+      projectId: "proj_1",
+      scope: "chapter_batch",
+      startChapterIndex: 1,
+    });
+
+    expect(
+      parseCommandPayload("serialReview.apply", {
+        artifactId: "artifact_review_1",
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      artifactId: "artifact_review_1",
       projectId: "proj_1",
     });
 

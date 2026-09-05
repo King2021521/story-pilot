@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import type { ModelGateway } from "@story-pilot/ai";
 import {
-  buildPromptMessages,
+  buildPromptTemplateMessages,
   ElementCandidateOutputSchema,
   type ElementCandidateOutput,
   type ElementCandidateType,
@@ -11,8 +11,12 @@ import {
 import type { CommandPayload } from "@story-pilot/contracts";
 import {
   CharacterRepository,
+  CreativePathRepository,
   DomainEventRepository,
+  type ProjectDatabase,
   ProjectRepository,
+  type ProjectOverviewRecord,
+  WorldbuildingRepository,
   WorldRepository,
   type WorldRuleRecord,
 } from "@story-pilot/db";
@@ -55,24 +59,25 @@ export class ElementCandidateService {
         .filter((rule): rule is WorldRuleRecord => rule !== undefined);
       const genre = input.genre?.trim() || project.genre;
       const style = input.style?.trim() || project.style || "通用";
-      const messages = buildPromptMessages({
-        capability: "element_generate",
-        context: buildElementGenerationContext({
+      const messages = buildPromptTemplateMessages({
+        templateId: "element-candidate.generate",
+        variables: buildElementGenerationVariables({
+          count: input.count,
           constraints: input.constraints,
           description: input.description,
           elementType: input.elementType,
           genre,
-          projectTitle: project.title,
+          project,
+          projectDatabase,
           style,
           worldRules,
         }),
         instruction: `生成 ${input.count} 个可供用户选择的「${input.elementType}」候选。候选不得直接写入正式设定。`,
-        version: "v1",
       });
 
       const generated = await this.modelGateway.generateObject({
         messages,
-        promptVersion: "v1",
+        promptVersion: "element-candidate.generate@v1",
         purpose: "element_generate",
         schema: ElementCandidateOutputSchema,
         schemaName: "ElementCandidateOutput",
@@ -224,32 +229,71 @@ export class ElementCandidateService {
   }
 }
 
-function buildElementGenerationContext(input: {
-  readonly projectTitle: string;
+function buildElementGenerationVariables(input: {
+  readonly project: ProjectOverviewRecord;
   readonly genre: string;
   readonly style: string;
   readonly elementType: ElementCandidateType;
+  readonly count: number;
   readonly description?: string | undefined;
   readonly worldRules: readonly WorldRuleRecord[];
   readonly constraints: readonly string[];
-}): string {
-  const worldRuleLines = input.worldRules.map(
-    (rule) => `- ${rule.title} [${rule.category}/${rule.source ?? "soft"}]: ${rule.content}`,
+  readonly projectDatabase: ProjectDatabase;
+}): Record<string, unknown> {
+  const pathRepository = new CreativePathRepository(input.projectDatabase);
+  const worldbuildingProfile = new WorldbuildingRepository(input.projectDatabase).getProfile(
+    input.project.id,
   );
-  const constraintLines = input.constraints.map((constraint) => `- ${constraint}`);
-  const description = input.description?.trim();
+  const blueprint = pathRepository.getActiveBlueprint(input.project.id);
+  const brief =
+    pathRepository.getLatestBrief(input.project.id) ??
+    ({
+      genre: input.genre,
+      style: input.style,
+      title: input.project.title,
+    } as const);
 
-  return [
-    `作品：${input.projectTitle}`,
-    `题材：${input.genre}`,
-    `风格：${input.style}`,
-    `候选类型：${input.elementType}`,
-    description ? `用户描述：${description}` : undefined,
-    worldRuleLines.length > 0 ? `世界观约束：\n${worldRuleLines.join("\n")}` : undefined,
-    constraintLines.length > 0 ? `额外约束：\n${constraintLines.join("\n")}` : undefined,
-  ]
-    .filter((line): line is string => line !== undefined)
-    .join("\n");
+  return {
+    project: buildProjectPromptVariable({
+      project: input.project,
+      style: input.style,
+    }),
+    brief,
+    generationRequest: {
+      constraints: input.constraints,
+      count: input.count,
+      description: input.description?.trim() ?? "",
+      elementType: input.elementType,
+      genre: input.genre,
+      style: input.style,
+      worldRuleIds: input.worldRules.map((rule) => rule.id),
+    },
+    blueprint,
+    worldbuildingProfile: worldbuildingProfile?.fields ?? null,
+    existingCanon: {
+      selectedWorldRules: input.worldRules.map((rule) => ({
+        category: rule.category,
+        content: rule.content,
+        id: rule.id,
+        source: rule.source,
+        title: rule.title,
+      })),
+    },
+    userInstruction: input.description?.trim() ?? null,
+  };
+}
+
+function buildProjectPromptVariable(input: {
+  readonly project: ProjectOverviewRecord;
+  readonly style: string;
+}): Record<string, unknown> {
+  return {
+    genre: input.project.genre,
+    id: input.project.id,
+    status: input.project.status,
+    style: input.style,
+    title: input.project.title,
+  };
 }
 
 function normalizeGeneratedCandidates(input: {

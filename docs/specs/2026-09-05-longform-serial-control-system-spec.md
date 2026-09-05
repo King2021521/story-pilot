@@ -375,13 +375,13 @@ serial.getDashboard(input: { projectId: string }): SerialDashboardView
 
 context.buildPackage(input: {
   projectId: string;
-  targetType: "chapter_plan" | "execution_card" | "chapter";
+  targetType: "chapter_plan" | "execution_card" | "chapter" | "chapter_range";
   targetId: string;
   purpose:
     | "execution_card_generate"
     | "chapter_draft"
     | "chapter_review"
-    | "state_extract"
+    | "story_state_delta_extract"
     | "retrospective_generate";
   tokenBudget?: number;
 }): GenerationContextPackage
@@ -697,7 +697,9 @@ const StoryStateDeltaOutputSchema = z.object({
 
 ### 8.7 阶段复盘模板
 
-能力：`serial_review_generate`
+模板 ID：`serial-review.generate`
+
+底层能力：`retrospective_generate`
 
 职责：
 
@@ -939,3 +941,102 @@ AI 生成质量的关键不是一次塞入更多文本，而是每次有稳定�
 - 每 10 到 20 章可以做阶段复盘，明确下一阶段升级方向。
 - 500 万字合成项目在总控台、章节规划、剧情债和上下文构建路径上性能可接受。
 - 前端交互符合创作者习惯：列表优先、弹窗编辑、单列长文本、Inspector 辅助、AI 产物可审阅。
+
+## 16. 当前实现落地映射
+
+本系统以“现有 9 步创作流程”为主骨架，只增加必要的长篇连载闭环能力，不改变用户已经熟悉的导航结构。
+
+| 用户动作             | 前端位置 | RPC 命令                        | AI 产物类型                    | 采纳后写入                                                         |
+| -------------------- | -------- | ------------------------------- | ------------------------------ | ------------------------------------------------------------------ |
+| 生成章节执行卡       | 章节规划 | `chapterExecutionCard.generate` | `chapter_execution_card_draft` | `chapter_execution_cards`                                          |
+| 基于结构章纲生成草稿 | 章节规划 | `chapter.generateDraftFromPlan` | `chapter_draft`                | `chapters`/`chapter_versions`                                      |
+| 生成正文草稿         | 正文创作 | `chapter.generateDraft`         | `chapter_draft`                | `chapters`/`chapter_versions`                                      |
+| 审阅当前版本         | 正文创作 | `chapter.reviewDraft`           | `chapter_review_report`        | 不直接写 canon                                                     |
+| 抽取状态变化         | 正文创作 | `storyState.extractDelta`       | `story_state_delta_draft`      | `story_state_snapshots`、`character_state_snapshots`、`plot_debts` |
+| 生成阶段复盘         | 章节规划 | `serialReview.generate`         | `serial_review_report`         | `serial_reviews`                                                   |
+| 新增或编辑剧情债     | 剧情节点 | `plotDebt.save`                 | 无                             | `plot_debts`                                                       |
+
+采纳规则：
+
+- `chapter_draft` 使用通用 artifact apply，按目标章节当前版本做替换式应用。
+- `chapter_execution_card_draft` 必须走 `chapterExecutionCard.apply`，不能当作正文 artifact。
+- `story_state_delta_draft` 必须走 `storyState.applyDelta`，由用户确认后再成为状态快照。
+- `serial_review_report` 必须走 `serialReview.apply`，进入阶段复盘档案。
+- `chapter_review_report` 是诊断报告，不直接修改正文或 canon；用户可据此手动修改正文，或拒绝归档该产物。
+
+## 17. Prompt 模板落地约束
+
+业务服务只负责组装变量和调用模板，不在服务内拼长 prompt。所有正式生成任务使用：
+
+```ts
+PromptTemplateRegistry.render(templateId, {
+  project,
+  brief,
+  worldbuildingProfile,
+  blueprint,
+  characters,
+  characterStates,
+  plotlines,
+  plotDebts,
+  conflicts,
+  longformPlans,
+  recentChapters,
+  contextPackage,
+  currentArtifact,
+  userInstruction,
+});
+```
+
+每个模板必须同时声明：
+
+- `id`：稳定模板 ID，例如 `chapter-review.generate`。
+- `capability`：模型策略能力，例如 `chapter_review` 或 `retrospective_generate`。
+- `version`：模板版本，例如 `v1`。
+- `requiredVariables`：缺少任何必需变量时直接失败。
+- `outputSchema`：与业务字段一一映射的 zod schema。
+- `lengthContract`：对最小信息密度、字段字数和数组规模的约束。
+- `canonBoundary`：是否允许创建新 canon、是否只能输出候选或诊断。
+
+推荐模型参数：
+
+| 任务                | `temperature` | `maxOutputTokens` | 说明                       |
+| ------------------- | ------------- | ----------------- | -------------------------- |
+| 世界观/核心故事补全 | 0.55-0.7      | 8000-12000        | 需要创造性，但必须结构闭环 |
+| 全书/滚动章纲       | 0.45-0.65     | 12000-18000       | 偏规划，要求节奏和因果清楚 |
+| 章节执行卡          | 0.35-0.5      | 5000-8000         | 偏约束，不写正文           |
+| 正文草稿            | 0.75-0.85     | 12000-20000       | 偏表达，仍受执行卡约束     |
+| 章节审稿            | 0.2-0.35      | 4000-6000         | 偏诊断，低随机性           |
+| 状态抽取/剧情债更新 | 0.1-0.25      | 4000-7000         | 偏事实抽取，严禁脑补       |
+| 阶段复盘            | 0.3-0.45      | 8000-12000        | 偏分析，输出可执行改进动作 |
+
+长文本生成约束示例：
+
+- 世界观 12 个维度每项建议 300 到 500 中文字，必须回应题材、时代、资源、权力、日常和冲突闭环。
+- 核心故事每个长文本字段建议 300 到 800 中文字，必须体现主角目标、阻力、阶段回报和长期张力。
+- 执行卡不追求字数铺满，但 narrativeGoal、coreConflict、readerReward、hook 必须具体到本章。
+- 阶段复盘不能只给评价词，必须给证据、风险、影响章节范围和下一步动作。
+
+## 18. 可执行 E2E 用例落地
+
+自动化测试分三层：
+
+- 组件/RPC 单测：验证按钮、弹窗、表单字段、payload 与 contracts 对齐。
+- Playwright E2E：验证真实页面布局、滚动、折叠、弹窗和 mock RPC 完整路径。
+- 真实流程测试：在本地配置模型后，跑“冰雪末世，打造安全屋，500 万字”从基本信息到正文前的全流程，并检查数据库记录。
+
+必须保留的 Playwright 用例：
+
+1. `shell-layout.spec.ts`：三栏布局不重叠，左右折叠可用，Inspector 工具箱结果可滚动。
+2. `book-outline.spec.ts`：全书/卷/弧线列表详情和弹窗新建、编辑、删除可用。
+3. `storyline-design.spec.ts`：故事线列表优先，创建和编辑走弹窗。
+4. `plot-nodes.spec.ts`：剧情节点、伏笔、剧情债列表与弹窗可用。
+5. `longform-serial-loop.spec.ts`：章节规划生成阶段复盘，正文页生成审稿报告、抽取状态变化，并从 AI 产物区采纳状态变化和阶段复盘。
+6. `longform-performance.spec.ts`：使用 500 万字合成项目验证总控台、章节规划分页/范围筛选、Inspector 布局和上下文包命令预算。
+
+E2E 布局断言至少包括：
+
+- 主工作区与 Inspector 不重叠。
+- 表单弹窗打开时，底层列表不被横向压缩到不可读。
+- 长文本字段单列排布，标签、输入框和字数统计不重叠。
+- Inspector 内部候选结果可滚动，生成按钮和关键约束字段始终可见。
+- 长篇项目的结构化章纲默认分页，不一次性渲染 1500 章列表；范围筛选应在 1 秒内反馈。

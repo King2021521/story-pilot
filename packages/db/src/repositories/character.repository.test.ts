@@ -102,6 +102,12 @@ describe("CharacterRepository", () => {
       expect(updated.traits).not.toEqual(
         expect.arrayContaining([expect.objectContaining({ name: "secret" })]),
       );
+
+      repository.deleteCharacter({
+        characterId: "character_1",
+        projectId: "project_1",
+      });
+      expect(repository.listCharacters("project_1")).toEqual([]);
     } finally {
       projectDatabase.close();
     }

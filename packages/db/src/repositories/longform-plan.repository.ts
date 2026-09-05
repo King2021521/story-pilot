@@ -652,6 +652,30 @@ export class LongformPlanRepository {
     return arcPlan;
   }
 
+  deleteBookPlan(projectId: string, bookPlanId: string): boolean {
+    const result = this.projectDatabase.client
+      .prepare("delete from book_plans where project_id = ? and id = ?")
+      .run(projectId, bookPlanId);
+
+    return result.changes > 0;
+  }
+
+  deleteVolumePlan(projectId: string, volumePlanId: string): boolean {
+    const result = this.projectDatabase.client
+      .prepare("delete from volume_plans where project_id = ? and id = ?")
+      .run(projectId, volumePlanId);
+
+    return result.changes > 0;
+  }
+
+  deleteArcPlan(projectId: string, arcPlanId: string): boolean {
+    const result = this.projectDatabase.client
+      .prepare("delete from arc_plans where project_id = ? and id = ?")
+      .run(projectId, arcPlanId);
+
+    return result.changes > 0;
+  }
+
   saveChapterPlan(input: SaveChapterPlanInput): ChapterPlanRecord {
     const now = input.now ?? Date.now();
     const existing = this.getChapterPlan(input.projectId, input.chapterPlanId);

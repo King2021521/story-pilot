@@ -1,5 +1,6 @@
 import {
   BranchesOutlined,
+  CheckCircleOutlined,
   PlusOutlined,
   SaveOutlined,
   ThunderboltOutlined,
@@ -30,6 +31,16 @@ export interface GenerateChapterDraftRequest {
   readonly instruction: string;
 }
 
+export interface ReviewChapterDraftRequest {
+  readonly chapterId: string;
+  readonly chapterVersion?: number;
+}
+
+export interface ExtractStoryStateDeltaRequest {
+  readonly chapterId: string;
+  readonly chapterVersion: number;
+}
+
 export interface CreateChapterRequest {
   readonly summary?: string;
   readonly title: string;
@@ -51,9 +62,12 @@ export interface ChapterEditorPageProps {
   readonly saving?: boolean;
   readonly versions?: readonly ChapterVersionItem[];
   onCreateChapter?: ((input: CreateChapterRequest) => Promise<void> | void) | undefined;
+  onExtractStateDelta?:
+    ((input: ExtractStoryStateDeltaRequest) => Promise<void> | void) | undefined;
   onGenerateDraft(input: GenerateChapterDraftRequest): Promise<void> | void;
   onLoadVersions?: ((input: LoadChapterVersionsRequest) => Promise<void> | void) | undefined;
   onRestoreVersion?: ((input: RestoreChapterVersionRequest) => Promise<void> | void) | undefined;
+  onReviewDraft?: ((input: ReviewChapterDraftRequest) => Promise<void> | void) | undefined;
   onSave(input: SaveChapterRequest): Promise<void> | void;
   onSelectChapter?: ((chapterId: string) => void) | undefined;
 }
@@ -63,8 +77,10 @@ export function ChapterEditorPage({
   chapters,
   loadingVersions = false,
   onCreateChapter,
+  onExtractStateDelta,
   onGenerateDraft,
   onLoadVersions,
+  onReviewDraft,
   onRestoreVersion,
   onSave,
   onSelectChapter,
@@ -189,6 +205,34 @@ export function ChapterEditorPage({
               >
                 生成草稿
               </Button>
+              {onReviewDraft ? (
+                <Button
+                  aria-label="审阅当前版本"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() =>
+                    onReviewDraft({
+                      chapterId: chapter.id,
+                      chapterVersion: chapter.version,
+                    })
+                  }
+                >
+                  审阅当前版本
+                </Button>
+              ) : null}
+              {onExtractStateDelta ? (
+                <Button
+                  aria-label="抽取状态变化"
+                  icon={<BranchesOutlined />}
+                  onClick={() =>
+                    onExtractStateDelta({
+                      chapterId: chapter.id,
+                      chapterVersion: chapter.version,
+                    })
+                  }
+                >
+                  抽取状态变化
+                </Button>
+              ) : null}
             </Space>
           </header>
 

@@ -217,6 +217,72 @@ describe("LongformPlanRepository", () => {
     }
   });
 
+  it("deletes book, volume, and arc plans with scoped cascades", async () => {
+    const projectDatabase = await createProjectDatabaseWithProject(tempDirs);
+    try {
+      const repository = new LongformPlanRepository(projectDatabase);
+      repository.createBookPlanHierarchy({
+        bookPlanId: "book_plan_1",
+        corePromise: "每卷完成一次安全屋升级和一次外部秩序碰撞。",
+        projectId: "project_1",
+        targetWordCount: 5_000_000,
+        title: "雪境堡垒全书规划",
+        volumes: [
+          {
+            arcs: [
+              {
+                arcIndex: 1,
+                arcPlanId: "arc_plan_1",
+                escalation: ["暴雪断电", "地下仓库失守"],
+                purpose: "验证第一批避难规则。",
+                title: "断电测试",
+              },
+            ],
+            majorConflict: "安全屋初建，外部幸存者开始试探边界。",
+            purpose: "完成安全屋基础秩序搭建。",
+            targetWordCount: 500_000,
+            title: "第一卷 白灾入屋",
+            volumeIndex: 1,
+            volumePlanId: "volume_plan_1",
+          },
+          {
+            arcs: [
+              {
+                arcIndex: 1,
+                arcPlanId: "arc_plan_2",
+                escalation: ["燃料交易", "路线背叛"],
+                purpose: "把冲突扩展到堡垒外部。",
+                title: "燃料远征",
+              },
+            ],
+            majorConflict: "堡垒热源不足，必须向外争夺燃料。",
+            purpose: "扩大地图和势力冲突。",
+            targetWordCount: 500_000,
+            title: "第二卷 热源争夺",
+            volumeIndex: 2,
+            volumePlanId: "volume_plan_2",
+          },
+        ],
+      });
+
+      expect(repository.deleteArcPlan("project_1", "arc_plan_1")).toBe(true);
+      expect(repository.listArcPlans("project_1", "volume_plan_1")).toHaveLength(0);
+      expect(repository.listVolumePlans("project_1", "book_plan_1")).toHaveLength(2);
+
+      expect(repository.deleteVolumePlan("project_1", "volume_plan_2")).toBe(true);
+      expect(repository.listVolumePlans("project_1", "book_plan_1")).toHaveLength(1);
+      expect(repository.listArcPlans("project_1", "volume_plan_2")).toHaveLength(0);
+
+      expect(repository.deleteBookPlan("project_1", "book_plan_1")).toBe(true);
+      expect(repository.listBookPlans("project_1")).toHaveLength(0);
+      expect(repository.listVolumePlans("project_1", "book_plan_1")).toHaveLength(0);
+      expect(repository.listArcPlans("project_1", "volume_plan_1")).toHaveLength(0);
+      expect(repository.deleteBookPlan("project_1", "missing_book_plan")).toBe(false);
+    } finally {
+      projectDatabase.close();
+    }
+  });
+
   it("creates rolling chapter plans with scene plans and explicit references", async () => {
     const projectDatabase = await createProjectDatabaseWithProject(tempDirs);
     try {

@@ -69,9 +69,15 @@ import {
   type CompleteCoreStoryFieldsResult,
   type CoreStoryFields,
   type CreateStoryEventValues,
+  type DeleteArcPlanValues,
+  type DeleteBookPlanValues,
+  type DeleteCharacterValues,
+  type DeletePlotlineValues,
+  type DeleteVolumePlanValues,
   type SaveArcPlanValues,
   type SaveBookPlanDraftValues,
   type SaveCoreStoryFieldsResult,
+  type SavePlotDebtValues,
   type SaveVolumePlanValues,
   type UpdateCharacterValues,
   type UpdateForeshadowingValues,
@@ -196,11 +202,11 @@ export function ShellLayout() {
   );
 
   const openProject = useCallback(
-    async (projectId: string) => {
+    async (projectId: string, moduleKey: WorkspaceModuleKey = "dashboard") => {
       const project = (await storyPilotApi.openProject({ projectId })) as WorkbenchProject;
       setActiveProject(project);
       setProjects((currentProjects) => upsertProject(currentProjects, project));
-      setActiveModuleKey("dashboard");
+      setActiveModuleKey(moduleKey);
       await refreshBoard(project.id);
     },
     [refreshBoard, storyPilotApi],
@@ -401,9 +407,98 @@ export function ShellLayout() {
     [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
   );
 
+  const reviewChapterDraft = useCallback(
+    async (input: { readonly chapterId: string; readonly chapterVersion?: number }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.reviewChapterDraft({
+          ...input,
+          projectId: activeProject.id,
+        });
+        openInspectorTab("artifacts");
+        await refreshBoard(activeProject.id);
+        message.success("章节审稿报告已进入产物区");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
+  );
+
+  const extractStoryStateDelta = useCallback(
+    async (input: { readonly chapterId: string; readonly chapterVersion: number }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.extractStoryStateDelta({
+          ...input,
+          projectId: activeProject.id,
+        });
+        openInspectorTab("artifacts");
+        await refreshBoard(activeProject.id);
+        message.success("章节状态变化已进入产物区");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
+  );
+
   const applyArtifact = useCallback(
     async (artifact: ArtifactReviewItem) => {
       if (!activeProject || !board) {
+        return;
+      }
+
+      if (artifact.kind === "chapter_execution_card_draft") {
+        try {
+          await storyPilotApi.applyChapterExecutionCard({
+            artifactId: artifact.id,
+            projectId: activeProject.id,
+          });
+          await refreshBoard(activeProject.id);
+          message.success("章节执行卡已确认");
+        } catch (error) {
+          message.error(getErrorMessage(error));
+        }
+        return;
+      }
+
+      if (artifact.kind === "story_state_delta_draft") {
+        try {
+          await storyPilotApi.applyStoryStateDelta({
+            artifactId: artifact.id,
+            projectId: activeProject.id,
+          });
+          await refreshBoard(activeProject.id);
+          message.success("状态变化已写入快照");
+        } catch (error) {
+          message.error(getErrorMessage(error));
+        }
+        return;
+      }
+
+      if (artifact.kind === "serial_review_report") {
+        try {
+          await storyPilotApi.applySerialReview({
+            artifactId: artifact.id,
+            projectId: activeProject.id,
+          });
+          await refreshBoard(activeProject.id);
+          message.success("阶段复盘已归档");
+        } catch (error) {
+          message.error(getErrorMessage(error));
+        }
+        return;
+      }
+
+      if (artifact.kind === "chapter_review_report") {
+        message.info("审稿报告不会直接写入正文，请按建议修改正文或拒绝归档。");
         return;
       }
 
@@ -422,9 +517,18 @@ export function ShellLayout() {
         })) as { readonly chapter?: WorkbenchChapter };
         if (result.chapter) {
           setSelectedChapterId(result.chapter.id);
+          try {
+            await storyPilotApi.extractStoryStateDelta({
+              chapterId: result.chapter.id,
+              chapterVersion: result.chapter.version,
+              projectId: activeProject.id,
+            });
+          } catch (stateError) {
+            message.warning(`章节已应用，但状态抽取失败：${getErrorMessage(stateError)}`);
+          }
         }
         await refreshBoard(activeProject.id);
-        message.success("AI 产物已应用为章节版本");
+        message.success("AI 产物已应用为章节版本，状态变化已进入产物区");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -578,6 +682,26 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const deleteCharacter = useCallback(
+    async (input: DeleteCharacterValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.deleteCharacter({
+          characterId: input.characterId,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("人物已删除");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const createWorldRule = useCallback(
     async (input: Omit<CommandPayload<"worldRule.create">, "projectId">) => {
       if (!activeProject) {
@@ -674,6 +798,26 @@ export function ShellLayout() {
         });
         await refreshBoard(activeProject.id);
         message.success("故事线已保存");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const deletePlotline = useCallback(
+    async (input: DeletePlotlineValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.deletePlotline({
+          plotlineId: input.plotlineId,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("故事线已删除");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -826,6 +970,26 @@ export function ShellLayout() {
         });
         await refreshBoard(activeProject.id);
         message.success("伏笔回收规划已提交");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const savePlotDebt = useCallback(
+    async (input: SavePlotDebtValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.savePlotDebt({
+          ...input,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success(input.debtId ? "剧情债已保存" : "剧情债已创建");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -1263,6 +1427,66 @@ export function ShellLayout() {
     [activeProject, message, refreshBoard, storyPilotApi],
   );
 
+  const deleteBookPlan = useCallback(
+    async (input: DeleteBookPlanValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.deleteBookPlan({
+          bookPlanId: input.bookPlanId,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("全书规划已删除");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const deleteVolumePlan = useCallback(
+    async (input: DeleteVolumePlanValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.deleteVolumePlan({
+          projectId: activeProject.id,
+          volumePlanId: input.volumePlanId,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("卷规划已删除");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
+  const deleteArcPlan = useCallback(
+    async (input: DeleteArcPlanValues) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.deleteArcPlan({
+          arcPlanId: input.arcPlanId,
+          projectId: activeProject.id,
+        });
+        await refreshBoard(activeProject.id);
+        message.success("阶段弧线已删除");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, refreshBoard, storyPilotApi],
+  );
+
   const generateRollingOutline = useCallback(
     async (input: {
       readonly volumePlanId?: string;
@@ -1370,6 +1594,52 @@ export function ShellLayout() {
         openInspectorTab("artifacts");
         await refreshBoard(activeProject.id);
         message.success("结构章纲草稿已进入产物区");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
+  );
+
+  const generateChapterExecutionCard = useCallback(
+    async (input: { readonly chapterPlanId: string; readonly instruction?: string }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.generateChapterExecutionCard({
+          ...input,
+          projectId: activeProject.id,
+        });
+        openInspectorTab("artifacts");
+        await refreshBoard(activeProject.id);
+        message.success("章节执行卡已进入产物区");
+      } catch (error) {
+        message.error(getErrorMessage(error));
+      }
+    },
+    [activeProject, message, openInspectorTab, refreshBoard, storyPilotApi],
+  );
+
+  const generateSerialReview = useCallback(
+    async (input: {
+      readonly endChapterIndex: number;
+      readonly scope: "chapter_batch" | "arc" | "volume";
+      readonly startChapterIndex: number;
+    }) => {
+      if (!activeProject) {
+        return;
+      }
+
+      try {
+        await storyPilotApi.generateSerialReview({
+          ...input,
+          projectId: activeProject.id,
+        });
+        openInspectorTab("artifacts");
+        await refreshBoard(activeProject.id);
+        message.success("阶段复盘报告已进入产物区");
       } catch (error) {
         message.error(getErrorMessage(error));
       }
@@ -1497,8 +1767,8 @@ export function ShellLayout() {
             chapters={board?.chapters ?? []}
             collapsed={sidebarCollapsed}
             onCreateProject={() => setCreateProjectOpen(true)}
-            onOpenProject={(projectId) => {
-              void openProject(projectId).catch((error: unknown) => {
+            onOpenProject={(projectId, moduleKey) => {
+              void openProject(projectId, moduleKey).catch((error: unknown) => {
                 message.error(getErrorMessage(error));
               });
             }}
@@ -1538,20 +1808,28 @@ export function ShellLayout() {
             onConfirmMemory={confirmMemory}
             onCreateChapter={createChapter}
             onCreateCharacter={createCharacter}
+            onDeleteArcPlan={deleteArcPlan}
+            onDeleteBookPlan={deleteBookPlan}
+            onDeleteCharacter={deleteCharacter}
+            onDeletePlotline={deletePlotline}
+            onDeleteVolumePlan={deleteVolumePlan}
             onCreateForeshadowing={createForeshadowing}
             onCreatePlotline={createPlotline}
             onCreatePlotlineNode={createPlotlineNode}
             onCreateStoryEvent={createStoryEvent}
             onCreateWorldRule={createWorldRule}
             onEvaluateStageGate={evaluateStageGate}
+            onExtractStoryStateDelta={extractStoryStateDelta}
             onGenerateBlueprint={generateBlueprint}
             onGenerateBookPlan={generateBookPlan}
+            onGenerateChapterExecutionCard={generateChapterExecutionCard}
             onGenerateDraft={generateDraft}
             onGenerateDraftFromOutline={generateDraftFromOutline}
             onGenerateDraftFromPlan={generateDraftFromPlan}
             onGenerateElementCandidates={generateElementCandidates}
             onGenerateOutline={generateOutline}
             onGenerateRollingOutline={generateRollingOutline}
+            onGenerateSerialReview={generateSerialReview}
             onLoadChapterVersions={loadChapterVersions}
             onPlanForeshadowing={planForeshadowing}
             onRejectMemory={rejectMemory}
@@ -1562,6 +1840,8 @@ export function ShellLayout() {
             onSaveBrief={saveBrief}
             onSaveChapter={saveChapter}
             onSaveCoreStoryFields={saveCoreStoryFields}
+            onSavePlotDebt={savePlotDebt}
+            onReviewChapterDraft={reviewChapterDraft}
             onSaveVolumePlan={saveVolumePlan}
             onSaveWorldbuildingFields={saveWorldbuildingFields}
             onSelectChapter={selectChapter}

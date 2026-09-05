@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 interface StoryPilotE2eRpcRequest {
   readonly command: string;
@@ -204,6 +204,16 @@ test("shell uses a non-overlapping workspace and collapsible inspector chrome", 
   await expect(page.getByRole("tab", { name: /工具箱/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "项目看板" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "AI 任务" })).toHaveCount(0);
+  await expect(page.getByLabel("作品树")).toBeVisible();
+  await expect(page.getByText("当前作品")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "收起作品 雪境堡垒" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await page.getByRole("button", { name: "收起作品 雪境堡垒" }).click();
+  await expect(page.getByRole("button", { name: "4. 角色设计" })).toHaveCount(0);
+  await page.getByRole("button", { name: "展开作品 雪境堡垒" }).click();
+  await expect(page.getByRole("button", { name: "4. 角色设计" })).toBeVisible();
 
   const titlebarBox = await page.getByLabel("应用标题栏").boundingBox();
   const sidebarBox = await page.getByLabel("作品管理区").boundingBox();
@@ -309,6 +319,22 @@ test("shell uses a non-overlapping workspace and collapsible inspector chrome", 
   expect(boxesOverlap(settingsMenuBox!, settingsContentBox!)).toBe(false);
 });
 
+test("worldbuilding and core story long text fields are stacked full-row editors", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "2. 世界观设计" }).click();
+  await expect(page.getByRole("heading", { name: "世界观设计" })).toBeVisible();
+  await expectFieldStackedBelow(page, "世界基底", "空间地理");
+  await expectFieldStackedBelow(page, "历史背景", "力量体系");
+
+  await page.getByRole("button", { name: "3. 核心故事" }).click();
+  await expect(page.getByRole("heading", { name: "核心故事设计" })).toBeVisible();
+  await expectFieldStackedBelow(page, "故事前提", "一句话故事");
+  await expectFieldStackedBelow(page, "核心承诺", "主线目标");
+});
+
 function boxesOverlap(
   first: { height: number; width: number; x: number; y: number },
   second: { height: number; width: number; x: number; y: number },
@@ -319,4 +345,20 @@ function boxesOverlap(
     first.y < second.y + second.height &&
     first.y + first.height > second.y
   );
+}
+
+async function expectFieldStackedBelow(page: Page, firstLabel: string, secondLabel: string) {
+  const first = page.getByLabel(firstLabel, { exact: true });
+  const second = page.getByLabel(secondLabel, { exact: true });
+
+  await expect(first).toBeVisible();
+  await expect(second).toBeVisible();
+
+  const firstBox = await first.boundingBox();
+  const secondBox = await second.boundingBox();
+  expect(firstBox).not.toBeNull();
+  expect(secondBox).not.toBeNull();
+  expect(Math.abs(firstBox!.x - secondBox!.x)).toBeLessThanOrEqual(8);
+  expect(secondBox!.width).toBeGreaterThanOrEqual(firstBox!.width * 0.95);
+  expect(secondBox!.y).toBeGreaterThan(firstBox!.y + firstBox!.height);
 }

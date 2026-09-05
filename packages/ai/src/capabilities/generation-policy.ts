@@ -26,6 +26,14 @@ const policies: Record<string, GenerationPolicy> = {
     maxOutputTokens: 12000,
     temperature: 0.82,
   },
+  chapter_execution_card_generate: {
+    maxOutputTokens: 7000,
+    temperature: 0.45,
+  },
+  chapter_review: {
+    maxOutputTokens: 6000,
+    temperature: 0.2,
+  },
   chapter_rewrite: {
     maxOutputTokens: 8000,
     temperature: 0.65,
@@ -50,6 +58,10 @@ const policies: Record<string, GenerationPolicy> = {
     maxOutputTokens: 3500,
     temperature: 0.2,
   },
+  story_state_delta_extract: {
+    maxOutputTokens: 6000,
+    temperature: 0.2,
+  },
   outline_generate: {
     maxOutputTokens: 5000,
     temperature: 0.55,
@@ -63,7 +75,7 @@ const policies: Record<string, GenerationPolicy> = {
     temperature: 0.68,
   },
   retrospective_generate: {
-    maxOutputTokens: 4500,
+    maxOutputTokens: 9000,
     temperature: 0.35,
   },
   rolling_chapter_plan_generate: {

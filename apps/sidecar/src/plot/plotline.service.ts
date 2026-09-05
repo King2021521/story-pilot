@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Injectable } from "@nestjs/common";
+import type { CommandPayload } from "@story-pilot/contracts";
 import {
   DomainEventRepository,
   PlotRepository,
@@ -37,6 +38,8 @@ export interface UpdatePlotlineInput {
   readonly plotlineId: string;
   readonly patch: Record<string, unknown>;
 }
+
+export type DeletePlotlineInput = CommandPayload<"plotline.delete">;
 
 export interface CreatePlotlineNodeInput {
   readonly projectId: string;
@@ -168,6 +171,34 @@ export class PlotlineService {
       });
 
       return plotline;
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async deletePlotline(input: DeletePlotlineInput): Promise<{ readonly plotlineId: string }> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const repository = new PlotRepository(projectDatabase);
+      const plotline = repository.getPlotline(input.projectId, input.plotlineId);
+      repository.deletePlotline({
+        plotlineId: input.plotlineId,
+        projectId: input.projectId,
+      });
+
+      new DomainEventRepository(projectDatabase).append({
+        aggregateId: input.plotlineId,
+        aggregateType: "plotline",
+        eventId: randomUUID(),
+        eventType: "plotline.deleted",
+        payload: {
+          title: plotline?.name ?? null,
+          type: plotline?.type ?? null,
+        },
+        projectId: input.projectId,
+      });
+
+      return { plotlineId: input.plotlineId };
     } finally {
       projectDatabase.close();
     }

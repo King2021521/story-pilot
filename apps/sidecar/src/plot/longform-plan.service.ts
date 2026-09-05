@@ -4,6 +4,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import {
   ArtifactRepository,
   ContextRepository,
+  CreativePathRepository,
   DomainEventRepository,
   LongformPlanRepository,
   ModelCallRepository,
@@ -14,13 +15,15 @@ import {
   type BookPlanRecord,
   type ChapterPlanRecord,
   type ProjectDatabase,
+  type ProjectOverviewRecord,
   type ScenePlanRecord,
   type VolumePlanRecord,
   type WorkflowRunRecord,
+  WorldbuildingRepository,
 } from "@story-pilot/db";
 import {
   BookPlanGenerateOutputSchema,
-  buildPromptMessages,
+  buildPromptTemplateMessages,
   RollingChapterPlanGenerateOutputSchema,
   type BookPlanGenerateOutput,
   type ModelGateway,
@@ -73,11 +76,17 @@ type ApplyBookPlanInput = CommandPayload<"plot.applyBookPlan">;
 type SaveBookPlanDraftInput = CommandPayload<"plot.saveBookPlanDraft">;
 type SaveVolumePlanInput = CommandPayload<"plot.saveVolumePlan">;
 type SaveArcPlanInput = CommandPayload<"plot.saveArcPlan">;
+type DeleteBookPlanInput = CommandPayload<"plot.deleteBookPlan">;
+type DeleteVolumePlanInput = CommandPayload<"plot.deleteVolumePlan">;
+type DeleteArcPlanInput = CommandPayload<"plot.deleteArcPlan">;
 type SaveChapterPlanInput = CommandPayload<"plot.saveChapterPlan">;
 type SaveScenePlanInput = CommandPayload<"plot.saveScenePlan">;
 type GenerateRollingOutlineInput = CommandPayload<"plot.generateRollingOutline">;
 type ApplyChapterPlansInput = CommandPayload<"plot.applyChapterPlans">;
 type AnalyzeOutlineImpactInput = CommandPayload<"plot.analyzeOutlineImpact">;
+
+const BOOK_PLAN_GENERATE_PROMPT_VERSION = "book-plan.generate@v1";
+const ROLLING_CHAPTER_PLAN_GENERATE_PROMPT_VERSION = "rolling-chapter-plan.generate@v1";
 
 @Injectable()
 export class LongformPlanService {
@@ -118,15 +127,19 @@ export class LongformPlanService {
         workOrderId,
       });
 
-      const messages = buildPromptMessages({
-        capability: "book_plan_generate",
-        context: contextText,
+      const messages = buildPromptTemplateMessages({
+        templateId: "book-plan.generate",
+        variables: buildBookPlanTemplateVariables(projectDatabase, project, {
+          contextPackageId,
+          contextText,
+          targetWordCount: input.targetWordCount,
+          volumeCount: input.volumeCount,
+        }),
         instruction: `生成目标 ${input.targetWordCount} 字、${input.volumeCount} 卷的长篇 Book Plan。`,
-        version: "v1",
       });
       const modelResult = await this.modelGateway.generateObject({
         messages,
-        promptVersion: "book-plan-generate.v1",
+        promptVersion: BOOK_PLAN_GENERATE_PROMPT_VERSION,
         purpose: "book_plan_generate",
         schema: BookPlanGenerateOutputSchema,
         schemaName: "BookPlanGenerateOutput",
@@ -144,7 +157,7 @@ export class LongformPlanService {
           model: modelResult.modelCall.model,
           modelCallId,
           projectId: input.projectId,
-          promptVersion: modelResult.modelCall.promptVersion ?? "book-plan-generate.v1",
+          promptVersion: modelResult.modelCall.promptVersion ?? BOOK_PLAN_GENERATE_PROMPT_VERSION,
           provider: modelResult.modelCall.provider,
           purpose: "book_plan_generate",
           request: {
@@ -152,6 +165,7 @@ export class LongformPlanService {
             messages,
             schemaName: "BookPlanGenerateOutput",
             targetWordCount: input.targetWordCount,
+            templateId: "book-plan.generate",
             volumeCount: input.volumeCount,
           },
           response: modelResult.raw,
@@ -404,6 +418,96 @@ export class LongformPlanService {
     }
   }
 
+  async deleteBookPlan(
+    input: DeleteBookPlanInput,
+  ): Promise<{ readonly bookPlanId: string; readonly deleted: boolean }> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const deleted = new LongformPlanRepository(projectDatabase).deleteBookPlan(
+          input.projectId,
+          input.bookPlanId,
+        );
+        if (deleted) {
+          new DomainEventRepository(projectDatabase).append({
+            aggregateId: input.bookPlanId,
+            aggregateType: "book_plan",
+            eventId: randomUUID(),
+            eventType: "book_plan.deleted",
+            now,
+            payload: {},
+            projectId: input.projectId,
+          });
+        }
+
+        return { bookPlanId: input.bookPlanId, deleted };
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async deleteVolumePlan(
+    input: DeleteVolumePlanInput,
+  ): Promise<{ readonly deleted: boolean; readonly volumePlanId: string }> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const deleted = new LongformPlanRepository(projectDatabase).deleteVolumePlan(
+          input.projectId,
+          input.volumePlanId,
+        );
+        if (deleted) {
+          new DomainEventRepository(projectDatabase).append({
+            aggregateId: input.volumePlanId,
+            aggregateType: "volume_plan",
+            eventId: randomUUID(),
+            eventType: "volume_plan.deleted",
+            now,
+            payload: {},
+            projectId: input.projectId,
+          });
+        }
+
+        return { deleted, volumePlanId: input.volumePlanId };
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
+  async deleteArcPlan(
+    input: DeleteArcPlanInput,
+  ): Promise<{ readonly arcPlanId: string; readonly deleted: boolean }> {
+    const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
+    try {
+      const now = Date.now();
+      return projectDatabase.client.transaction(() => {
+        const deleted = new LongformPlanRepository(projectDatabase).deleteArcPlan(
+          input.projectId,
+          input.arcPlanId,
+        );
+        if (deleted) {
+          new DomainEventRepository(projectDatabase).append({
+            aggregateId: input.arcPlanId,
+            aggregateType: "arc_plan",
+            eventId: randomUUID(),
+            eventType: "arc_plan.deleted",
+            now,
+            payload: {},
+            projectId: input.projectId,
+          });
+        }
+
+        return { arcPlanId: input.arcPlanId, deleted };
+      })();
+    } finally {
+      projectDatabase.close();
+    }
+  }
+
   async saveChapterPlan(input: SaveChapterPlanInput): Promise<ChapterPlanRecord> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
@@ -496,6 +600,7 @@ export class LongformPlanService {
   ): Promise<GenerateRollingOutlineResult> {
     const projectDatabase = await this.projectStorage.openProjectDatabase(input.projectId);
     try {
+      const project = getProjectOrThrow(projectDatabase, input.projectId);
       const target = resolveRollingOutlineTarget(projectDatabase, input);
       const { contextPackageId, contextText } = createPlanningContext(projectDatabase, {
         input: {
@@ -529,15 +634,23 @@ export class LongformPlanService {
         workOrderId,
       });
 
-      const messages = buildPromptMessages({
-        capability: "rolling_chapter_plan_generate",
-        context: contextText,
+      const messages = buildPromptTemplateMessages({
+        templateId: "rolling-chapter-plan.generate",
+        variables: buildRollingChapterPlanTemplateVariables(projectDatabase, project, {
+          arcPlan: target.arcPlan,
+          chapterCount: input.chapterCount,
+          contextPackageId,
+          contextText,
+          startChapterIndex: input.startChapterIndex,
+          targetId: target.targetId,
+          targetType: target.targetType,
+          volumePlan: target.volumePlan,
+        }),
         instruction: `从第 ${input.startChapterIndex} 章开始生成未来 ${input.chapterCount} 章 Chapter Plan 和 Scene Plan。`,
-        version: "v1",
       });
       const modelResult = await this.modelGateway.generateObject({
         messages,
-        promptVersion: "rolling-chapter-plan-generate.v1",
+        promptVersion: ROLLING_CHAPTER_PLAN_GENERATE_PROMPT_VERSION,
         purpose: "rolling_chapter_plan_generate",
         schema: RollingChapterPlanGenerateOutputSchema,
         schemaName: "RollingChapterPlanGenerateOutput",
@@ -556,7 +669,8 @@ export class LongformPlanService {
           model: modelResult.modelCall.model,
           modelCallId,
           projectId: input.projectId,
-          promptVersion: modelResult.modelCall.promptVersion ?? "rolling-chapter-plan-generate.v1",
+          promptVersion:
+            modelResult.modelCall.promptVersion ?? ROLLING_CHAPTER_PLAN_GENERATE_PROMPT_VERSION,
           provider: modelResult.modelCall.provider,
           purpose: "rolling_chapter_plan_generate",
           request: {
@@ -565,6 +679,7 @@ export class LongformPlanService {
             schemaName: "RollingChapterPlanGenerateOutput",
             targetId: target.targetId,
             targetType: target.targetType,
+            templateId: "rolling-chapter-plan.generate",
           },
           response: modelResult.raw,
           status: modelResult.modelCall.status,
@@ -810,6 +925,195 @@ function createPlanningContext(
   return {
     contextPackageId,
     contextText: creativeContextText(contextItems),
+  };
+}
+
+function buildBookPlanTemplateVariables(
+  projectDatabase: ProjectDatabase,
+  project: ProjectOverviewRecord,
+  input: {
+    readonly contextPackageId: string;
+    readonly contextText: string;
+    readonly targetWordCount: number;
+    readonly volumeCount: number;
+  },
+): Record<string, unknown> {
+  const pathRepository = new CreativePathRepository(projectDatabase);
+  const worldbuildingProfile = new WorldbuildingRepository(projectDatabase).getProfile(project.id);
+
+  return {
+    project: buildProjectPromptVariable(project, {
+      targetWordCount: input.targetWordCount,
+      volumeCount: input.volumeCount,
+    }),
+    brief: buildBriefPromptVariable(pathRepository, project),
+    worldbuildingProfile: worldbuildingProfile?.fields ?? null,
+    blueprint: pathRepository.getActiveBlueprint(project.id),
+    contextPackage: {
+      id: input.contextPackageId,
+      strategy: "creative_context_items_v1",
+      text: input.contextText,
+    },
+  };
+}
+
+function buildRollingChapterPlanTemplateVariables(
+  projectDatabase: ProjectDatabase,
+  project: ProjectOverviewRecord,
+  input: {
+    readonly arcPlan: ArcPlanRecord | undefined;
+    readonly chapterCount: 10 | 20;
+    readonly contextPackageId: string;
+    readonly contextText: string;
+    readonly startChapterIndex: number;
+    readonly targetId: string;
+    readonly targetType: "project" | "volume_plan" | "arc_plan";
+    readonly volumePlan: VolumePlanRecord | undefined;
+  },
+): Record<string, unknown> {
+  const pathRepository = new CreativePathRepository(projectDatabase);
+  const worldbuildingProfile = new WorldbuildingRepository(projectDatabase).getProfile(project.id);
+
+  return {
+    project: buildProjectPromptVariable(project, {
+      chapterCount: input.chapterCount,
+      startChapterIndex: input.startChapterIndex,
+    }),
+    brief: buildBriefPromptVariable(pathRepository, project),
+    worldbuildingProfile: worldbuildingProfile?.fields ?? null,
+    blueprint: pathRepository.getActiveBlueprint(project.id),
+    longformPlans: buildLongformPlansPromptVariable(projectDatabase, project.id, {
+      arcPlanId: input.arcPlan?.id ?? null,
+      chapterCount: input.chapterCount,
+      startChapterIndex: input.startChapterIndex,
+      targetId: input.targetId,
+      targetType: input.targetType,
+      volumePlanId: input.volumePlan?.id ?? null,
+    }),
+    contextPackage: {
+      id: input.contextPackageId,
+      strategy: "creative_context_items_v1",
+      text: input.contextText,
+    },
+  };
+}
+
+function buildProjectPromptVariable(
+  project: ProjectOverviewRecord,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    genre: project.genre,
+    id: project.id,
+    status: project.status,
+    style: project.style ?? "通用",
+    title: project.title,
+    ...extra,
+  };
+}
+
+function buildBriefPromptVariable(
+  pathRepository: CreativePathRepository,
+  project: ProjectOverviewRecord,
+): Record<string, unknown> {
+  const brief = pathRepository.getLatestBrief(project.id);
+  if (!brief) {
+    return {
+      genre: project.genre,
+      style: project.style ?? "通用",
+      title: project.title,
+    };
+  }
+
+  return {
+    emotionalRewards: brief.emotionalRewards,
+    estimatedChapterCount: brief.estimatedChapterCount,
+    estimatedWordCount: brief.estimatedWordCount,
+    forbiddenDirections: brief.forbiddenDirections,
+    genre: brief.genre,
+    id: brief.id,
+    initialIdea: brief.initialIdea,
+    lengthProfile: brief.lengthProfile,
+    narrativePov: brief.narrativePov,
+    platformProfile: brief.platformProfile,
+    status: brief.status,
+    subgenres: brief.subgenres,
+    targetAudience: brief.targetAudience,
+    version: brief.version,
+  };
+}
+
+function buildLongformPlansPromptVariable(
+  projectDatabase: ProjectDatabase,
+  projectId: string,
+  target: Record<string, unknown>,
+): Record<string, unknown> {
+  const repository = new LongformPlanRepository(projectDatabase);
+
+  return {
+    target,
+    bookPlans: repository.listBookPlans(projectId).map((bookPlan) => ({
+      corePromise: bookPlan.corePromise,
+      endingDirection: bookPlan.endingDirection,
+      id: bookPlan.id,
+      mainPlotlineId: bookPlan.mainPlotlineId,
+      status: bookPlan.status,
+      targetWordCount: bookPlan.targetWordCount,
+      title: bookPlan.title,
+      version: bookPlan.version,
+    })),
+    volumePlans: repository.listVolumePlans(projectId).map((volumePlan) => ({
+      bookPlanId: volumePlan.bookPlanId,
+      climax: volumePlan.climax,
+      id: volumePlan.id,
+      majorConflict: volumePlan.majorConflict,
+      purpose: volumePlan.purpose,
+      status: volumePlan.status,
+      targetWordCount: volumePlan.targetWordCount,
+      title: volumePlan.title,
+      volumeIndex: volumePlan.volumeIndex,
+    })),
+    arcPlans: repository.listArcPlans(projectId).map((arcPlan) => ({
+      arcIndex: arcPlan.arcIndex,
+      characterArcId: arcPlan.characterArcId,
+      endChapterIndex: arcPlan.endChapterIndex,
+      escalation: arcPlan.escalation,
+      id: arcPlan.id,
+      plotlineId: arcPlan.plotlineId,
+      purpose: arcPlan.purpose,
+      startChapterIndex: arcPlan.startChapterIndex,
+      status: arcPlan.status,
+      title: arcPlan.title,
+      volumePlanId: arcPlan.volumePlanId,
+    })),
+    chapterPlans: repository.listChapterPlans(projectId).map((chapterPlan) => ({
+      arcPlanId: chapterPlan.arcPlanId,
+      chapterGoal: chapterPlan.chapterGoal,
+      chapterIndex: chapterPlan.chapterIndex,
+      conflict: chapterPlan.conflict,
+      emotionalTurn: chapterPlan.emotionalTurn,
+      hook: chapterPlan.hook,
+      id: chapterPlan.id,
+      informationGain: chapterPlan.informationGain,
+      relatedCharacterIds: chapterPlan.relatedCharacterIds,
+      relatedForeshadowingIds: chapterPlan.relatedForeshadowingIds,
+      relatedPlotlineIds: chapterPlan.relatedPlotlineIds,
+      status: chapterPlan.status,
+      targetWordCount: chapterPlan.targetWordCount,
+      title: chapterPlan.title,
+    })),
+    scenePlans: repository.listScenePlans(projectId).map((scenePlan) => ({
+      chapterPlanId: scenePlan.chapterPlanId,
+      conflictTurn: scenePlan.conflictTurn,
+      id: scenePlan.id,
+      locationId: scenePlan.locationId,
+      memoryTargets: scenePlan.memoryTargets,
+      outcome: scenePlan.outcome,
+      povCharacterId: scenePlan.povCharacterId,
+      sceneGoal: scenePlan.sceneGoal,
+      sceneIndex: scenePlan.sceneIndex,
+      status: scenePlan.status,
+    })),
   };
 }
 

@@ -527,6 +527,8 @@ describe("ShellLayout", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "作品总控台" })).toBeInTheDocument();
+    expect(screen.getByRole("tree", { name: "作品树" })).toBeInTheDocument();
+    expect(screen.queryByText("当前作品")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1. 基本信息" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "9. 正文创作" })).toBeInTheDocument();
 
@@ -582,11 +584,15 @@ describe("ShellLayout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "7. 剧情节点" }));
     expect(await screen.findByRole("heading", { name: "剧情节点设计" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("节点标题"), { target: { value: "旧信出现" } });
-    fireEvent.change(screen.getByLabelText("节点描述"), {
+    fireEvent.click(screen.getByRole("button", { name: "新建剧情节点" }));
+    const storyEventDialog = await screen.findByRole("dialog", { name: "新建剧情节点" });
+    fireEvent.change(within(storyEventDialog).getByLabelText("节点标题"), {
+      target: { value: "旧信出现" },
+    });
+    fireEvent.change(within(storyEventDialog).getByLabelText("节点描述"), {
       target: { value: "主角收到旧信，被迫回到十年前的旧案。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "创建剧情节点" }));
+    fireEvent.click(within(storyEventDialog).getByRole("button", { name: "创建剧情节点" }));
     await waitFor(() => {
       expect(rpcPayload("storyEvent.create")).toMatchObject({
         description: "主角收到旧信，被迫回到十年前的旧案。",
@@ -864,6 +870,25 @@ describe("ShellLayout", () => {
             memoryCandidates: [],
             workflowRun: { id: "run_plan_1", status: "completed" },
           });
+        case "chapterExecutionCard.generate":
+          return rpcSuccess(request.id, {
+            artifact: {
+              id: "artifact_execution_card_1",
+              kind: "chapter_execution_card_draft",
+              status: "pending",
+              title: "第 1 章执行卡",
+            },
+            contextPackage: { id: "context_package_1" },
+          });
+        case "serialReview.generate":
+          return rpcSuccess(request.id, {
+            artifact: {
+              id: "artifact_serial_review_1",
+              kind: "serial_review_report",
+              status: "pending",
+              title: "阶段复盘报告",
+            },
+          });
         default:
           return rpcSuccess(request.id, null);
       }
@@ -899,7 +924,8 @@ describe("ShellLayout", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "确认核心故事" }));
     fireEvent.click(screen.getByRole("button", { name: "6. 全书大纲" }));
-    fireEvent.click(screen.getByRole("button", { name: "生成全书规划" }));
+    fireEvent.click(screen.getByRole("button", { name: "AI 生成全书规划" }));
+    fireEvent.click(await screen.findByRole("button", { name: "生成全书规划" }));
     await waitFor(() => {
       expect(screen.getAllByText("星潮纪全书规划").length).toBeGreaterThan(0);
     });
@@ -908,6 +934,10 @@ describe("ShellLayout", () => {
     await waitFor(() => {
       expect(screen.getAllByText("第 1 章：开局钩子").length).toBeGreaterThan(0);
     });
+    fireEvent.click(screen.getByRole("button", { name: "生成阶段复盘" }));
+    const reviewDialog = await screen.findByRole("dialog", { name: "生成阶段复盘" });
+    fireEvent.click(within(reviewDialog).getByRole("button", { name: /生成复盘报告/ }));
+    fireEvent.click(screen.getByRole("button", { name: "生成执行卡 第 1 章：开局钩子" }));
     fireEvent.click(screen.getByRole("button", { name: "基于结构章纲生成草稿 第 1 章：开局钩子" }));
     fireEvent.click(screen.getByRole("button", { name: "生成前 10 章章纲" }));
     await waitFor(() => {
@@ -949,6 +979,16 @@ describe("ShellLayout", () => {
         projectId: "project_1",
         startChapterIndex: 1,
         volumePlanId: "volume_plan_1",
+      });
+      expect(rpcPayload("chapterExecutionCard.generate")).toMatchObject({
+        chapterPlanId: "chapter_plan_1",
+        projectId: "project_1",
+      });
+      expect(rpcPayload("serialReview.generate")).toMatchObject({
+        endChapterIndex: 1,
+        projectId: "project_1",
+        scope: "chapter_batch",
+        startChapterIndex: 1,
       });
       expect(rpcPayload("chapter.generateDraftFromPlan")).toMatchObject({
         chapterPlanId: "chapter_plan_1",
@@ -1180,8 +1220,10 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "4. 角色设计" }));
-    expect(await screen.findByRole("heading", { name: "角色档案" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "AI 辅助" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "角色列表" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建角色" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI 生成角色候选" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "角色档案表单" })).not.toBeInTheDocument();
   });
 
   it("sends chapter and memory actions through typed RPC commands", async () => {
@@ -1453,20 +1495,24 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "4. 角色设计" }));
-    expect(await screen.findByRole("heading", { name: "角色档案" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "角色列表" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "AI 辅助" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "角色档案表单" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建角色" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI 生成角色候选" })).toBeInTheDocument();
     expect(screen.getByText("顾晏")).toBeInTheDocument();
     expect(screen.getByText("制造阻力")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "编辑角色 顾晏" }));
-    expect(screen.getByDisplayValue("顾晏")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("制造旧案调查的主要阻力。")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("掌握档案原件。")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("剧情任务"), {
+    const editCharacterDialog = await screen.findByRole("dialog", { name: "编辑角色：顾晏" });
+    expect(within(editCharacterDialog).getByDisplayValue("顾晏")).toBeInTheDocument();
+    expect(
+      within(editCharacterDialog).getByDisplayValue("制造旧案调查的主要阻力。"),
+    ).toBeInTheDocument();
+    expect(within(editCharacterDialog).getByDisplayValue("掌握档案原件。")).toBeInTheDocument();
+    fireEvent.change(within(editCharacterDialog).getByLabelText("剧情任务"), {
       target: { value: "制造新的调查阻力，并逼出旧案档案伪造线。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    fireEvent.click(within(editCharacterDialog).getByRole("button", { name: "保存修改" }));
     await waitFor(() => {
       expect(rpcPayload("character.update")).toMatchObject({
         characterId: "character_existing",
@@ -1480,12 +1526,32 @@ describe("ShellLayout", () => {
         projectId: "project_1",
       });
     });
-    fireEvent.click(screen.getByRole("button", { name: "新建角色" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "编辑角色：顾晏" })).not.toBeInTheDocument();
+    });
 
-    fireEvent.change(screen.getByLabelText("创作描述"), {
+    fireEvent.click(screen.getByRole("button", { name: "删除角色 顾晏" }));
+    const deleteCharacterDialog = await screen.findByRole("dialog", { name: "删除角色" });
+    expect(
+      within(deleteCharacterDialog).getByText("删除后会从当前作品的角色列表中移除。"),
+    ).toBeInTheDocument();
+    fireEvent.click(within(deleteCharacterDialog).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => {
+      expect(rpcPayload("character.delete")).toMatchObject({
+        characterId: "character_existing",
+        projectId: "project_1",
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "删除角色" })).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 生成角色候选" }));
+    const characterAiDialog = await screen.findByRole("dialog", { name: "AI 生成角色候选" });
+    fireEvent.change(within(characterAiDialog).getByLabelText("创作描述"), {
       target: { value: "生成能承担旧案反转线的角色候选。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "生成角色候选" }));
+    fireEvent.click(within(characterAiDialog).getByRole("button", { name: "生成角色候选" }));
     await waitFor(() => {
       expect(rpcPayload("element.generateCandidates")).toMatchObject({
         count: 10,
@@ -1496,53 +1562,70 @@ describe("ShellLayout", () => {
         style: "悬疑推理",
       });
     });
-    expect(await screen.findByText("潮汐断星刃")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("选择候选 潮汐断星刃"));
-    fireEvent.click(screen.getByRole("button", { name: "采纳选中" }));
+    expect(await within(characterAiDialog).findByText("潮汐断星刃")).toBeInTheDocument();
+    fireEvent.click(within(characterAiDialog).getByLabelText("选择候选 潮汐断星刃"));
+    fireEvent.click(within(characterAiDialog).getByRole("button", { name: "采纳选中" }));
     await waitFor(() => {
       expect(rpcPayload("element.acceptCandidates")).toMatchObject({
         items: [expect.objectContaining({ name: "潮汐断星刃", type: "weapon" })],
         projectId: "project_1",
       });
     });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "AI 生成角色候选" })).not.toBeInTheDocument();
+    });
 
-    fireEvent.change(screen.getByLabelText("人物名称"), { target: { value: "林鸢" } });
-    fireEvent.change(screen.getByLabelText("年龄/身份"), { target: { value: "女，27 岁" } });
-    fireEvent.change(screen.getByLabelText("首次登场"), { target: { value: "第 1 章" } });
-    fireEvent.change(screen.getByLabelText("原型标签"), { target: { value: "离队调查者" } });
-    fireEvent.change(screen.getByLabelText("剧情任务"), {
+    fireEvent.click(screen.getByRole("button", { name: "新建角色" }));
+    const createCharacterDialog = await screen.findByRole("dialog", { name: "新建角色" });
+    fireEvent.change(within(createCharacterDialog).getByLabelText("人物名称"), {
+      target: { value: "林鸢" },
+    });
+    fireEvent.change(within(createCharacterDialog).getByLabelText("年龄/身份"), {
+      target: { value: "女，27 岁" },
+    });
+    fireEvent.change(within(createCharacterDialog).getByLabelText("首次登场"), {
+      target: { value: "第 1 章" },
+    });
+    fireEvent.change(within(createCharacterDialog).getByLabelText("原型标签"), {
+      target: { value: "离队调查者" },
+    });
+    fireEvent.change(within(createCharacterDialog).getByLabelText("剧情任务"), {
       target: { value: "把旧信线索推进成主线调查，并把被掩盖的旧案逼出来。" },
     });
-    fireEvent.change(screen.getByLabelText("外在目标"), { target: { value: "查清旧信来源" } });
-    fireEvent.change(screen.getByLabelText("内在需求"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("外在目标"), {
+      target: { value: "查清旧信来源" },
+    });
+    fireEvent.change(within(createCharacterDialog).getByLabelText("内在需求"), {
       target: { value: "重新学会信任他人" },
     });
-    fireEvent.change(screen.getByLabelText("致命缺陷"), { target: { value: "过度自责" } });
-    fireEvent.change(screen.getByLabelText("秘密"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("致命缺陷"), {
+      target: { value: "过度自责" },
+    });
+    fireEvent.change(within(createCharacterDialog).getByLabelText("秘密"), {
       target: { value: "十年前曾到过案发现场" },
     });
-    fireEvent.change(screen.getByLabelText("关系钩子"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("关系钩子"), {
       target: { value: "与钟楼守档人互相试探。" },
     });
-    fireEvent.change(screen.getByLabelText("初始状态"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("初始状态"), {
       target: { value: "逃避旧案，只想离开旧城。" },
     });
-    fireEvent.change(screen.getByLabelText("关键转折"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("关键转折"), {
       target: { value: "发现证人仍被追杀后决定回头。" },
     });
-    fireEvent.change(screen.getByLabelText("结局状态"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("结局状态"), {
       target: { value: "愿意公开旧案证据并承担代价。" },
     });
-    fireEvent.change(screen.getByLabelText("说话风格"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("说话风格"), {
       target: { value: "克制、短句、偏观察细节。" },
     });
-    fireEvent.change(screen.getByLabelText("外形记忆点"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("外形记忆点"), {
       target: { value: "旧风衣、随身旧笔记本，观察时会按住袖口。" },
     });
-    fireEvent.change(screen.getByLabelText("人物小传"), {
+    fireEvent.change(within(createCharacterDialog).getByLabelText("人物小传"), {
       target: { value: "前刑警，因十年前钟楼案离队。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "创建人物" }));
+    fireEvent.click(within(createCharacterDialog).getByRole("button", { name: "创建人物" }));
     await waitFor(() => {
       expect(rpcPayload("character.create")).toMatchObject({
         appearance: "旧风衣、随身旧笔记本，观察时会按住袖口。",
@@ -1569,18 +1652,20 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "5. 故事线设计" }));
-    expect(await screen.findByRole("heading", { name: "故事线档案" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "节点编排" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "故事线列表" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "故事线档案表单" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建故事线" })).toBeInTheDocument();
     expect(screen.getByText("旧案主线")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "编辑故事线 旧案主线" }));
-    fireEvent.change(screen.getByLabelText("核心问题"), {
+    const editPlotlineDialog = await screen.findByRole("dialog", { name: "编辑故事线：旧案主线" });
+    fireEvent.change(within(editPlotlineDialog).getByLabelText("核心问题"), {
       target: { value: "旧案真凶是否还在操控旧城？" },
     });
-    fireEvent.change(screen.getByLabelText("回收方式"), {
+    fireEvent.change(within(editPlotlineDialog).getByLabelText("回收方式"), {
       target: { value: "第 20 章揭示寄信人身份，并回收旧案关键证据。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    fireEvent.click(within(editPlotlineDialog).getByRole("button", { name: "保存修改" }));
     await waitFor(() => {
       expect(rpcPayload("plotline.update")).toMatchObject({
         patch: {
@@ -1592,13 +1677,26 @@ describe("ShellLayout", () => {
         projectId: "project_1",
       });
     });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "编辑故事线：旧案主线" }),
+      ).not.toBeInTheDocument();
+    });
 
-    fireEvent.change(screen.getByLabelText("节点标题"), { target: { value: "信纸水印出现" } });
-    fireEvent.change(screen.getByLabelText("章节提示"), { target: { value: "第 3 章" } });
-    fireEvent.change(screen.getByLabelText("节点说明"), {
+    fireEvent.click(screen.getByRole("button", { name: "添加节点 旧案主线" }));
+    const createNodeDialog = await screen.findByRole("dialog", {
+      name: "添加故事线节点：旧案主线",
+    });
+    fireEvent.change(within(createNodeDialog).getByLabelText("节点标题"), {
+      target: { value: "信纸水印出现" },
+    });
+    fireEvent.change(within(createNodeDialog).getByLabelText("章节提示"), {
+      target: { value: "第 3 章" },
+    });
+    fireEvent.change(within(createNodeDialog).getByLabelText("节点说明"), {
       target: { value: "让读者看到信纸水印，但暂时不解释来源。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "添加节点" }));
+    fireEvent.click(within(createNodeDialog).getByRole("button", { name: "添加节点" }));
     await waitFor(() => {
       expect(rpcPayload("plotline.createNode")).toMatchObject({
         chapterHint: "第 3 章",
@@ -1612,20 +1710,23 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "新建故事线" }));
-    fireEvent.change(screen.getByLabelText("故事线名称"), { target: { value: "旧信谜团" } });
-    fireEvent.change(screen.getByLabelText("故事线摘要"), {
+    const createPlotlineDialog = await screen.findByRole("dialog", { name: "新建故事线" });
+    fireEvent.change(within(createPlotlineDialog).getByLabelText("故事线名称"), {
+      target: { value: "旧信谜团" },
+    });
+    fireEvent.change(within(createPlotlineDialog).getByLabelText("故事线摘要"), {
       target: { value: "围绕旧信来源展开。" },
     });
-    fireEvent.change(screen.getByLabelText("核心问题"), {
+    fireEvent.change(within(createPlotlineDialog).getByLabelText("核心问题"), {
       target: { value: "旧信到底是谁寄出的？" },
     });
-    fireEvent.change(screen.getByLabelText("推进机制"), {
+    fireEvent.change(within(createPlotlineDialog).getByLabelText("推进机制"), {
       target: { value: "每三章投放一条可验证线索，并用一次误导制造新的问题。" },
     });
-    fireEvent.change(screen.getByLabelText("情绪承诺"), {
+    fireEvent.change(within(createPlotlineDialog).getByLabelText("情绪承诺"), {
       target: { value: "持续解谜、反转和真相逼近。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "创建故事线" }));
+    fireEvent.click(within(createPlotlineDialog).getByRole("button", { name: "创建故事线" }));
     await waitFor(() => {
       expect(rpcPayload("plotline.create")).toMatchObject({
         centralQuestion: "旧信到底是谁寄出的？",
@@ -1646,12 +1747,29 @@ describe("ShellLayout", () => {
       });
     });
 
+    fireEvent.click(screen.getByRole("button", { name: "删除故事线 旧案主线" }));
+    const deletePlotlineDialog = await screen.findByRole("dialog", { name: "删除故事线" });
+    expect(
+      within(deletePlotlineDialog).getByText("删除后会从当前作品的故事线列表中移除。"),
+    ).toBeInTheDocument();
+    fireEvent.click(within(deletePlotlineDialog).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => {
+      expect(rpcPayload("plotline.delete")).toMatchObject({
+        plotlineId: "plotline_existing",
+        projectId: "project_1",
+      });
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "7. 剧情节点" }));
-    fireEvent.change(screen.getByLabelText("伏笔标题"), { target: { value: "水印伏笔" } });
-    fireEvent.change(screen.getByLabelText("伏笔内容"), {
+    fireEvent.click(screen.getByRole("button", { name: "新建伏笔" }));
+    const foreshadowingDialog = await screen.findByRole("dialog", { name: "新建伏笔" });
+    fireEvent.change(within(foreshadowingDialog).getByLabelText("伏笔标题"), {
+      target: { value: "水印伏笔" },
+    });
+    fireEvent.change(within(foreshadowingDialog).getByLabelText("伏笔内容"), {
       target: { value: "信纸水印暗示十年前档案。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "创建伏笔" }));
+    fireEvent.click(within(foreshadowingDialog).getByRole("button", { name: "创建伏笔" }));
 
     await waitFor(() => {
       expect(rpcPayload("foreshadowing.create")).toMatchObject({
@@ -1663,8 +1781,18 @@ describe("ShellLayout", () => {
     });
   }, 10_000);
 
-  it("keeps character AI assistance below the primary editing row", async () => {
+  it("opens character editing and AI assistance from list actions", async () => {
     const project = createProject();
+    const characters = [
+      {
+        id: "character_qinyu",
+        importance: "core",
+        name: "秦钰",
+        narrativeFunction: "driver",
+        role: "protagonist",
+        storyTask: "追查旧案并推动主线真相浮出水面。",
+      },
+    ];
 
     invokeMock.mockImplementation(async (_tauriCommand, args) => {
       const request = getRpcRequest(args);
@@ -1677,7 +1805,29 @@ describe("ShellLayout", () => {
           return rpcSuccess(request.id, {
             artifacts: [],
             chapters: [],
-            characters: [],
+            characterStateSnapshots: [
+              {
+                characterId: "character_qinyu",
+                chapterId: "chapter_1",
+                chapterIndex: 1,
+                createdAt: 1,
+                emotionalState: "警惕，压抑愤怒。",
+                externalGoal: "确认旧信来源。",
+                id: "state_character_qinyu_1",
+                internalNeed: "重新相信同伴。",
+                knowledgeState: "知道旧信和十年前档案有关。",
+                physicalState: "轻伤。",
+                position: "钟楼旧档案室",
+                projectId: "project_1",
+                relationshipState: {},
+                resourceState: {},
+                riskFlags: ["身份暴露"],
+                secrets: ["隐瞒曾到过案发现场"],
+                sourceId: "chapter_1",
+                sourceType: "chapter",
+              },
+            ],
+            characters,
             foreshadowings: [],
             items: [],
             locations: [],
@@ -1700,20 +1850,36 @@ describe("ShellLayout", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "4. 角色设计" }));
-    expect(await screen.findByRole("heading", { name: "角色档案" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "角色列表" })).toBeInTheDocument();
 
     const workspace = container.querySelector(".character-design-workspace");
     const primaryRow = workspace?.querySelector(":scope > .character-design-primary");
-    const assistant = workspace?.querySelector(":scope > .character-design-candidate");
     const listPane = screen.getByRole("region", { name: "角色列表面板" });
-    const formPane = screen.getByRole("region", { name: "角色档案表单" });
 
     expect(primaryRow).toBeInstanceOf(HTMLElement);
-    expect(assistant).toBeInstanceOf(HTMLElement);
     expect(primaryRow).toContainElement(listPane);
-    expect(primaryRow).toContainElement(formPane);
-    expect(primaryRow?.children).toHaveLength(2);
-    expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 辅助" }));
+    expect(screen.queryByRole("region", { name: "角色档案表单" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "查看角色状态 秦钰" }));
+    const stateDialog = await screen.findByRole("dialog", { name: "状态时间线：秦钰" });
+    expect(within(stateDialog).getByText("钟楼旧档案室")).toBeInTheDocument();
+    expect(within(stateDialog).getByText("身份暴露")).toBeInTheDocument();
+    fireEvent.click(within(stateDialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "状态时间线：秦钰" })).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "新建角色" }));
+    expect(await screen.findByRole("dialog", { name: "新建角色" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "角色档案表单" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "新建角色" })).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 生成角色候选" }));
+    const aiDialog = await screen.findByRole("dialog", { name: "AI 生成角色候选" });
+    expect(within(aiDialog).getByRole("heading", { name: "AI 辅助" })).toBeInTheDocument();
   });
 
   it("edits plot nodes with a stable form-first layout and aligned fields", async () => {
@@ -1784,6 +1950,25 @@ describe("ShellLayout", () => {
             locations: [],
             memoryCandidates: [],
             organizations: [],
+            plotDebts: [
+              {
+                actualPayoffChapterIndex: null,
+                debtType: "mystery",
+                expectedPayoffChapterIndex: 20,
+                id: "plot_debt_watermark",
+                lifecycleNotes: ["第 1 章信纸水印出现"],
+                promise: "解释信纸水印为何来自官府档案纸。",
+                projectId: "project_1",
+                relatedCharacterIds: ["character_qinyu"],
+                relatedForeshadowingId: "foreshadowing_1",
+                relatedPlotlineId: null,
+                relatedWorldRuleIds: [],
+                riskLevel: "high",
+                seedChapterIndex: 1,
+                status: "open",
+                title: "水印来源",
+              },
+            ],
             plotlines: [],
             project,
             storyEvents,
@@ -1803,31 +1988,35 @@ describe("ShellLayout", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "7. 剧情节点" }));
     expect(await screen.findByRole("heading", { name: "剧情节点设计" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "剧情节点档案" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "伏笔 / 回收档案" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "AI 回收辅助" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "节点与伏笔" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "剧情节点详情" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建剧情节点" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建伏笔" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI 规划回收" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "节点标题" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "伏笔标题" })).not.toBeInTheDocument();
 
     const workspace = container.querySelector(".plot-node-design-workspace");
     const primaryRow = workspace?.querySelector(":scope > .plot-node-design-primary");
-    const assistant = workspace?.querySelector(":scope > .plot-node-design-assistant");
     const listPane = screen.getByRole("region", { name: "剧情节点列表面板" });
-    const eventFormPane = screen.getByRole("region", { name: "剧情节点档案表单" });
-    const foreshadowingPane = screen.getByRole("region", { name: "伏笔回收表单" });
+    const detailPane = screen.getByRole("region", { name: "剧情节点详情面板" });
 
     expect(primaryRow).toBeInstanceOf(HTMLElement);
-    expect(assistant).toBeInstanceOf(HTMLElement);
     expect(primaryRow).toContainElement(listPane);
-    expect(primaryRow).toContainElement(eventFormPane);
-    expect(primaryRow).toContainElement(foreshadowingPane);
-    expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 回收辅助" }));
+    expect(primaryRow).toContainElement(detailPane);
 
     fireEvent.click(screen.getByRole("button", { name: "编辑剧情节点 旧信出现" }));
-    fireEvent.change(screen.getByLabelText("节点标题"), { target: { value: "水印来源暴露" } });
-    fireEvent.change(screen.getByLabelText("故事时间"), { target: { value: "第 3 章公堂前" } });
-    fireEvent.change(screen.getByLabelText("节点描述"), {
+    let dialog = await screen.findByRole("dialog", { name: "编辑剧情节点：旧信出现" });
+    fireEvent.change(within(dialog).getByLabelText("节点标题"), {
+      target: { value: "水印来源暴露" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("故事时间"), {
+      target: { value: "第 3 章公堂前" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("节点描述"), {
       target: { value: "秦钰确认旧信水印来自官府档案纸。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存剧情节点" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存剧情节点" }));
 
     await waitFor(() => {
       expect(rpcPayload("storyEvent.update")).toMatchObject({
@@ -1841,14 +2030,18 @@ describe("ShellLayout", () => {
       });
     });
 
+    fireEvent.click(screen.getByRole("button", { name: "查看伏笔 信纸水印" }));
+    expect(await screen.findByRole("heading", { name: "伏笔详情" })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "编辑伏笔 信纸水印" }));
-    fireEvent.change(screen.getByLabelText("伏笔内容"), {
+    dialog = await screen.findByRole("dialog", { name: "编辑伏笔：信纸水印" });
+    fireEvent.change(within(dialog).getByLabelText("伏笔内容"), {
       target: { value: "水印像是普通纸纹，实则是官府档案纸暗纹。" },
     });
-    fireEvent.change(screen.getByLabelText("回收方案"), {
+    fireEvent.change(within(dialog).getByLabelText("回收方案"), {
       target: { value: "第 20 章揭示水印证明档案调包。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存伏笔" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存伏笔" }));
 
     await waitFor(() => {
       expect(rpcPayload("foreshadowing.update")).toMatchObject({
@@ -1858,6 +2051,51 @@ describe("ShellLayout", () => {
           payoffExpectation: "第 20 章揭示水印证明档案调包。",
         },
         projectId: "project_1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 规划回收" }));
+    dialog = await screen.findByRole("dialog", { name: "AI 规划回收" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "生成伏笔回收方案" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("foreshadowing.plan")).toMatchObject({
+        projectId: "project_1",
+      });
+    });
+
+    expect(screen.getByRole("region", { name: "剧情债账本" })).toBeInTheDocument();
+    expect(screen.getByText("水印来源")).toBeInTheDocument();
+    expect(screen.getByText("风险 高")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "新增剧情债" }));
+    dialog = await screen.findByRole("dialog", { name: "新增剧情债" });
+    fireEvent.change(within(dialog).getByLabelText("剧情债标题"), {
+      target: { value: "证人失踪" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("埋设章节"), {
+      target: { value: "4" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("预期回收章节"), {
+      target: { value: "18" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("承诺内容"), {
+      target: { value: "证人突然失踪，后续必须说明谁转移了证人以及目的。" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "创建剧情债" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("plotDebt.save")).toMatchObject({
+        projectId: "project_1",
+        values: {
+          debtType: "reader_promise",
+          expectedPayoffChapterIndex: 18,
+          promise: "证人突然失踪，后续必须说明谁转移了证人以及目的。",
+          riskLevel: "medium",
+          seedChapterIndex: 4,
+          status: "open",
+          title: "证人失踪",
+        },
       });
     });
   });
@@ -1989,31 +2227,30 @@ describe("ShellLayout", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "6. 全书大纲" }));
-    expect(await screen.findByRole("heading", { name: "全书计划" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "卷规划" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "阶段弧线" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "大纲层级" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "全书规划详情" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "核心承诺" })).not.toBeInTheDocument();
 
     const workspace = container.querySelector(".book-outline-workspace");
     const primaryRow = workspace?.querySelector(":scope > .book-outline-primary");
-    const assistant = workspace?.querySelector(":scope > .book-outline-assistant");
     const listPane = screen.getByRole("region", { name: "大纲层级列表" });
-    const formPane = screen.getByRole("region", { name: "大纲编辑表单" });
+    const detailPane = screen.getByRole("region", { name: "大纲详情" });
 
     expect(primaryRow).toBeInstanceOf(HTMLElement);
-    expect(assistant).toBeInstanceOf(HTMLElement);
     expect(primaryRow).toContainElement(listPane);
-    expect(primaryRow).toContainElement(formPane);
+    expect(primaryRow).toContainElement(detailPane);
     expect(primaryRow?.children).toHaveLength(2);
-    expect(assistant).toContainElement(screen.getByRole("heading", { name: "AI 辅助规划" }));
+    expect(screen.queryByRole("region", { name: "AI 辅助规划" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "编辑全书规划 布衣天子全书大纲" }));
-    fireEvent.change(screen.getByLabelText("核心承诺"), {
+    let dialog = await screen.findByRole("dialog", { name: /编辑全书规划/ });
+    fireEvent.change(within(dialog).getByLabelText("核心承诺"), {
       target: { value: "每卷一次公开胜利和一次隐藏损失。" },
     });
-    fireEvent.change(screen.getByLabelText("结局方向"), {
+    fireEvent.change(within(dialog).getByLabelText("结局方向"), {
       target: { value: "主角公开朝堂真相后离开旧身份。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存全书规划" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存全书规划" }));
 
     await waitFor(() => {
       expect(rpcPayload("plot.saveBookPlanDraft")).toMatchObject({
@@ -2025,10 +2262,11 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "编辑卷规划 第一卷 寒门入局" }));
-    fireEvent.change(screen.getByLabelText("卷核心冲突"), {
+    dialog = await screen.findByRole("dialog", { name: /编辑卷规划/ });
+    fireEvent.change(within(dialog).getByLabelText("卷核心冲突"), {
       target: { value: "寒门新官必须用民案撬动旧贵族封锁。" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存卷规划" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存卷规划" }));
 
     await waitFor(() => {
       expect(rpcPayload("plot.saveVolumePlan")).toMatchObject({
@@ -2040,10 +2278,11 @@ describe("ShellLayout", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "编辑阶段弧线 旧信追查" }));
-    fireEvent.change(screen.getByLabelText("升级链"), {
+    dialog = await screen.findByRole("dialog", { name: /编辑阶段弧线/ });
+    fireEvent.change(within(dialog).getByLabelText("升级链"), {
       target: { value: "旧信出现\n证人失踪\n公堂反杀\n幕后势力露面" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存阶段弧线" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存阶段弧线" }));
 
     await waitFor(() => {
       expect(rpcPayload("plot.saveArcPlan")).toMatchObject({
@@ -2066,6 +2305,15 @@ describe("ShellLayout", () => {
     const chapters = [chapter];
     const artifacts = [
       {
+        body: '{"card":{"title":"第一章执行卡"}}',
+        id: "artifact_execution_card",
+        kind: "chapter_execution_card_draft",
+        status: "pending",
+        targetId: "chapter_plan_1",
+        targetType: "chapter_plan",
+        title: "第一章执行卡",
+      },
+      {
         body: "AI 草稿正文。",
         id: "artifact_apply",
         kind: "chapter_draft",
@@ -2082,6 +2330,24 @@ describe("ShellLayout", () => {
         targetId: "chapter_1",
         targetType: "chapter",
         title: "废弃草稿",
+      },
+      {
+        body: '{"storyDelta":{"globalSituationChange":"钟楼旧案被重新打开"}}',
+        id: "artifact_state_delta",
+        kind: "story_state_delta_draft",
+        status: "pending",
+        targetId: "chapter_1",
+        targetType: "chapter",
+        title: "第一章状态变化",
+      },
+      {
+        body: '{"progressSummary":"前十章节奏稳定"}',
+        id: "artifact_serial_review",
+        kind: "serial_review_report",
+        status: "pending",
+        targetId: "1-10",
+        targetType: "chapter_range",
+        title: "前十章阶段复盘",
       },
     ];
 
@@ -2132,13 +2398,46 @@ describe("ShellLayout", () => {
           chapter.version = 3;
           return rpcSuccess(request.id, chapter);
         case "artifact.apply":
-          chapter.content = artifacts[0]!.body;
+          chapter.content = artifacts[1]!.body;
           chapter.version = 4;
+          artifacts[1]!.status = "applied";
+          return rpcSuccess(request.id, { artifact: artifacts[1], chapter });
+        case "chapterExecutionCard.apply":
           artifacts[0]!.status = "applied";
-          return rpcSuccess(request.id, { artifact: artifacts[0], chapter });
+          return rpcSuccess(request.id, {
+            chapterPlanId: "chapter_plan_1",
+            id: "execution_card_1",
+            status: "confirmed",
+          });
+        case "chapter.reviewDraft":
+          return rpcSuccess(request.id, {
+            artifact: {
+              id: "artifact_chapter_review",
+              kind: "chapter_review_report",
+              status: "pending",
+              title: "章节审稿报告",
+            },
+          });
+        case "storyState.extractDelta":
+          return rpcSuccess(request.id, {
+            artifact: artifacts[3],
+          });
+        case "storyState.applyDelta":
+          artifacts[3]!.status = "applied";
+          return rpcSuccess(request.id, {
+            characterSnapshots: [],
+            plotDebtChanges: [],
+            storySnapshot: { id: "story_state_1" },
+          });
+        case "serialReview.apply":
+          artifacts[4]!.status = "applied";
+          return rpcSuccess(request.id, {
+            id: "serial_review_1",
+            status: "archived",
+          });
         case "artifact.reject":
-          artifacts[1]!.status = "rejected";
-          return rpcSuccess(request.id, artifacts[1]);
+          artifacts[2]!.status = "rejected";
+          return rpcSuccess(request.id, artifacts[2]);
         default:
           return rpcSuccess(request.id, null);
       }
@@ -2185,6 +2484,38 @@ describe("ShellLayout", () => {
 
     fireEvent.click(await screen.findByRole("tab", { name: /AI 产物/ }));
 
+    fireEvent.click(screen.getByRole("tab", { name: /状态/ }));
+    fireEvent.click(screen.getByRole("button", { name: "审阅当前版本" }));
+    fireEvent.click(screen.getByRole("button", { name: "抽取状态变化" }));
+
+    await waitFor(() => {
+      expect(rpcPayload("chapter.reviewDraft")).toMatchObject({
+        chapterId: "chapter_1",
+        chapterVersion: 3,
+        projectId: "project_1",
+      });
+      expect(rpcPayload("storyState.extractDelta")).toMatchObject({
+        chapterId: "chapter_1",
+        chapterVersion: 3,
+        projectId: "project_1",
+      });
+    });
+
+    fireEvent.click(await screen.findByRole("tab", { name: /AI 产物/ }));
+
+    const executionCardArtifact = screen.getByText("第一章执行卡").closest("li");
+    expect(executionCardArtifact).not.toBeNull();
+    fireEvent.click(
+      within(executionCardArtifact as HTMLElement).getByRole("button", { name: "应用" }),
+    );
+
+    await waitFor(() => {
+      expect(rpcPayload("chapterExecutionCard.apply")).toMatchObject({
+        artifactId: "artifact_execution_card",
+        projectId: "project_1",
+      });
+    });
+
     const draftArtifact = screen.getByText("AI 章节草稿").closest("li");
     expect(draftArtifact).not.toBeNull();
     fireEvent.click(within(draftArtifact as HTMLElement).getByRole("button", { name: "应用" }));
@@ -2195,6 +2526,34 @@ describe("ShellLayout", () => {
         artifactId: "artifact_apply",
         projectId: "project_1",
         targetVersion: 3,
+      });
+    });
+
+    const stateDeltaArtifact = await screen.findByText("第一章状态变化");
+    const stateDeltaArtifactItem = stateDeltaArtifact.closest("li");
+    expect(stateDeltaArtifactItem).not.toBeNull();
+    fireEvent.click(
+      within(stateDeltaArtifactItem as HTMLElement).getByRole("button", { name: "应用" }),
+    );
+
+    await waitFor(() => {
+      expect(rpcPayload("storyState.applyDelta")).toMatchObject({
+        artifactId: "artifact_state_delta",
+        projectId: "project_1",
+      });
+    });
+
+    const serialReviewArtifact = await screen.findByText("前十章阶段复盘");
+    const serialReviewArtifactItem = serialReviewArtifact.closest("li");
+    expect(serialReviewArtifactItem).not.toBeNull();
+    fireEvent.click(
+      within(serialReviewArtifactItem as HTMLElement).getByRole("button", { name: "应用" }),
+    );
+
+    await waitFor(() => {
+      expect(rpcPayload("serialReview.apply")).toMatchObject({
+        artifactId: "artifact_serial_review",
+        projectId: "project_1",
       });
     });
 

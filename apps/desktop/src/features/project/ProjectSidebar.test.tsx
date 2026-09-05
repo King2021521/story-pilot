@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProjectSidebar, type ProjectSidebarProps } from "./ProjectSidebar";
@@ -17,19 +17,48 @@ describe("ProjectSidebar", () => {
     expect(screen.getByLabelText("侧栏设置区")).toHaveClass("project-sidebar__footer");
   });
 
-  it("collapses and expands the project and work sections independently", () => {
+  it("renders project modules as a single nested work tree", () => {
+    const onOpenProject = vi.fn();
+    const onSelectModule = vi.fn();
+    renderProjectSidebar({ onOpenProject, onSelectModule });
+
+    const projectTree = screen.getByRole("tree", { name: "作品树" });
+    expect(screen.queryByText("当前作品")).not.toBeInTheDocument();
+    expect(
+      within(projectTree).getByRole("button", { name: "打开作品 布衣天子" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收起作品 布衣天子" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+
+    const workModules = screen.getByLabelText("布衣天子的创作模块");
+    expect(within(workModules).getByRole("button", { name: "总控台" })).toBeInTheDocument();
+    expect(within(workModules).getByRole("button", { name: "4. 角色设计" })).toBeInTheDocument();
+
+    fireEvent.click(within(workModules).getByRole("button", { name: "5. 故事线设计" }));
+    expect(onSelectModule).toHaveBeenCalledWith("storylines");
+
+    fireEvent.click(within(projectTree).getByRole("button", { name: "打开作品 布衣天子" }));
+    expect(onOpenProject).toHaveBeenCalledWith("project_1");
+
+    expect(
+      within(projectTree).getByRole("button", { name: "打开作品 雾城旧案" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开作品 雾城旧案" }));
+    const secondWorkModules = screen.getByLabelText("雾城旧案的创作模块");
+    fireEvent.click(within(secondWorkModules).getByRole("button", { name: "2. 世界观设计" }));
+    expect(onOpenProject).toHaveBeenLastCalledWith("project_2", "worldbuilding");
+  });
+
+  it("collapses project tree nodes and auxiliary modules independently", () => {
     renderProjectSidebar();
 
-    expect(screen.getByText("布衣天子")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "收起作品空间" }));
-    expect(screen.queryByText("布衣天子")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "展开作品空间" }));
-    expect(screen.getByText("布衣天子")).toBeInTheDocument();
-
     expect(screen.getByRole("button", { name: "4. 角色设计" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "收起当前作品" }));
+    fireEvent.click(screen.getByRole("button", { name: "收起作品 布衣天子" }));
     expect(screen.queryByRole("button", { name: "4. 角色设计" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "展开当前作品" }));
+    expect(screen.queryByText("第一章 雨夜来信")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开作品 布衣天子" }));
     expect(screen.getByRole("button", { name: "4. 角色设计" })).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "记忆确认" })).toBeInTheDocument();
@@ -86,6 +115,10 @@ function createProjectSidebarProps(
       {
         id: "project_1",
         title: "布衣天子",
+      },
+      {
+        id: "project_2",
+        title: "雾城旧案",
       },
     ],
     selectedChapterId: "chapter_1",

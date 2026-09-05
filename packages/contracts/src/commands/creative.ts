@@ -36,6 +36,19 @@ const creativeStageKeySchema = z.enum([
 ]);
 
 const outlineImpactTargetSchema = z.enum(["book_plan", "volume_plan", "arc_plan", "chapter_plan"]);
+const generationContextTargetTypeSchema = z.enum([
+  "chapter_plan",
+  "execution_card",
+  "chapter",
+  "chapter_range",
+]);
+const generationContextPurposeSchema = z.enum([
+  "execution_card_generate",
+  "chapter_draft",
+  "chapter_review",
+  "story_state_delta_extract",
+  "retrospective_generate",
+]);
 
 const worldbuildingTextFieldSchema = z.string().max(500).default("");
 
@@ -234,6 +247,39 @@ const storyEventPatchSchema = z
 const foreshadowingStatusValueSchema = z.enum(["seeded", "payoff_ready", "paid_off", "archived"]);
 const foreshadowingStatusSchema = foreshadowingStatusValueSchema.default("seeded");
 
+const plotDebtStatusValueSchema = z.enum([
+  "open",
+  "reinforced",
+  "payoff_ready",
+  "paid_off",
+  "dropped",
+]);
+const plotDebtRiskLevelValueSchema = z.enum(["low", "medium", "high", "critical"]);
+const plotDebtTypeSchema = z.enum([
+  "foreshadowing",
+  "mystery",
+  "reader_promise",
+  "relationship",
+  "world_rule",
+  "conflict",
+  "reward",
+]);
+const plotDebtValuesSchema = z.object({
+  actualPayoffChapterIndex: z.number().int().positive().nullable().optional(),
+  debtType: plotDebtTypeSchema,
+  expectedPayoffChapterIndex: z.number().int().positive().nullable().optional(),
+  lifecycleNotes: z.array(z.string().min(1).max(300)).max(50).default([]),
+  promise: z.string().min(1).max(800),
+  relatedCharacterIds: z.array(z.string().min(1)).default([]),
+  relatedForeshadowingId: z.string().min(1).nullable().optional(),
+  relatedPlotlineId: z.string().min(1).nullable().optional(),
+  relatedWorldRuleIds: z.array(z.string().min(1)).default([]),
+  riskLevel: plotDebtRiskLevelValueSchema.default("medium"),
+  seedChapterIndex: z.number().int().positive().nullable().optional(),
+  status: plotDebtStatusValueSchema.default("open"),
+  title: z.string().min(1).max(120),
+});
+
 const foreshadowingPatchSchema = z
   .object({
     title: z.string().min(1).optional(),
@@ -279,6 +325,12 @@ const worldbuildingFieldsSchema = z.object({
 });
 
 export const creativePathCommandSchemas = {
+  "context.buildPackage": projectIdPayloadSchema.extend({
+    purpose: generationContextPurposeSchema,
+    targetId: z.string().min(1),
+    targetType: generationContextTargetTypeSchema,
+    tokenBudget: z.number().int().min(1000).max(200_000).optional(),
+  }),
   "creativeStage.getPath": projectIdPayloadSchema,
   "creativeStage.evaluateGate": projectIdPayloadSchema.extend({
     stageKey: creativeStageKeySchema,
@@ -435,6 +487,15 @@ export const creativePathCommandSchemas = {
     title: z.string().min(1).max(120),
     volumePlanId: z.string().min(1),
   }),
+  "plot.deleteBookPlan": projectIdPayloadSchema.extend({
+    bookPlanId: z.string().min(1),
+  }),
+  "plot.deleteVolumePlan": projectIdPayloadSchema.extend({
+    volumePlanId: z.string().min(1),
+  }),
+  "plot.deleteArcPlan": projectIdPayloadSchema.extend({
+    arcPlanId: z.string().min(1),
+  }),
   "plot.saveChapterPlan": projectIdPayloadSchema.extend({
     arcPlanId: outlinePlanOptionalIdSchema,
     chapterId: outlinePlanOptionalIdSchema,
@@ -507,6 +568,9 @@ export const creativeCommandSchemas = {
   "character.update": projectIdPayloadSchema.extend({
     characterId: z.string().min(1),
     patch: z.record(z.string(), z.unknown()),
+  }),
+  "character.delete": projectIdPayloadSchema.extend({
+    characterId: z.string().min(1),
   }),
   "entityRelation.list": projectIdPayloadSchema.extend({
     entityId: z.string().min(1).optional(),
@@ -587,6 +651,9 @@ export const creativeCommandSchemas = {
     plotlineId: z.string().min(1),
     patch: z.record(z.string(), z.unknown()),
   }),
+  "plotline.delete": projectIdPayloadSchema.extend({
+    plotlineId: z.string().min(1),
+  }),
   "plotline.createNode": projectIdPayloadSchema.extend({
     plotlineId: z.string().min(1),
     title: z.string().min(1),
@@ -664,5 +731,28 @@ export const creativeCommandSchemas = {
   "foreshadowing.plan": projectIdPayloadSchema.extend({
     chapterId: z.string().min(1).optional(),
     plotlineId: z.string().min(1).optional(),
+  }),
+  "plotDebt.list": projectIdPayloadSchema.extend({
+    riskLevel: z.array(plotDebtRiskLevelValueSchema).optional(),
+    status: z.array(plotDebtStatusValueSchema).optional(),
+  }),
+  "plotDebt.save": projectIdPayloadSchema.extend({
+    debtId: z.string().min(1).optional(),
+    values: plotDebtValuesSchema,
+  }),
+  "storyState.extractDelta": projectIdPayloadSchema.extend({
+    chapterId: z.string().min(1),
+    chapterVersion: z.number().int().nonnegative(),
+  }),
+  "storyState.applyDelta": projectIdPayloadSchema.extend({
+    artifactId: z.string().min(1),
+  }),
+  "serialReview.generate": projectIdPayloadSchema.extend({
+    endChapterIndex: z.number().int().positive(),
+    scope: z.enum(["chapter_batch", "arc", "volume"]),
+    startChapterIndex: z.number().int().positive(),
+  }),
+  "serialReview.apply": projectIdPayloadSchema.extend({
+    artifactId: z.string().min(1),
   }),
 };

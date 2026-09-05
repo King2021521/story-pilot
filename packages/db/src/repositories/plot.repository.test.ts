@@ -46,6 +46,7 @@ interface PlotRepositoryWithStorylineProfile {
     readonly targetChapterId?: string;
     readonly title: string;
   }): PlotlineNodeRecord;
+  deletePlotline(input: { readonly plotlineId: string; readonly projectId: string }): void;
   listPlotlines(projectId: string): PlotlineRecord[];
   updatePlotline(input: {
     readonly payoffPlan?: string;
@@ -244,6 +245,12 @@ describe("PlotRepository", () => {
         relatedCharacterIds: [],
         status: "active",
       });
+
+      repository.deletePlotline({
+        plotlineId: "plotline_1",
+        projectId: "project_1",
+      });
+      expect(repository.listPlotlines("project_1")).toEqual([]);
     } finally {
       projectDatabase.close();
     }

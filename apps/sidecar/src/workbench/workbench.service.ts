@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import {
   ArtifactRepository,
   ChapterRepository,
+  ChapterExecutionCardRepository,
   CharacterRepository,
   CreativePathRepository,
   LongformPlanRepository,
@@ -10,6 +11,7 @@ import {
   PlotRepository,
   ProjectRepository,
   ReviewIssueRepository,
+  SerialStateRepository,
   WorkflowRepository,
   WorldbuildingRepository,
   WorldRepository,
@@ -46,10 +48,13 @@ export interface WorkbenchBoard {
   readonly locations: readonly unknown[];
   readonly memoryCandidates: readonly unknown[];
   readonly organizations: readonly unknown[];
+  readonly plotDebts: readonly unknown[];
   readonly plotlines: readonly unknown[];
   readonly worldRules: readonly unknown[];
   readonly worldbuildingProfile: unknown;
   readonly storyEvents: readonly unknown[];
+  readonly storyStateSnapshots: readonly unknown[];
+  readonly characterStateSnapshots: readonly unknown[];
   readonly workOrders: readonly unknown[];
 }
 
@@ -104,6 +109,7 @@ export class WorkbenchService {
       const longformPlanRepository = new LongformPlanRepository(projectDatabase);
       const outlineRepository = new OutlineRepository(projectDatabase);
       const characterRepository = new CharacterRepository(projectDatabase);
+      const serialStateRepository = new SerialStateRepository(projectDatabase);
       if (creativePathRepository.listStages(projectId).length === 0) {
         creativePathRepository.initializePath(projectId);
       }
@@ -119,6 +125,9 @@ export class WorkbenchService {
           ...creativePath,
           arcPlans: longformPlanRepository.listArcPlans(projectId),
           bookPlans: longformPlanRepository.listBookPlans(projectId),
+          chapterExecutionCards: new ChapterExecutionCardRepository(projectDatabase).listByProject(
+            projectId,
+          ),
           chapterOutlines: outlineRepository.listChapterOutlines(projectId),
           chapterPlans: longformPlanRepository.listChapterPlans(projectId),
           outlines: outlineRepository.listOutlines(projectId),
@@ -139,11 +148,14 @@ export class WorkbenchService {
         memoryCandidates: new MemoryRepository(projectDatabase).listCandidates({ projectId }),
         organizations: worldRepository.listOrganizations(projectId),
         plotlines: plotRepository.listPlotlines(projectId),
+        plotDebts: serialStateRepository.listPlotDebts({ projectId }),
         project: getProjectOrThrow(new ProjectRepository(projectDatabase), projectId),
+        storyStateSnapshots: serialStateRepository.listStorySnapshots(projectId),
         storyEvents: plotRepository.listStoryEvents(projectId),
         worldRules: worldRepository.listWorldRules(projectId),
         worldbuildingProfile: new WorldbuildingRepository(projectDatabase).getProfile(projectId),
         workOrders: new WorkflowRepository(projectDatabase).listWorkOrders({ projectId }),
+        characterStateSnapshots: serialStateRepository.listCharacterSnapshots({ projectId }),
       };
     } finally {
       projectDatabase.close();

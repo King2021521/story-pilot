@@ -641,6 +641,33 @@ describe("RpcService MVP command integration", () => {
         }),
       );
       const chapterPlan = getRecordArray(appliedChapterPlans, "chapterPlans")[0];
+      const executionCardDraft = await expectRpcOk(
+        rpcService.handle({
+          command: "chapterExecutionCard.generate",
+          id: "req_longform_execution_card",
+          payload: {
+            chapterPlanId: getString(chapterPlan, "id"),
+            instruction: "强化本章读者回报和章末钩子",
+            projectId,
+          },
+        }),
+      );
+      const executionCardArtifact = getRecord(executionCardDraft, "artifact");
+      const executionCard = await expectRpcOk(
+        rpcService.handle({
+          command: "chapterExecutionCard.apply",
+          id: "req_longform_apply_execution_card",
+          payload: {
+            artifactId: getString(executionCardArtifact, "id"),
+            projectId,
+          },
+        }),
+      );
+      expect(executionCard).toMatchObject({
+        chapterPlanId: getString(chapterPlan, "id"),
+        readerReward: expect.stringContaining("升级爽点"),
+        status: "confirmed",
+      });
       const draftFromPlan = await expectRpcOk(
         rpcService.handle({
           command: "chapter.generateDraftFromPlan",
@@ -755,6 +782,13 @@ describe("RpcService MVP command integration", () => {
       ]);
       expect(getRecordArray(boardCreativePath, "chapterPlans")).toEqual([
         expect.objectContaining({ id: getString(chapterPlan, "id") }),
+      ]);
+      expect(getRecordArray(boardCreativePath, "chapterExecutionCards")).toEqual([
+        expect.objectContaining({
+          chapterPlanId: getString(chapterPlan, "id"),
+          readerReward: expect.stringContaining("升级爽点"),
+          status: "confirmed",
+        }),
       ]);
       expect(getRecordArray(boardCreativePath, "scenePlans")).toEqual([
         expect.objectContaining({ chapterPlanId: getString(chapterPlan, "id") }),
@@ -879,6 +913,72 @@ describe("RpcService MVP command integration", () => {
           purpose: "用第一阶段让主角从被动受害转为主动查案。",
         }),
       ]);
+
+      const deleteArcResult = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.deleteArcPlan",
+          id: "req_delete_arc_plan",
+          payload: {
+            arcPlanId: getString(arcPlan, "id"),
+            projectId,
+          },
+        }),
+      );
+      expect(deleteArcResult).toMatchObject({ deleted: true });
+      const boardAfterArcDelete = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_outline_board_after_arc_delete",
+          payload: { projectId },
+        }),
+      );
+      expect(
+        getRecordArray(getRecord(boardAfterArcDelete, "creativePath"), "arcPlans"),
+      ).toHaveLength(0);
+
+      const deleteVolumeResult = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.deleteVolumePlan",
+          id: "req_delete_volume_plan",
+          payload: {
+            projectId,
+            volumePlanId: getString(volumePlan, "id"),
+          },
+        }),
+      );
+      expect(deleteVolumeResult).toMatchObject({ deleted: true });
+      const boardAfterVolumeDelete = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_outline_board_after_volume_delete",
+          payload: { projectId },
+        }),
+      );
+      expect(
+        getRecordArray(getRecord(boardAfterVolumeDelete, "creativePath"), "volumePlans"),
+      ).toHaveLength(0);
+
+      const deleteBookResult = await expectRpcOk(
+        rpcService.handle({
+          command: "plot.deleteBookPlan",
+          id: "req_delete_book_plan",
+          payload: {
+            bookPlanId: getString(bookPlan, "id"),
+            projectId,
+          },
+        }),
+      );
+      expect(deleteBookResult).toMatchObject({ deleted: true });
+      const boardAfterBookDelete = await expectRpcOk(
+        rpcService.handle({
+          command: "workbench.getBoard",
+          id: "req_outline_board_after_book_delete",
+          payload: { projectId },
+        }),
+      );
+      expect(
+        getRecordArray(getRecord(boardAfterBookDelete, "creativePath"), "bookPlans"),
+      ).toHaveLength(0);
     } finally {
       await moduleRef.close();
     }
@@ -2639,6 +2739,84 @@ describe("RpcService MVP command integration", () => {
     }
   });
 
+  it("deletes character and plotline records through RPC", async () => {
+    const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
+    try {
+      const project = await expectRpcOk(
+        rpcService.handle({
+          command: "project.create",
+          id: "req_project_delete_creative_objects",
+          payload: { genre: "悬疑", title: "长夜序章" },
+        }),
+      );
+      const projectId = getString(project, "id");
+      const character = await expectRpcOk(
+        rpcService.handle({
+          command: "character.create",
+          id: "req_character_delete_create",
+          payload: {
+            name: "林鸢",
+            projectId,
+            role: "protagonist",
+          },
+        }),
+      );
+      const plotline = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.create",
+          id: "req_plotline_delete_create",
+          payload: {
+            kind: "mystery",
+            priority: 3,
+            projectId,
+            title: "旧信谜团",
+          },
+        }),
+      );
+
+      await expectRpcOk(
+        rpcService.handle({
+          command: "character.delete",
+          id: "req_character_delete",
+          payload: {
+            characterId: getString(character, "id"),
+            projectId,
+          },
+        }),
+      );
+      await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.delete",
+          id: "req_plotline_delete",
+          payload: {
+            plotlineId: getString(plotline, "id"),
+            projectId,
+          },
+        }),
+      );
+
+      const characters = await expectRpcOk(
+        rpcService.handle({
+          command: "character.list",
+          id: "req_character_delete_list",
+          payload: { projectId },
+        }),
+      );
+      const plotlines = await expectRpcOk(
+        rpcService.handle({
+          command: "plotline.list",
+          id: "req_plotline_delete_list",
+          payload: { projectId },
+        }),
+      );
+
+      expect(getRecordArray(characters, "items")).toEqual([]);
+      expect(getRecordArray(plotlines, "items")).toEqual([]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it("includes creative objects on the workbench board after they are created", async () => {
     const { moduleRef, rpcService } = await createRpcHarness(tempDirs);
     try {
@@ -3347,6 +3525,41 @@ async function createRpcHarness(tempDirs: string[]) {
                 },
               ],
               reviewNotes: [],
+            },
+            ChapterExecutionCardOutput: {
+              card: {
+                chapterIndex: 1,
+                coreConflict:
+                  "主角必须在第一次触碰星潮禁令和隐藏自己身份之间做选择，司星阁的追捕会把个人修行欲望推向公开秩序冲突，也会让旧名单背后的家族债务提前暴露，形成升级爽点、身份风险和主线谜题三重压力。",
+                emotionalTurn:
+                  "主角从只想偷取一次修行机会，转向意识到自己已经进入无法回头的规则战争，并开始主动试探司星阁禁令边界。",
+                forbiddenMoves: ["不要提前解释星潮终极来源"],
+                hook: "禁令背后的旧名单出现主角父亲名字，并指向一处被删去的观星记录，记录末尾还有一个未签名的处决日期。",
+                informationGain:
+                  "星潮不是单纯天象，而是被司星阁长期管控的资源，底层越界会触发身份追踪，也会让旧名单中的家族债务重新浮出水面。",
+                narrativeGoal:
+                  "把第一章从常规入门推进到主线规则冲突，让读者同时获得禁区探索、第一次越界和旧名单悬念，并明确后续会围绕升级收益与身份代价持续推进，避免只写修行开局而没有长期追读牵引。",
+                readerReward:
+                  "给出主角第一次取得碎星砂的升级爽点，同时留下父亲旧名单和司星阁追踪的双重悬念，让读者既得到即时回报又期待下一章追查。",
+                relatedForeshadowingIds: ["foreshadowing_1"],
+                relatedPlotDebtIds: ["plot_debt_star_tide"],
+                relatedPlotlineIds: ["plotline_1"],
+                requiredCharacterIds: ["character_1"],
+                requiredLocationIds: [],
+                sceneBriefs: [
+                  {
+                    conflictTurn: "守卫发现禁区有异常灵纹，主角必须在逃离和夺取碎星砂之间抢时间。",
+                    memoryTargets: ["碎星砂", "司星阁禁令"],
+                    outcome:
+                      "主角带走碎星砂，但身份追踪被启动，旧名单悬念进入明线并改变下一章行动目标。",
+                    sceneGoal: "展示禁区规则、主角动机和第一次越界代价，并把升级爽点落到具体物件。",
+                    sceneIndex: 1,
+                  },
+                ],
+                targetWordCount: 3200,
+                title: "第 1 章 星潮禁令",
+              },
+              riskNotes: ["旧名单真相需要后续分阶段揭示。"],
             },
             ContinuityReviewOutput: {
               issues: [

@@ -104,6 +104,7 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
   ensureTableColumn(projectDatabase, "characters", "arc_start", "arc_start text");
   ensureTableColumn(projectDatabase, "characters", "arc_turn", "arc_turn text");
   ensureTableColumn(projectDatabase, "characters", "arc_end", "arc_end text");
+  projectDatabase.client.exec(GENERATION_CONTEXT_PACKAGE_SCHEMA_SQL);
   ensureTableColumn(
     projectDatabase,
     "story_blueprints",
@@ -193,6 +194,26 @@ function ensureProjectSchemaCompatibility(projectDatabase: ProjectDatabase): voi
   projectDatabase.client.exec(CREATIVE_PATH_SCHEMA_SQL);
   projectDatabase.client.exec(WORLDBUILDING_PROFILE_SCHEMA_SQL);
 }
+
+const GENERATION_CONTEXT_PACKAGE_SCHEMA_SQL = `
+create table if not exists generation_context_packages (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  target_type text not null,
+  target_id text not null,
+  purpose text not null,
+  token_budget integer not null,
+  estimated_tokens integer not null,
+  strategy text not null,
+  items_json text not null,
+  omitted_items_json text not null default '[]',
+  created_at integer not null
+);
+
+create index if not exists generation_context_packages_project_id_idx on generation_context_packages(project_id);
+create index if not exists generation_context_packages_target_idx on generation_context_packages(target_type, target_id);
+create index if not exists generation_context_packages_purpose_idx on generation_context_packages(project_id, purpose);
+`;
 
 function ensureTableColumn(
   projectDatabase: ProjectDatabase,

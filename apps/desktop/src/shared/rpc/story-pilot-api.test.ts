@@ -367,6 +367,60 @@ describe("StoryPilotApiClient", () => {
       instruction: "强化章末钩子",
       projectId: "project_1",
     });
+    await api.generateChapterExecutionCard({
+      chapterPlanId: "chapter_plan_1",
+      projectId: "project_1",
+    });
+    await api.applyChapterExecutionCard({
+      artifactId: "artifact_execution_card_1",
+      projectId: "project_1",
+    });
+    await api.saveChapterExecutionCard({
+      projectId: "project_1",
+      values: {
+        chapterIndex: 1,
+        chapterPlanId: "chapter_plan_1",
+        coreConflict: "主角必须在安全屋保密和救援外部幸存者之间做选择。",
+        emotionalTurn: "从单纯自保转向意识到安全屋会形成秩序责任。",
+        forbiddenMoves: [],
+        hook: "炉芯日志出现不可能预警。",
+        informationGain: "热源启动会留下可追踪信号。",
+        narrativeGoal: "让读者看到安全屋第一次升级和第一次暴露风险。",
+        readerReward: "兑现安全屋供热升级，并留下热源来源悬念。",
+        relatedForeshadowingIds: [],
+        relatedPlotDebtIds: [],
+        relatedPlotlineIds: [],
+        requiredCharacterIds: [],
+        requiredLocationIds: [],
+        sceneBriefs: [
+          {
+            conflictTurn: "外部敲门制造保密压力。",
+            memoryTargets: [],
+            outcome: "热源启动成功但风险上升。",
+            sceneGoal: "验证供热闭环。",
+            sceneIndex: 1,
+          },
+        ],
+        status: "draft",
+        targetWordCount: 3500,
+        title: "第一章 炉芯预警",
+      },
+    });
+    await api.reviewChapterDraft({
+      chapterId: "chapter_1",
+      chapterVersion: 1,
+      projectId: "project_1",
+    });
+    await api.generateSerialReview({
+      endChapterIndex: 10,
+      projectId: "project_1",
+      scope: "chapter_batch",
+      startChapterIndex: 1,
+    });
+    await api.applySerialReview({
+      artifactId: "artifact_serial_review_1",
+      projectId: "project_1",
+    });
     await api.getArtifact({ artifactId: "artifact_1", projectId: "project_1" });
     await api.listMemoryCandidates({ projectId: "project_1", status: "pending" });
     await api.confirmMemory({
@@ -562,6 +616,32 @@ describe("StoryPilotApiClient", () => {
     await api.planForeshadowing({
       projectId: "project_1",
     });
+    await api.listPlotDebts({
+      projectId: "project_1",
+      status: ["open"],
+    });
+    await api.savePlotDebt({
+      projectId: "project_1",
+      values: {
+        debtType: "reader_promise",
+        lifecycleNotes: [],
+        promise: "安全屋升级必须伴随更高代价。",
+        relatedCharacterIds: [],
+        relatedWorldRuleIds: [],
+        riskLevel: "medium",
+        status: "open",
+        title: "安全屋升级承诺",
+      },
+    });
+    await api.extractStoryStateDelta({
+      chapterId: "chapter_1",
+      chapterVersion: 1,
+      projectId: "project_1",
+    });
+    await api.applyStoryStateDelta({
+      artifactId: "artifact_delta_1",
+      projectId: "project_1",
+    });
 
     expect(send.mock.calls.map(([command]) => command)).toEqual([
       "project.getOverview",
@@ -589,6 +669,12 @@ describe("StoryPilotApiClient", () => {
       "chapter.get",
       "chapter.reviewContinuity",
       "chapter.generateDraftFromPlan",
+      "chapterExecutionCard.generate",
+      "chapterExecutionCard.apply",
+      "chapterExecutionCard.save",
+      "chapter.reviewDraft",
+      "serialReview.generate",
+      "serialReview.apply",
       "artifact.get",
       "memory.listCandidates",
       "memory.confirm",
@@ -632,6 +718,10 @@ describe("StoryPilotApiClient", () => {
       "foreshadowing.create",
       "foreshadowing.update",
       "foreshadowing.plan",
+      "plotDebt.list",
+      "plotDebt.save",
+      "storyState.extractDelta",
+      "storyState.applyDelta",
     ]);
   });
 });

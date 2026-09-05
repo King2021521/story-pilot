@@ -127,6 +127,22 @@ test.beforeEach(async ({ page }) => {
           }
           return { data: target ?? null, id: request.id, ok: true };
         }
+        case "storyEvent.create": {
+          const payload = request.payload as Record<string, unknown>;
+          const target = {
+            chapterId: payload.chapterId ?? null,
+            eventType: payload.eventType ?? "discovery",
+            id: `event_${storyEvents.length + 1}`,
+            participants: payload.participants ?? [],
+            sceneId: null,
+            status: payload.status ?? "draft",
+            storyTime: payload.storyTime ?? null,
+            summary: payload.description ?? "",
+            title: payload.title ?? "未命名节点",
+          };
+          storyEvents.push(target);
+          return { data: target, id: request.id, ok: true };
+        }
         case "foreshadowing.update": {
           const payload = request.payload as {
             foreshadowingId: string;
@@ -146,6 +162,8 @@ test.beforeEach(async ({ page }) => {
           }
           return { data: target ?? null, id: request.id, ok: true };
         }
+        case "foreshadowing.plan":
+          return { data: null, id: request.id, ok: true };
         default:
           return { data: null, id: request.id, ok: true };
       }
@@ -153,7 +171,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("plot node design uses stable editing forms and persists event and foreshadowing changes", async ({
+test("plot node design uses list detail workflow with modal create/edit and AI planning", async ({
   page,
 }) => {
   await page.goto("/");
@@ -161,29 +179,51 @@ test("plot node design uses stable editing forms and persists event and foreshad
   await page.getByRole("button", { name: "7. 剧情节点" }).click();
 
   await expect(page.getByRole("heading", { name: "剧情节点设计" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "剧情节点档案" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "伏笔 / 回收档案" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "AI 回收辅助" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "节点与伏笔" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "剧情节点详情" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新建剧情节点" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新建伏笔" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "AI 规划回收" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "节点标题" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "伏笔标题" })).toHaveCount(0);
 
   const listBox = await page.locator(".plot-node-design-list").boundingBox();
-  const eventEditorBox = await page.locator(".plot-node-event-editor").boundingBox();
-  const foreshadowingEditorBox = await page
-    .locator(".plot-node-foreshadowing-editor")
-    .boundingBox();
-  const assistantBox = await page.locator(".plot-node-design-assistant").boundingBox();
+  const detailBox = await page.locator(".plot-node-design-detail").boundingBox();
   expect(listBox).not.toBeNull();
-  expect(eventEditorBox).not.toBeNull();
-  expect(foreshadowingEditorBox).not.toBeNull();
-  expect(assistantBox).not.toBeNull();
-  expect(boxesOverlap(listBox!, eventEditorBox!)).toBe(false);
-  expect(boxesOverlap(listBox!, foreshadowingEditorBox!)).toBe(false);
-  expect(boxesOverlap(eventEditorBox!, assistantBox!)).toBe(false);
-  expect(boxesOverlap(foreshadowingEditorBox!, assistantBox!)).toBe(false);
+  expect(detailBox).not.toBeNull();
+  expect(boxesOverlap(listBox!, detailBox!)).toBe(false);
+
+  await page.getByRole("button", { name: "新建剧情节点" }).click();
+  let dialog = page.getByRole("dialog", { name: "新建剧情节点" });
+  await expect(dialog.getByRole("textbox", { name: "节点标题" })).toBeVisible();
+  await dialog.getByRole("textbox", { name: "节点标题" }).fill("公堂试探");
+  await dialog.getByRole("textbox", { name: "节点描述" }).fill("秦钰用旧信逼出第一处证词破绽。");
+  await dialog.getByRole("button", { name: "创建剧情节点" }).click();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const requests = window.__STORY_PILOT_E2E_REQUESTS__ ?? [];
+        return requests.findLast((request) => request.command === "storyEvent.create")?.payload;
+      }),
+    )
+    .toMatchObject({
+      description: "秦钰用旧信逼出第一处证词破绽。",
+      projectId: "project_1",
+      title: "公堂试探",
+    });
+
+  await page.getByRole("button", { name: "查看剧情节点 旧信出现" }).click();
+  await expect(page.getByRole("heading", { name: "剧情节点详情" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "剧情节点详情面板" }).getByText("秦钰收到带水印的旧信。"),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "编辑剧情节点 旧信出现" }).click();
-  const eventTitleInput = page.getByRole("textbox", { name: "节点标题" });
-  const eventStoryTimeInput = page.getByRole("textbox", { name: "故事时间" });
-  const eventDescriptionInput = page.getByRole("textbox", { name: "节点描述" });
+  dialog = page.getByRole("dialog", { name: "编辑剧情节点：旧信出现" });
+  const eventTitleInput = dialog.getByRole("textbox", { name: "节点标题" });
+  const eventStoryTimeInput = dialog.getByRole("textbox", { name: "故事时间" });
+  const eventDescriptionInput = dialog.getByRole("textbox", { name: "节点描述" });
   await expect(eventTitleInput).toHaveValue("旧信出现");
   await eventTitleInput.fill("水印来源暴露");
   await eventStoryTimeInput.fill("第 3 章公堂前");
@@ -191,7 +231,7 @@ test("plot node design uses stable editing forms and persists event and foreshad
   await expect(eventTitleInput).toHaveValue("水印来源暴露");
   await expect(eventStoryTimeInput).toHaveValue("第 3 章公堂前");
   await expect(eventDescriptionInput).toHaveValue("秦钰确认旧信水印来自官府档案纸。");
-  await page.getByRole("button", { name: "保存剧情节点" }).click();
+  await dialog.getByRole("button", { name: "保存剧情节点" }).click();
 
   await expect
     .poll(async () =>
@@ -210,9 +250,18 @@ test("plot node design uses stable editing forms and persists event and foreshad
       storyEventId: "event_seed",
     });
 
+  await page.getByRole("button", { name: "查看伏笔 信纸水印" }).click();
+  await expect(page.getByRole("heading", { name: "伏笔详情" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "剧情节点详情面板" })
+      .getByText("信纸水印第一次出现，暂不解释来源。"),
+  ).toBeVisible();
+
   await page.getByRole("button", { name: "编辑伏笔 信纸水印" }).click();
-  const foreshadowingDescriptionInput = page.getByRole("textbox", { name: "伏笔内容" });
-  const foreshadowingPayoffInput = page.getByRole("textbox", { name: "回收方案" });
+  dialog = page.getByRole("dialog", { name: "编辑伏笔：信纸水印" });
+  const foreshadowingDescriptionInput = dialog.getByRole("textbox", { name: "伏笔内容" });
+  const foreshadowingPayoffInput = dialog.getByRole("textbox", { name: "回收方案" });
   await expect(foreshadowingDescriptionInput).toHaveValue("信纸水印第一次出现，暂不解释来源。");
   await foreshadowingDescriptionInput.fill("水印像是普通纸纹，实则是官府档案纸暗纹。");
   await foreshadowingPayoffInput.fill("第 20 章揭示水印证明档案调包。");
@@ -220,7 +269,7 @@ test("plot node design uses stable editing forms and persists event and foreshad
     "水印像是普通纸纹，实则是官府档案纸暗纹。",
   );
   await expect(foreshadowingPayoffInput).toHaveValue("第 20 章揭示水印证明档案调包。");
-  await page.getByRole("button", { name: "保存伏笔" }).click();
+  await dialog.getByRole("button", { name: "保存伏笔" }).click();
 
   await expect
     .poll(async () =>
@@ -235,6 +284,21 @@ test("plot node design uses stable editing forms and persists event and foreshad
         description: "水印像是普通纸纹，实则是官府档案纸暗纹。",
         payoffExpectation: "第 20 章揭示水印证明档案调包。",
       },
+      projectId: "project_1",
+    });
+
+  await page.getByRole("button", { name: "AI 规划回收" }).click();
+  dialog = page.getByRole("dialog", { name: "AI 规划回收" });
+  await dialog.getByRole("button", { name: "生成伏笔回收方案" }).click();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const requests = window.__STORY_PILOT_E2E_REQUESTS__ ?? [];
+        return requests.findLast((request) => request.command === "foreshadowing.plan")?.payload;
+      }),
+    )
+    .toMatchObject({
       projectId: "project_1",
     });
 });

@@ -15,11 +15,15 @@ export type PromptCapability =
   | "book_plan_generate"
   | "rolling_chapter_plan_generate"
   | "chapter_draft"
+  | "chapter_execution_card_generate"
+  | "chapter_review"
   | "chapter_rewrite"
   | "memory_extract"
   | "continuity_review"
   | "foreshadowing_plan"
+  | "plot_debt_update"
   | "retrospective_generate"
+  | "story_state_delta_extract"
   | "element_generate";
 export type PromptVersion = "v1";
 
@@ -43,6 +47,8 @@ const promptFiles = {
   brief_refine: "./brief-refine/system.v1.md",
   character_generate: "./character-generate/system.v1.md",
   chapter_draft: "./chapter-draft/system.v1.md",
+  chapter_execution_card_generate: "./chapter-execution-card-generate/system.v1.md",
+  chapter_review: "./chapter-review/system.v1.md",
   chapter_rewrite: "./chapter-rewrite/system.v1.md",
   continuity_review: "./continuity-review/system.v1.md",
   core_story_complete: "./core-story-complete/system.v1.md",
@@ -52,10 +58,12 @@ const promptFiles = {
   memory_extract: "./memory-extract/system.v1.md",
   outline_generate: "./outline-generate/system.v1.md",
   book_plan_generate: "./book-plan-generate/system.v1.md",
+  plot_debt_update: "./plot-debt-update/system.v1.md",
   rolling_chapter_plan_generate: "./rolling-chapter-plan-generate/system.v1.md",
   plot_arc_generate: "./plot-arc-generate/system.v1.md",
   relationship_generate: "./relationship-generate/system.v1.md",
   retrospective_generate: "./retrospective-generate/system.v1.md",
+  story_state_delta_extract: "./story-state-delta-extract/system.v1.md",
   worldbuilding_generate: "./worldbuilding-generate/system.v1.md",
 } as const;
 

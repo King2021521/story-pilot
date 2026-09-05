@@ -107,6 +107,30 @@ export const contextPackageItems = sqliteTable(
   ],
 );
 
+export const generationContextPackages = sqliteTable(
+  "generation_context_packages",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id").notNull(),
+    purpose: text("purpose").notNull(),
+    tokenBudget: integer("token_budget").notNull(),
+    estimatedTokens: integer("estimated_tokens").notNull(),
+    strategy: text("strategy").notNull(),
+    itemsJson: text("items_json").notNull(),
+    omittedItemsJson: text("omitted_items_json").notNull().default("[]"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("generation_context_packages_project_id_idx").on(table.projectId),
+    index("generation_context_packages_target_idx").on(table.targetType, table.targetId),
+    index("generation_context_packages_purpose_idx").on(table.projectId, table.purpose),
+  ],
+);
+
 export const projectionCheckpoints = sqliteTable(
   "projection_checkpoints",
   {

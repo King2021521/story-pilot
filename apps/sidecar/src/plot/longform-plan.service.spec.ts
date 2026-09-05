@@ -17,6 +17,7 @@ import {
   CharacterRepository,
   createProjectDatabase,
   CreativePathRepository,
+  LongformPlanRepository,
   PlotRepository,
   PROJECT_DATABASE_FILE,
   WorldbuildingRepository,
@@ -118,10 +119,14 @@ describe("LongformPlanService AI context", () => {
       }
       expect(firstCall).toMatchObject({
         maxOutputTokens: 12000,
+        promptVersion: "book-plan.generate@v1",
         purpose: "book_plan_generate",
         temperature: 0.5,
       });
       const promptText = firstCall.messages.map((message) => message.content).join("\n");
+      expect(promptText).toContain("模板：book-plan.generate@v1");
+      expect(promptText).toContain("<worldbuildingProfile>");
+      expect(promptText).toContain("<blueprint>");
       expect(promptText).toContain("近现代旧城悬疑世界");
       expect(promptText).toContain("顾砚");
       expect(promptText).toContain("谁烧毁了钟楼档案");
@@ -129,6 +134,95 @@ describe("LongformPlanService AI context", () => {
       expect(promptText).toContain("旧信编号");
       expect(promptText).toContain("estimatedWordCount");
       expect(promptText).toContain("800000");
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it("builds rolling chapter prompts from registered templates and longform plans", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "story-pilot-rolling-context-"));
+    tempDirs.push(rootDir);
+    process.env.STORY_PILOT_PROJECTS_ROOT = rootDir;
+    const provider = new CapturingObjectProvider({
+      chapterPlans: [
+        {
+          chapterGoal: "顾砚把旧信编号和卷内主线绑定，决定重查钟楼地窖。",
+          chapterIndex: 11,
+          conflict: "钟楼议会放出假线索，诱导顾砚离开真正的档案入口。",
+          emotionalTurn: "顾砚从被动追查转为主动设局。",
+          hook: "地窖墙面出现了与旧信相同的编号。",
+          id: "draft_chapter_11",
+          informationGain: "旧信编号并非寄信人自创，而是钟楼档案的内部索引。",
+          relatedCharacterIds: ["character_gu_yan"],
+          relatedForeshadowingIds: ["foreshadowing_letter_code"],
+          relatedPlotlineIds: ["plotline_clocktower_case"],
+          scenes: [
+            {
+              conflictTurn: "议会线人抢先烧掉公开档案，逼顾砚转向地窖暗格。",
+              id: "draft_scene_11_1",
+              memoryTargets: ["旧信编号", "钟楼地窖入口"],
+              outcome: "顾砚确认旧信编号可指向被删档案。",
+              povCharacterId: "character_gu_yan",
+              sceneGoal: "验证旧信编号的真实来源。",
+              sceneIndex: 1,
+            },
+          ],
+          targetWordCount: 3500,
+          title: "第十一章 地窖索引",
+        },
+      ],
+      riskNotes: [],
+    });
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ProjectModule, PlotModule],
+    })
+      .overrideProvider(MODEL_GATEWAY)
+      .useValue(new ModelGateway(provider))
+      .compile();
+    try {
+      const projectService = moduleRef.get(ProjectService);
+      const longformPlanService = moduleRef.get(LongformPlanService);
+      const project = await projectService.createProject({
+        genre: "悬疑",
+        style: "旧城推理",
+        title: "长夜序章",
+      });
+      const projectDatabase = createProjectDatabase(join(project.rootPath, PROJECT_DATABASE_FILE));
+      let volumePlanId = "";
+      try {
+        seedCreativeContext(projectDatabase, project.id);
+        const seededPlan = seedLongformPlan(projectDatabase, project.id);
+        volumePlanId = seededPlan.volumePlanId;
+      } finally {
+        projectDatabase.close();
+      }
+
+      await longformPlanService.generateRollingOutline({
+        chapterCount: 10,
+        projectId: project.id,
+        startChapterIndex: 11,
+        volumePlanId,
+      });
+
+      expect(provider.calls).toHaveLength(1);
+      const [firstCall] = provider.calls;
+      if (!firstCall) {
+        throw new Error("expected model provider to receive a rolling chapter plan call");
+      }
+      expect(firstCall).toMatchObject({
+        maxOutputTokens: 12000,
+        promptVersion: "rolling-chapter-plan.generate@v1",
+        purpose: "rolling_chapter_plan_generate",
+        temperature: 0.45,
+      });
+      const promptText = firstCall.messages.map((message) => message.content).join("\n");
+      expect(promptText).toContain("模板：rolling-chapter-plan.generate@v1");
+      expect(promptText).toContain("<longformPlans>");
+      expect(promptText).toContain("钟楼旧案全书规划");
+      expect(promptText).toContain("第一卷：雨夜旧信");
+      expect(promptText).toContain("第 11 章开始生成未来 10 章");
+      expect(promptText).toContain("旧信编号");
     } finally {
       await moduleRef.close();
     }
@@ -254,6 +348,47 @@ function seedCreativeContext(
     status: "planned",
     title: "旧信与缺页对应",
   });
+}
+
+function seedLongformPlan(
+  projectDatabase: ReturnType<typeof createProjectDatabase>,
+  projectId: string,
+): { readonly volumePlanId: string; readonly arcPlanId: string } {
+  const result = new LongformPlanRepository(projectDatabase).createBookPlanHierarchy({
+    bookPlanId: "book_plan_clocktower",
+    corePromise: "每一卷都推进旧信、档案和身份代价三条压力线。",
+    endingDirection: "顾砚公开钟楼真相，但必须承担旧城秩序崩塌后的选择。",
+    projectId,
+    targetWordCount: 800000,
+    title: "钟楼旧案全书规划",
+    volumes: [
+      {
+        arcs: [
+          {
+            arcIndex: 1,
+            arcPlanId: "arc_plan_old_letter",
+            endChapterIndex: 40,
+            escalation: ["旧信编号", "档案缺页", "地窖入口"],
+            purpose: "完成旧信主谜题的首次升级。",
+            startChapterIndex: 1,
+            title: "旧信入局",
+          },
+        ],
+        climax: "顾砚发现旧信编号来自钟楼内部档案系统。",
+        majorConflict: "顾砚追查旧信时被钟楼议会压制。",
+        purpose: "建立追读承诺、主线谜题和旧城秩序压力。",
+        targetWordCount: 200000,
+        title: "第一卷：雨夜旧信",
+        volumeIndex: 1,
+        volumePlanId: "volume_plan_rain_letter",
+      },
+    ],
+  });
+
+  return {
+    arcPlanId: result.arcPlans[0]?.id ?? "arc_plan_old_letter",
+    volumePlanId: result.volumePlans[0]?.id ?? "volume_plan_rain_letter",
+  };
 }
 
 function worldbuildingFields(overrides: Partial<WorldbuildingFields>): WorldbuildingFields {

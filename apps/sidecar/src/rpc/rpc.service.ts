@@ -20,6 +20,8 @@ import {
   type GenerateChapterDraftInput,
   type GenerateChapterDraftFromPlanInput,
 } from "../chapter/chapter.service.js";
+import { ChapterExecutionCardService } from "../chapter/chapter-execution-card.service.js";
+import { ContextPackageService } from "../context-package/context-package.service.js";
 import { ElementCandidateService } from "../creative/element-candidate.service.js";
 import { CreativePathService } from "../creative-path/creative-path.service.js";
 import { DiagnosticsService } from "../diagnostics/diagnostics.service.js";
@@ -37,7 +39,10 @@ import { LongformPlanService } from "../plot/longform-plan.service.js";
 import { PlotlineService, type CreatePlotlineInput } from "../plot/plotline.service.js";
 import { StoryEventService, type CreateStoryEventInput } from "../plot/story-event.service.js";
 import { ProjectService, type CreateProjectInput } from "../project/project.service.js";
+import { ChapterReviewService } from "../review/chapter-review.service.js";
+import { SerialReviewService } from "../review/serial-review.service.js";
 import { SettingsService } from "../settings/settings.service.js";
+import { SerialStateService } from "../serial-state/serial-state.service.js";
 import { WorkflowService, type RunWorkflowInput } from "../workflow/workflow.service.js";
 import { WorkbenchService } from "../workbench/workbench.service.js";
 import { WorldbuildingService } from "../world/worldbuilding.service.js";
@@ -49,7 +54,9 @@ export class RpcService {
     private readonly artifactService: ArtifactService,
     private readonly aiCommandService: AiCommandService,
     private readonly characterService: CharacterService,
+    private readonly chapterExecutionCardService: ChapterExecutionCardService,
     private readonly chapterService: ChapterService,
+    private readonly contextPackageService: ContextPackageService,
     private readonly conflictService: ConflictService,
     private readonly creativePathService: CreativePathService,
     private readonly diagnosticsService: DiagnosticsService,
@@ -63,7 +70,10 @@ export class RpcService {
     private readonly plotlineService: PlotlineService,
     private readonly longformPlanService: LongformPlanService,
     private readonly projectService: ProjectService,
+    private readonly chapterReviewService: ChapterReviewService,
+    private readonly serialReviewService: SerialReviewService,
     private readonly settingsService: SettingsService,
+    private readonly serialStateService: SerialStateService,
     private readonly storyEventService: StoryEventService,
     private readonly workflowService: WorkflowService,
     private readonly workbenchService: WorkbenchService,
@@ -196,6 +206,11 @@ export class RpcService {
       case "ai.listArtifacts": {
         return this.aiCommandService.listArtifacts(payload as CommandPayload<"ai.listArtifacts">);
       }
+      case "context.buildPackage": {
+        return this.contextPackageService.buildPackage(
+          payload as CommandPayload<"context.buildPackage">,
+        );
+      }
       case "creativeStage.getPath": {
         const parsed = payload as CommandPayload<"creativeStage.getPath">;
         return this.creativePathService.getPath(parsed.projectId);
@@ -318,6 +333,21 @@ export class RpcService {
       case "plot.saveArcPlan": {
         return this.longformPlanService.saveArcPlan(payload as CommandPayload<"plot.saveArcPlan">);
       }
+      case "plot.deleteBookPlan": {
+        return this.longformPlanService.deleteBookPlan(
+          payload as CommandPayload<"plot.deleteBookPlan">,
+        );
+      }
+      case "plot.deleteVolumePlan": {
+        return this.longformPlanService.deleteVolumePlan(
+          payload as CommandPayload<"plot.deleteVolumePlan">,
+        );
+      }
+      case "plot.deleteArcPlan": {
+        return this.longformPlanService.deleteArcPlan(
+          payload as CommandPayload<"plot.deleteArcPlan">,
+        );
+      }
       case "plot.saveChapterPlan": {
         return this.longformPlanService.saveChapterPlan(
           payload as CommandPayload<"plot.saveChapterPlan">,
@@ -341,6 +371,22 @@ export class RpcService {
       case "plot.analyzeOutlineImpact": {
         return this.longformPlanService.analyzeOutlineImpact(
           payload as CommandPayload<"plot.analyzeOutlineImpact">,
+        );
+      }
+      case "plotDebt.list": {
+        return this.serialStateService.listPlotDebts(payload as CommandPayload<"plotDebt.list">);
+      }
+      case "plotDebt.save": {
+        return this.serialStateService.savePlotDebt(payload as CommandPayload<"plotDebt.save">);
+      }
+      case "storyState.extractDelta": {
+        return this.serialStateService.extractDelta(
+          payload as CommandPayload<"storyState.extractDelta">,
+        );
+      }
+      case "storyState.applyDelta": {
+        return this.serialStateService.applyDelta(
+          payload as CommandPayload<"storyState.applyDelta">,
         );
       }
       case "chapter.list": {
@@ -387,6 +433,11 @@ export class RpcService {
           workflowType: "review",
         });
       }
+      case "chapter.reviewDraft": {
+        return this.chapterReviewService.reviewDraft(
+          payload as CommandPayload<"chapter.reviewDraft">,
+        );
+      }
       case "chapter.generateDraft": {
         const parsed = payload as CommandPayload<"chapter.generateDraft">;
         const input: GenerateChapterDraftInput = {
@@ -412,6 +463,29 @@ export class RpcService {
           ...(parsed.instruction === undefined ? {} : { instruction: parsed.instruction }),
         };
         return this.chapterService.generateDraftFromPlan(input);
+      }
+      case "chapterExecutionCard.generate": {
+        return this.chapterExecutionCardService.generate(
+          payload as CommandPayload<"chapterExecutionCard.generate">,
+        );
+      }
+      case "chapterExecutionCard.apply": {
+        return this.chapterExecutionCardService.apply(
+          payload as CommandPayload<"chapterExecutionCard.apply">,
+        );
+      }
+      case "chapterExecutionCard.save": {
+        return this.chapterExecutionCardService.save(
+          payload as CommandPayload<"chapterExecutionCard.save">,
+        );
+      }
+      case "serialReview.generate": {
+        return this.serialReviewService.generate(
+          payload as CommandPayload<"serialReview.generate">,
+        );
+      }
+      case "serialReview.apply": {
+        return this.serialReviewService.apply(payload as CommandPayload<"serialReview.apply">);
       }
       case "artifact.apply": {
         const parsed = payload as CommandPayload<"artifact.apply">;
@@ -613,6 +687,9 @@ export class RpcService {
       case "character.update": {
         return this.characterService.updateCharacter(payload as CommandPayload<"character.update">);
       }
+      case "character.delete": {
+        return this.characterService.deleteCharacter(payload as CommandPayload<"character.delete">);
+      }
       case "entityRelation.list": {
         const parsed = payload as CommandPayload<"entityRelation.list">;
         return {
@@ -716,6 +793,9 @@ export class RpcService {
       }
       case "plotline.update": {
         return this.plotlineService.updatePlotline(payload as CommandPayload<"plotline.update">);
+      }
+      case "plotline.delete": {
+        return this.plotlineService.deletePlotline(payload as CommandPayload<"plotline.delete">);
       }
       case "plotline.createNode": {
         const parsed = payload as CommandPayload<"plotline.createNode">;

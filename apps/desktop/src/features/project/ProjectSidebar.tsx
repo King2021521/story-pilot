@@ -18,7 +18,7 @@ import {
   SettingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Button, Empty, Tooltip, Tree, Typography } from "antd";
+import { Button, Empty, Tooltip, Typography } from "antd";
 import { useState, type ReactNode } from "react";
 
 import {
@@ -45,7 +45,7 @@ const MODULE_ICONS: Record<WorkspaceModuleKey, ReactNode> = {
   worldbuilding: <GlobalOutlined />,
 };
 
-type SidebarSectionKey = "auxiliary" | "modules" | "workspace";
+type SidebarSectionKey = "auxiliary" | "workspace";
 
 export interface ProjectSidebarProject {
   readonly id: string;
@@ -66,7 +66,7 @@ export interface ProjectSidebarProps {
   readonly selectedChapterId?: string | undefined;
   readonly showCollapseControl?: boolean;
   onCreateProject?(): void;
-  onOpenProject?(projectId: string): void;
+  onOpenProject?(projectId: string, moduleKey?: WorkspaceModuleKey): void;
   onOpenSettings?(): void;
   onSelectModule?(moduleKey: WorkspaceModuleKey): void;
   onSelectChapter?(chapterId: string): void;
@@ -90,36 +90,44 @@ export function ProjectSidebar({
 }: ProjectSidebarProps) {
   const [openSections, setOpenSections] = useState<Record<SidebarSectionKey, boolean>>({
     auxiliary: true,
-    modules: true,
     workspace: true,
   });
-  const projectTreeData = projects.map((project) => ({
-    children:
-      project.id === activeProjectId
-        ? chapters.map((chapter) => ({
-            icon: <FileTextOutlined />,
-            key: chapterKey(chapter.id),
-            title: chapter.title,
-          }))
-        : undefined,
-    icon: project.id === activeProjectId ? <FolderOpenOutlined /> : <BookOutlined />,
-    key: projectKey(project.id),
-    title: project.title,
-  }));
-  const selectedKeys = selectedChapterId
-    ? [chapterKey(selectedChapterId)]
-    : activeProjectId
-      ? [projectKey(activeProjectId)]
-      : [];
+  const [projectExpansionOverrides, setProjectExpansionOverrides] = useState<
+    Record<string, boolean>
+  >({});
   const sidebarClassName = collapsed
     ? "project-sidebar project-sidebar--collapsed"
     : "project-sidebar";
+
+  const isProjectExpanded = (projectId: string) =>
+    projectExpansionOverrides[projectId] ?? projectId === activeProjectId;
 
   const toggleSection = (sectionKey: SidebarSectionKey) => {
     setOpenSections((current) => ({
       ...current,
       [sectionKey]: !current[sectionKey],
     }));
+  };
+
+  const toggleProject = (projectId: string) => {
+    setProjectExpansionOverrides((current) => ({
+      ...current,
+      [projectId]: !(current[projectId] ?? projectId === activeProjectId),
+    }));
+  };
+
+  const selectProjectModule = (projectId: string, moduleKey: WorkspaceModuleKey) => {
+    if (projectId !== activeProjectId) {
+      onOpenProject?.(projectId, moduleKey);
+      return;
+    }
+
+    onSelectModule?.(moduleKey);
+  };
+
+  const selectChapter = (chapterId: string) => {
+    onSelectModule?.("manuscript");
+    onSelectChapter?.(chapterId);
   };
 
   return (
@@ -184,48 +192,89 @@ export function ProjectSidebar({
             sectionKey="workspace"
             title="作品空间"
           >
-            {projectTreeData.length === 0 ? (
+            {projects.length === 0 ? (
               <Empty description="暂无作品" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
-              <Tree
-                blockNode
-                defaultExpandedKeys={activeProjectId ? [projectKey(activeProjectId)] : []}
-                onSelect={(selectedKeys) => {
-                  const selectedKey = String(selectedKeys[0] ?? "");
-                  if (selectedKey.startsWith("chapter:")) {
-                    onSelectChapter?.(selectedKey.slice("chapter:".length));
-                    return;
-                  }
-                  if (selectedKey.startsWith("project:")) {
-                    onOpenProject?.(selectedKey.slice("project:".length));
-                  }
-                }}
-                selectedKeys={selectedKeys}
-                showIcon
-                treeData={projectTreeData}
-              />
+              <div aria-label="作品树" className="project-sidebar-tree" role="tree">
+                {projects.map((project) => {
+                  const active = project.id === activeProjectId;
+                  const expanded = isProjectExpanded(project.id);
+
+                  return (
+                    <div
+                      aria-expanded={expanded}
+                      aria-selected={active}
+                      className={
+                        active
+                          ? "project-sidebar-tree__project project-sidebar-tree__project--active"
+                          : "project-sidebar-tree__project"
+                      }
+                      key={project.id}
+                      role="treeitem"
+                    >
+                      <div className="project-sidebar-tree__project-row">
+                        <Tooltip title={expanded ? "收起作品" : "展开作品"}>
+                          <button
+                            aria-controls={`project-sidebar-project-${project.id}`}
+                            aria-expanded={expanded}
+                            aria-label={`${expanded ? "收起" : "展开"}作品 ${project.title}`}
+                            className="project-sidebar-tree__toggle"
+                            onClick={() => toggleProject(project.id)}
+                            type="button"
+                          >
+                            <DownOutlined />
+                          </button>
+                        </Tooltip>
+                        <button
+                          aria-current={active ? "page" : undefined}
+                          aria-label={`打开作品 ${project.title}`}
+                          className="project-sidebar-tree__project-button"
+                          onClick={() => onOpenProject?.(project.id)}
+                          type="button"
+                        >
+                          {active ? <FolderOpenOutlined /> : <BookOutlined />}
+                          <span>{project.title}</span>
+                        </button>
+                      </div>
+                      {expanded ? (
+                        <div
+                          aria-label={`${project.title}的创作模块`}
+                          className="project-sidebar-tree__children"
+                          id={`project-sidebar-project-${project.id}`}
+                          role="group"
+                        >
+                          {PRIMARY_WORKSPACE_MODULES.map((module) => (
+                            <div className="project-sidebar-tree__child" key={module.key}>
+                              <SidebarModuleButton
+                                active={active && activeModuleKey === module.key}
+                                module={module}
+                                onClick={() => selectProjectModule(project.id, module.key)}
+                              />
+                              {active && module.key === "manuscript" && chapters.length > 0 ? (
+                                <div
+                                  aria-label={`${project.title}的正文章节`}
+                                  className="project-sidebar-tree__chapters"
+                                >
+                                  {chapters.map((chapter) => (
+                                    <SidebarChapterButton
+                                      active={chapter.id === selectedChapterId}
+                                      chapter={chapter}
+                                      key={chapter.id}
+                                      onSelectChapter={selectChapter}
+                                    />
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </SidebarSection>
-
-          {activeProjectId ? (
-            <SidebarSection
-              onToggle={() => toggleSection("modules")}
-              open={openSections.modules}
-              sectionKey="modules"
-              title="当前作品"
-            >
-              <div className="project-sidebar__modules-list">
-                {PRIMARY_WORKSPACE_MODULES.map((module) => (
-                  <SidebarModuleButton
-                    active={activeModuleKey === module.key}
-                    key={module.key}
-                    module={module}
-                    onSelectModule={onSelectModule}
-                  />
-                ))}
-              </div>
-            </SidebarSection>
-          ) : null}
 
           {activeProjectId ? (
             <SidebarSection
@@ -306,11 +355,13 @@ function SidebarModuleButton({
   active,
   collapsed = false,
   module,
+  onClick,
   onSelectModule,
 }: {
   readonly active: boolean;
   readonly collapsed?: boolean;
   readonly module: WorkspaceModuleDefinition;
+  onClick?(): void;
   readonly onSelectModule?: ((moduleKey: WorkspaceModuleKey) => void) | undefined;
 }) {
   const button = (
@@ -319,7 +370,7 @@ function SidebarModuleButton({
       block={!collapsed}
       className="project-sidebar__module-button"
       icon={MODULE_ICONS[module.key]}
-      onClick={() => onSelectModule?.(module.key)}
+      onClick={onClick ?? (() => onSelectModule?.(module.key))}
       type={active ? "primary" : "text"}
     >
       {collapsed ? null : module.label}
@@ -335,10 +386,28 @@ function SidebarModuleButton({
   );
 }
 
-function projectKey(projectId: string): string {
-  return `project:${projectId}`;
-}
-
-function chapterKey(chapterId: string): string {
-  return `chapter:${chapterId}`;
+function SidebarChapterButton({
+  active,
+  chapter,
+  onSelectChapter,
+}: {
+  readonly active: boolean;
+  readonly chapter: ProjectSidebarChapter;
+  onSelectChapter(chapterId: string): void;
+}) {
+  return (
+    <Button
+      block
+      className={
+        active
+          ? "project-sidebar-tree__chapter-button project-sidebar-tree__chapter-button--active"
+          : "project-sidebar-tree__chapter-button"
+      }
+      icon={<FileTextOutlined />}
+      onClick={() => onSelectChapter(chapter.id)}
+      type="text"
+    >
+      {chapter.title}
+    </Button>
+  );
 }
