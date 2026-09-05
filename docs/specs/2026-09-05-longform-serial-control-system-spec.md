@@ -744,7 +744,7 @@ AI 生成质量的关键不是一次塞入更多文本，而是每次有稳定�
 - 当前章节有 chapter plan。
 - 当前章节有 chapter execution card。
 - 至少一个相关角色有最新状态快照，或系统明确标记无相关角色。
-- 当前章关联的 plot debt 风险没有 error。
+- 当前章关联的 plot debt 风险没有 critical。
 - 当前上下文包可构建成功。
 
 正文应用后必须触发：

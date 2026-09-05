@@ -13,7 +13,7 @@
       "title": "剧情债标题",
       "action": "create|reinforce|payoff|drop|risk_raise",
       "note": "变化说明",
-      "riskLevel": "low|medium|high|error",
+      "riskLevel": "low|medium|high|critical",
       "expectedPayoffChapterIndex": 30
     }
   ],

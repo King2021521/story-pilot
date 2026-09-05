@@ -108,4 +108,11 @@ describe("PromptRegistry", () => {
     expect(rollingPrompt.content).toContain("10-20");
     expect(rollingPrompt.content).toContain("JSON");
   });
+
+  it("keeps plot debt risk levels aligned with business enums", () => {
+    const prompt = PromptRegistry.getPrompt("plot_debt_update", "v1");
+
+    expect(prompt.content).toContain("low|medium|high|critical");
+    expect(prompt.content).not.toContain("low|medium|high|error");
+  });
 });
